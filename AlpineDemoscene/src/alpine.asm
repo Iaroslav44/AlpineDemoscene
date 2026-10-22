@@ -52,10 +52,11 @@ WS_POPUP                        EQU 80000000h
 WS_VISIBLE                      EQU 10000000h
 SW_SHOW                         EQU 5
 MB_ICONERROR                    EQU 10h
-CW_RENDER_WIDTH                 EQU 960
-CW_RENDER_HEIGHT                EQU 540
-CW_LOW_WIDTH                    EQU 640
-CW_LOW_HEIGHT                   EQU 360
+CW_RENDER_WIDTH                 EQU 1280
+CW_RENDER_HEIGHT                EQU 720
+CW_LOW_WIDTH                    EQU 1280
+CW_LOW_HEIGHT                   EQU 720
+SHADOW_SIZE                     EQU 2048
 
 DXGI_FORMAT_R8G8B8A8_UNORM      EQU 28
 DXGI_USAGE_RENDER_TARGET_OUTPUT EQU 20h
@@ -127,18 +128,20 @@ swapDesc:
     dq 0
     dd 1, 0, 0, 0
 
-; Full-resolution and half-resolution D3D11_VIEWPORTs.
+; Output and scene D3D11_VIEWPORTs (both native 1280x720).
 align 8
 outputViewport:
     dd 00000000h, 00000000h
-    dd 44700000h, 44070000h        ; 960.0, 540.0
+    dd 44A00000h, 44340000h        ; 1280.0, 720.0
     dd 00000000h, 3F800000h
 
 align 8
 lowViewport:
     dd 00000000h, 00000000h
-    dd 44200000h, 43B40000h        ; 640.0, 360.0
+    dd 44A00000h, 44340000h        ; native 1280.0, 720.0
     dd 00000000h, 3F800000h
+reflectionViewport:
+    dd 0, 0, 44200000h, 43B40000h, 0, 3F800000h ; 640x360
 
 ; D3D11_BUFFER_DESC: two float4s, dynamic CPU write.
 align 8
@@ -149,7 +152,7 @@ constantBufferDesc:
     dd D3D11_CPU_ACCESS_WRITE
     dd 0, 0
 
-; D3D11_TEXTURE2D_DESCs for the low-resolution scene and two HDR histories.
+; D3D11_TEXTURE2D_DESCs for the native scene and two HDR histories.
 align 8
 lowSurfaceDesc:
     dd CW_LOW_WIDTH, CW_LOW_HEIGHT
@@ -186,7 +189,57 @@ postSamplerDesc:
 
 align 8
 clearHistoryColour dd 00000000h, 00000000h, 00000000h, 00000000h
-nullShaderResources dq 0, 0
+clearShadowColour dd 3F800000h, 3F800000h, 3F800000h, 3F800000h
+nullShaderResources dq 0, 0, 0, 0
+requiredFeatureLevel dd 0B000h          ; FL11_0, required for camera compute
+
+align 8
+shadowViewport:
+    dd 0, 0, 45000000h, 45000000h, 0, 3F800000h
+shadowSurfaceDesc:
+    dd SHADOW_SIZE, SHADOW_SIZE, 1, 1, 41, 1, 0, 0, 28h, 0, 0 ; R32_FLOAT
+terrainSurfaceDesc:
+    dd 2048, 2048, 1, 1, 41, 1, 0, 0, 88h, 0, 0 ; R32_FLOAT SRV|UAV
+reflectionSurfaceDesc:
+    dd 640, 360, 1, 1, 10, 1, 0, 0, 28h, 0, 0 ; RGBA16F
+reflectionDepthDesc:
+    dd 640, 360, 1, 1, 40, 1, 0, 0, 40h, 0, 0
+passMainUnavailable dd 0, 0, 0, 0
+passMainAvailable dd 0, 3F800000h, 0, 0
+passReflection dd 3F800000h, 3F800000h, 0, 0
+reflectionBegin REAL4 40.0
+reflectionEnd REAL4 108.0
+loopSeconds REAL4 128.0
+mainDepthDesc:
+    dd CW_LOW_WIDTH, CW_LOW_HEIGHT, 1, 1, 40, 1, 0, 0, 40h, 0, 0 ; D32_FLOAT
+shadowDepthDesc:
+    dd SHADOW_SIZE, SHADOW_SIZE, 1, 1, 40, 1, 0, 0, 40h, 0, 0
+cameraBufferDesc:
+    dd 192, 0, 88h, 0, 40h, 16          ; SRV|UAV, STRUCTURED, float4 stride
+batchBufferDesc:
+    dd 16, 0, 4, 0, 0, 0               ; default constant buffer, one uint4
+cameraSRVDesc:
+    dd 0, 1, 0, 12, 0, 0               ; UNKNOWN, BUFFER, 12 elements
+cameraUAVDesc:
+    dd 0, 1, 0, 12, 0
+meshRasterizerDesc:
+    dd 3, 1, 0, 0, 0, 0, 1, 0, 0, 0 ; SOLID, CULL_NONE, depth clip on
+worldDepthStateDesc:
+    dd 1, 1, 4, 0                     ; enabled/write-all/LESS_EQUAL/stencil off
+    db 0FFh, 0FFh, 0, 0
+    dd 1, 1, 1, 8, 1, 1, 1, 8
+; Fixed procedural mesh contract shared by main and shadow draws.
+; b1 uint4 (absolute instance base, padding), vertex count, instance count, pad.
+; SV_InstanceID starts at zero even with nonzero StartInstanceLocation. Supply
+; the procedural dispatch base explicitly in b1; both API start offsets are 0.
+meshDrawBatches:
+    dd 0, 0, 0, 0, 3600, 32, 0, 0
+    dd 1000, 0, 0, 0, 8712, 192, 0, 0
+    dd 2000, 0, 0, 0, 18, 12288, 0, 0
+    dd 20000, 0, 0, 0, 240, 384, 0, 0
+    dd 30000, 0, 0, 0, 216, 4, 0, 0
+    dd 40000, 0, 0, 0, 288, 6144, 0, 0
+    dd 50000, 0, 0, 0, 432, 6, 0, 0    ; shadow-only residents
 
 ; WAVEFORMATEX: 44.1 kHz, stereo, signed 16-bit PCM.
 align 8
@@ -242,6 +295,35 @@ pixelShader             dq ?
 humanShader             dq ?
 temporalShader          dq ?
 displayShader           dq ?
+meshVertexShader        dq ?
+meshPixelShader         dq ?
+shadowVertexShader      dq ?
+shadowPixelShader       dq ?
+cameraComputeShader     dq ?
+terrainComputeShader    dq ?
+terrainTexture          dq ?
+terrainSRV              dq ?
+terrainUAV              dq ?
+cameraFrameBuffer       dq ?
+batchConstantBuffer     dq ?
+passConstantBuffer      dq ?
+reflectionTexture       dq ?
+reflectionSRV           dq ?
+reflectionRTV           dq ?
+reflectionDepthTexture  dq ?
+reflectionDepthView     dq ?
+reflectionEnabled       dd ?
+cameraFrameSRV          dq ?
+cameraFrameUAV          dq ?
+mainDepthTexture        dq ?
+mainDepthView           dq ?
+shadowDepthTexture      dq ?
+shadowDepthView         dq ?
+shadowTexture           dq ?
+shadowSRV               dq ?
+shadowRTV               dq ?
+meshRasterizer          dq ?
+worldDepthState         dq ?
 constantBuffer          dq ?
 postSampler             dq ?
 lowTexture              dq ?
@@ -416,10 +498,27 @@ CreateRenderSurface ENDP
 ; Load one embedded DXBC resource and create a pixel shader from it.
 ; ecx = RT_RCDATA id, rdx = ID3D11PixelShader output slot.
 LoadEmbeddedPixelShader PROC
+    mov r8d, 120
+    jmp LoadEmbeddedShader
+LoadEmbeddedPixelShader ENDP
+
+LoadEmbeddedVertexShader PROC
+    mov r8d, 96
+    jmp LoadEmbeddedShader
+LoadEmbeddedVertexShader ENDP
+
+LoadEmbeddedComputeShader PROC
+    mov r8d, 144
+    jmp LoadEmbeddedShader
+LoadEmbeddedComputeShader ENDP
+
+LoadEmbeddedShader PROC
     push rbx
     push rsi
     push rdi
-    sub rsp, 30h
+    push r12
+    sub rsp, 28h
+    mov r12d, r8d
     mov ebx, ecx
     mov rsi, rdx
     mov qword ptr [rsi], 0
@@ -456,18 +555,144 @@ LoadEmbeddedPixelShader PROC
     mov r8d, ebx
     xor r9d, r9d
     mov qword ptr [rsp+20h], rsi
-    call qword ptr [rax+120]             ; CreatePixelShader
+    call qword ptr [rax+r12]             ; Create{Vertex,Pixel,Compute}Shader
     jmp embedded_shader_done
 
 embedded_shader_failed:
     mov eax, 80004005h
 embedded_shader_done:
-    add rsp, 30h
+    add rsp, 28h
+    pop r12
     pop rdi
     pop rsi
     pop rbx
     ret
-LoadEmbeddedPixelShader ENDP
+LoadEmbeddedShader ENDP
+
+; rcx = depth texture descriptor, rdx = texture slot, r8 = DSV slot.
+CreateDepthSurface PROC
+    push rbx
+    push rsi
+    push rdi
+    sub rsp, 20h
+    mov rbx, rcx
+    mov rsi, rdx
+    mov rdi, r8
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, rbx
+    xor r8d, r8d
+    mov r9, rsi
+    call qword ptr [rax+40]
+    test eax, eax
+    js depth_surface_done
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, [rsi]
+    xor r8d, r8d
+    mov r9, rdi
+    call qword ptr [rax+80]              ; CreateDepthStencilView
+depth_surface_done:
+    add rsp, 20h
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+CreateDepthSurface ENDP
+
+DrawSceneBatches PROC
+    push rbx
+    push rsi
+    sub rsp, 48h
+    lea rbx, meshDrawBatches
+    mov esi, ecx                      ; six main batches, seven shadow batches
+draw_batch_loop:
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, batchConstantBuffer
+    xor r8d, r8d
+    xor r9d, r9d
+    mov qword ptr [rsp+20h], rbx
+    mov dword ptr [rsp+28h], 0
+    mov dword ptr [rsp+30h], 0
+    call qword ptr [rax+384]            ; UpdateSubresource: b1 absolute base
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, [rbx+16]
+    mov r8d, [rbx+20]
+    xor r9d, r9d
+    mov dword ptr [rsp+20h], 0
+    call qword ptr [rax+168]             ; DrawInstanced
+    add rbx, 32
+    dec esi
+    jnz draw_batch_loop
+    add rsp, 48h
+    pop rsi
+    pop rbx
+    ret
+DrawSceneBatches ENDP
+
+; Rewrite all eight floats: WRITE_DISCARD never preserves the other fields.
+; ecx/edx are bit patterns for this pass's scene width/height. O.w stays the
+; previous rendered frame even when b0 is rewritten for a reflection subpass.
+UpdateFrameConstants PROC
+    push rbx
+    push rsi
+    sub rsp, 38h
+    mov ebx, ecx
+    mov esi, edx
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, constantBuffer
+    xor r8d, r8d
+    mov r9d, D3D11_MAP_WRITE_DISCARD
+    mov dword ptr [rsp+20h], 0
+    lea r10, mappedData
+    mov qword ptr [rsp+28h], r10
+    call qword ptr [rax+112]
+    test eax, eax
+    js frame_constants_done
+    mov rax, qword ptr mappedData[0]
+    mov [rax], ebx
+    mov [rax+4], esi
+    movss xmm0, currentTime
+    movss dword ptr [rax+8], xmm0
+    cvtsi2ss xmm0, frameCounter
+    movss dword ptr [rax+12], xmm0
+    mov dword ptr [rax+16], 44A00000h
+    mov dword ptr [rax+20], 44340000h
+    movss xmm0, runSeed
+    movss dword ptr [rax+24], xmm0
+    movss xmm0, previousTime
+    movss dword ptr [rax+28], xmm0
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, constantBuffer
+    xor r8d, r8d
+    call qword ptr [rax+120]
+    xor eax, eax
+frame_constants_done:
+    add rsp, 38h
+    pop rsi
+    pop rbx
+    ret
+UpdateFrameConstants ENDP
+
+; rcx points to one immutable float4 describing reflection/main pass state.
+UpdatePassConstants PROC
+    sub rsp, 38h
+    mov qword ptr [rsp+20h], rcx
+    mov dword ptr [rsp+28h], 0
+    mov dword ptr [rsp+30h], 0
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, passConstantBuffer
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+384]
+    add rsp, 38h
+    ret
+UpdatePassConstants ENDP
 
 
 GenerateSineTable PROC
@@ -1120,7 +1345,7 @@ start PROC
     test eax, eax
     jz init_failed
 
-    ; Centre a borderless 960x540 canvas; scale down on smaller displays.
+    ; Centre a borderless 1280x720 canvas; scale down on smaller displays.
     xor ecx, ecx
     call GetSystemMetrics
     mov edx, CW_RENDER_WIDTH
@@ -1178,8 +1403,9 @@ start PROC
     xor r8d, r8d
     xor r9d, r9d
     sub rsp, 40h
-    mov qword ptr [rsp+20h], 0
-    mov qword ptr [rsp+28h], 0
+    lea rax, requiredFeatureLevel
+    mov qword ptr [rsp+20h], rax
+    mov qword ptr [rsp+28h], 1
     mov dword ptr [rsp+30h], D3D11_SDK_VERSION
     lea rax, swapDesc
     mov qword ptr [rsp+38h], rax
@@ -1201,8 +1427,9 @@ start PROC
     xor r8d, r8d
     xor r9d, r9d
     sub rsp, 40h
-    mov qword ptr [rsp+20h], 0
-    mov qword ptr [rsp+28h], 0
+    lea rax, requiredFeatureLevel
+    mov qword ptr [rsp+20h], rax
+    mov qword ptr [rsp+28h], 1
     mov dword ptr [rsp+30h], D3D11_SDK_VERSION
     lea rax, swapDesc
     mov qword ptr [rsp+38h], rax
@@ -1220,7 +1447,7 @@ start PROC
     js init_failed
 
 d3d_created:
-    ; Locate both fxc-produced bytecode blobs in the executable resources.
+    ; Locate the fullscreen DXBC programs in the executable resources.
     mov rcx, hInstance
     mov edx, 101
     mov r8d, 10                         ; RT_RCDATA
@@ -1313,6 +1540,37 @@ d3d_created:
     test eax, eax
     js init_failed
 
+    mov ecx, 106
+    lea rdx, meshVertexShader
+    call LoadEmbeddedVertexShader
+    test eax, eax
+    js init_failed
+    mov ecx, 107
+    lea rdx, meshPixelShader
+    call LoadEmbeddedPixelShader
+    test eax, eax
+    js init_failed
+    mov ecx, 108
+    lea rdx, shadowVertexShader
+    call LoadEmbeddedVertexShader
+    test eax, eax
+    js init_failed
+    mov ecx, 109
+    lea rdx, shadowPixelShader
+    call LoadEmbeddedPixelShader
+    test eax, eax
+    js init_failed
+    mov ecx, 110
+    lea rdx, cameraComputeShader
+    call LoadEmbeddedComputeShader
+    test eax, eax
+    js init_failed
+    mov ecx, 111
+    lea rdx, terrainComputeShader
+    call LoadEmbeddedComputeShader
+    test eax, eax
+    js init_failed
+
     ; IDXGISwapChain::GetBuffer(0, IID_ID3D11Texture2D, ...)
     mov rcx, swapChain
     mov rax, [rcx]
@@ -1338,7 +1596,7 @@ d3d_created:
     call ReleaseObject
     mov backBuffer, 0
 
-    ; Low-resolution HDR scene plus two full-resolution temporal histories.
+    ; Native HDR scene plus two full-resolution temporal histories.
     lea rcx, lowSurfaceDesc
     lea rdx, lowTexture
     lea r8, lowSRV
@@ -1368,6 +1626,118 @@ d3d_created:
     lea r8, historySRV1
     lea r9, historyRTV1
     call CreateRenderSurface
+    test eax, eax
+    js init_failed
+
+    lea rcx, shadowSurfaceDesc
+    lea rdx, shadowTexture
+    lea r8, shadowSRV
+    lea r9, shadowRTV
+    call CreateRenderSurface
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, terrainSurfaceDesc
+    xor r8d, r8d
+    lea r9, terrainTexture
+    call qword ptr [rax+40]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, terrainTexture
+    xor r8d, r8d
+    lea r9, terrainSRV
+    call qword ptr [rax+56]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, terrainTexture
+    xor r8d, r8d
+    lea r9, terrainUAV
+    call qword ptr [rax+64]
+    test eax, eax
+    js init_failed
+    lea rcx, mainDepthDesc
+    lea rdx, mainDepthTexture
+    lea r8, mainDepthView
+    call CreateDepthSurface
+    test eax, eax
+    js init_failed
+    lea rcx, reflectionSurfaceDesc
+    lea rdx, reflectionTexture
+    lea r8, reflectionSRV
+    lea r9, reflectionRTV
+    call CreateRenderSurface
+    test eax, eax
+    js init_failed
+    lea rcx, reflectionDepthDesc
+    lea rdx, reflectionDepthTexture
+    lea r8, reflectionDepthView
+    call CreateDepthSurface
+    test eax, eax
+    js init_failed
+    lea rcx, shadowDepthDesc
+    lea rdx, shadowDepthTexture
+    lea r8, shadowDepthView
+    call CreateDepthSurface
+    test eax, eax
+    js init_failed
+
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, cameraBufferDesc
+    xor r8d, r8d
+    lea r9, cameraFrameBuffer
+    call qword ptr [rax+24]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, batchBufferDesc
+    xor r8d, r8d
+    lea r9, batchConstantBuffer
+    call qword ptr [rax+24]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, batchBufferDesc
+    xor r8d, r8d
+    lea r9, passConstantBuffer
+    call qword ptr [rax+24]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, cameraFrameBuffer
+    lea r8, cameraSRVDesc
+    lea r9, cameraFrameSRV
+    call qword ptr [rax+56]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, cameraFrameBuffer
+    lea r8, cameraUAVDesc
+    lea r9, cameraFrameUAV
+    call qword ptr [rax+64]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, meshRasterizerDesc
+    lea r8, meshRasterizer
+    call qword ptr [rax+176]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, worldDepthStateDesc
+    lea r8, worldDepthState
+    call qword ptr [rax+168]
     test eax, eax
     js init_failed
 
@@ -1413,6 +1783,11 @@ d3d_created:
 
     mov rcx, d3dContext
     mov rax, [rcx]
+    mov rdx, meshRasterizer
+    call qword ptr [rax+344]            ; RSSetState, procedural triangles two-sided
+
+    mov rcx, d3dContext
+    mov rax, [rcx]
     mov rax, [rax+88]                   ; VSSetShader
     mov rdx, vertexShader
     xor r8d, r8d
@@ -1432,6 +1807,25 @@ d3d_created:
 
     mov rcx, d3dContext
     mov rax, [rcx]
+    mov edx, 1
+    mov r8d, 1
+    lea r9, batchConstantBuffer
+    call qword ptr [rax+56]             ; VS b1, explicit procedural batch base
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 2
+    mov r8d, 1
+    lea r9, passConstantBuffer
+    call qword ptr [rax+56]             ; VS b2, reflection mode/availability
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 2
+    mov r8d, 1
+    lea r9, passConstantBuffer
+    call qword ptr [rax+128]            ; PS b2
+
+    mov rcx, d3dContext
+    mov rax, [rcx]
     mov rax, [rax+128]                  ; PSSetConstantBuffers
     xor edx, edx
     mov r8d, 1
@@ -1440,11 +1834,83 @@ d3d_created:
 
     mov rcx, d3dContext
     mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, constantBuffer
+    call qword ptr [rax+568]            ; CSSetConstantBuffers(b0)
+
+    mov rcx, d3dContext
+    mov rax, [rcx]
     mov rax, [rax+80]                   ; PSSetSamplers(s0)
     xor edx, edx
     mov r8d, 1
     lea r9, postSampler
     call rax
+
+    ; Generate the immutable terrain height cache on the GPU. No pixels or
+    ; external files are embedded: resource 111 contains only generator code.
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, terrainComputeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+552]            ; CSSetShader
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, terrainUAV
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]            ; CSSetUnorderedAccessViews
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 256
+    mov r8d, 256
+    mov r9d, 1
+    call qword ptr [rax+328]            ; Dispatch(256,256,1)
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 4
+    mov r8d, 1
+    lea r9, terrainSRV
+    call qword ptr [rax+200]            ; VS t4
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 4
+    mov r8d, 1
+    lea r9, terrainSRV
+    call qword ptr [rax+64]             ; PS t4
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 4
+    mov r8d, 1
+    lea r9, terrainSRV
+    call qword ptr [rax+536]            ; CS t4
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    mov r8d, 1
+    lea r9, postSampler
+    call qword ptr [rax+208]            ; VS sampler s1
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    mov r8d, 1
+    lea r9, postSampler
+    call qword ptr [rax+80]             ; PS sampler s1
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    mov r8d, 1
+    lea r9, postSampler
+    call qword ptr [rax+560]            ; CS sampler s1
 
     ; Session entropy controls the restrained musical mutations and shader seed.
     lea rcx, qpcFrequency
@@ -1592,44 +2058,31 @@ time_from_qpc:
     movss currentTime, xmm0
 
 update_constants:
-    ; ID3D11DeviceContext::Map(constantBuffer, WRITE_DISCARD)
-    mov rcx, d3dContext
-    mov rax, [rcx]
-    mov rax, [rax+112]
-    mov rdx, constantBuffer
-    xor r8d, r8d
-    mov r9d, D3D11_MAP_WRITE_DISCARD
-    sub rsp, 10h
-    mov qword ptr [rsp+20h], 0
-    lea r10, mappedData
-    mov qword ptr [rsp+28h], r10
-    call rax
-    add rsp, 10h
+    mov ecx, 44A00000h
+    mov edx, 44340000h
+    call UpdateFrameConstants
     test eax, eax
     js clean_exit
-    mov rax, qword ptr mappedData[0]
-    mov dword ptr [rax+0], 44200000h     ; low width 640.0
-    mov dword ptr [rax+4], 43B40000h     ; low height 360.0
+    ; Range gating uses loop phase, including the audio and QPC fallback paths.
+    mov reflectionEnabled, 0
     movss xmm0, currentTime
-    movss dword ptr [rax+8], xmm0
-    cvtsi2ss xmm0, frameCounter
-    movss dword ptr [rax+12], xmm0
-    mov dword ptr [rax+16], 44700000h    ; output width 960.0
-    mov dword ptr [rax+20], 44070000h    ; output height 540.0
-    movss xmm0, runSeed
-    movss dword ptr [rax+24], xmm0
-    movss xmm0, previousTime
-    movss dword ptr [rax+28], xmm0
-
-    mov rcx, d3dContext
-    mov rax, [rcx]
-    mov rax, [rax+120]                  ; Unmap
-    mov rdx, constantBuffer
-    xor r8d, r8d
-    call rax
-
-    movss xmm0, currentTime
-    movss previousTime, xmm0
+    movaps xmm1, xmm0
+    divss xmm1, loopSeconds
+    cvttss2si eax, xmm1
+    cvtsi2ss xmm1, eax
+    mulss xmm1, loopSeconds
+    subss xmm0, xmm1
+    ucomiss xmm0, reflectionBegin
+    jb reflection_unavailable
+    ucomiss xmm0, reflectionEnd
+    ja reflection_unavailable
+    mov reflectionEnabled, 1
+    lea rcx, passMainAvailable
+    jmp pass_mode_ready
+reflection_unavailable:
+    lea rcx, passMainUnavailable
+pass_mode_ready:
+    call UpdatePassConstants
 
     ; Any SRV left by the preceding display pass must be detached before one of
     ; the ping-pong resources can become an RTV again.
@@ -1637,18 +2090,230 @@ update_constants:
     mov rax, [rcx]
     mov rax, [rax+64]                   ; PSSetShaderResources
     xor edx, edx
-    mov r8d, 2
+    mov r8d, 4
     lea r9, nullShaderResources
     call rax
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 5
+    mov r8d, 1
+    lea r9, terrainSRV                 ; safe fallback while reflection is RTV
+    call qword ptr [rax+64]
 
-    ; Pass 1: procedural scene into the half-resolution linear HDR surface S.
+    ; Cache camera/light transforms once per frame, never per mesh vertex.
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+200]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, cameraComputeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+552]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, cameraFrameUAV
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    mov r8d, 1
+    mov r9d, 1
+    call qword ptr [rax+328]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, cameraFrameSRV
+    call qword ptr [rax+200]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, cameraFrameSRV
+    call qword ptr [rax+64]
+
+    ; Rasterize moving scene geometry into a real shadow/depth map.
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    xor r8d, r8d
+    call qword ptr [rax+288]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    lea r8, shadowRTV
+    mov r9, shadowDepthView
+    call qword ptr [rax+264]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, shadowRTV
+    lea r8, clearShadowColour
+    call qword ptr [rax+400]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, shadowDepthView
+    mov r8d, 1
+    movss xmm3, clearShadowColour
+    mov dword ptr [rsp+20h], 0
+    call qword ptr [rax+424]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    lea r8, shadowViewport
+    call qword ptr [rax+352]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, shadowVertexShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+88]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, shadowPixelShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+72]
+    mov ecx, 7
+    call DrawSceneBatches
+
+    cmp reflectionEnabled, 0
+    je reflection_complete
+    lea rcx, passReflection
+    call UpdatePassConstants
+    mov ecx, 44200000h                 ; 640x360 ray footprint and jitter
+    mov edx, 43B40000h
+    call UpdateFrameConstants
+    test eax, eax
+    js clean_exit
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    lea r8, reflectionRTV
+    mov r9, reflectionDepthView
+    call qword ptr [rax+264]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, reflectionDepthView
+    mov r8d, 1
+    movss xmm3, clearShadowColour
+    mov dword ptr [rsp+20h], 0
+    call qword ptr [rax+424]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, worldDepthState
+    xor r8d, r8d
+    call qword ptr [rax+288]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 2
+    mov r8d, 1
+    lea r9, shadowSRV
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    lea r8, reflectionViewport
+    call qword ptr [rax+352]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, vertexShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+88]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, pixelShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+72]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    xor r8d, r8d
+    call qword ptr [rax+104]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    xor r8d, r8d
+    call qword ptr [rax+288]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, meshVertexShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+88]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, meshPixelShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+72]
+    mov ecx, 6
+    call DrawSceneBatches
+    lea rcx, passMainAvailable
+    call UpdatePassConstants
+    mov ecx, 44A00000h
+    mov edx, 44340000h
+    call UpdateFrameConstants
+    test eax, eax
+    js clean_exit
+reflection_complete:
+
+    ; World: heightfield, water and sky write perspective depth into D32.
     mov rcx, d3dContext
     mov rax, [rcx]
     mov rax, [rax+264]                  ; OMSetRenderTargets
     mov edx, 1
     lea r8, lowRTV
-    xor r9d, r9d
+    mov r9, mainDepthView
     call rax
+    cmp reflectionEnabled, 0
+    je main_reflection_bound
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 5
+    mov r8d, 1
+    lea r9, reflectionSRV
+    call qword ptr [rax+64]             ; reflection RTV has been detached
+main_reflection_bound:
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, mainDepthView
+    mov r8d, 1
+    movss xmm3, clearShadowColour
+    mov dword ptr [rsp+20h], 0
+    call qword ptr [rax+424]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, worldDepthState
+    xor r8d, r8d
+    call qword ptr [rax+288]            ; sky at depth1 needs LESS_EQUAL
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 2
+    mov r8d, 1
+    lea r9, shadowSRV
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, vertexShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+88]
     mov rcx, d3dContext
     mov rax, [rcx]
     mov rax, [rax+352]                  ; RSSetViewports
@@ -1669,7 +2334,34 @@ update_constants:
     xor r8d, r8d
     call rax
 
-    ; Pass 2: composite procedural humans over LowA into LowB.  Keeping the
+    ; Real instanced triangles share the world depth buffer and HDR target.
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    xor r8d, r8d
+    call qword ptr [rax+288]            ; default LESS, depth writes enabled
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, meshVertexShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+88]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, meshPixelShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+72]
+    mov ecx, 6
+    call DrawSceneBatches
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, vertexShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+88]
+
+    ; Composite procedural humans over LowA into LowB. Keeping the
     ; character marcher out of the world shader prevents FXC from exploding its
     ; nested ray loops and gives reactive character depth a dedicated pass.
     mov rcx, d3dContext
@@ -1822,6 +2514,8 @@ temporal_targets_ready:
     call rax
     test eax, eax
     js clean_exit                      ; device removed/reset must not busy-loop
+    movss xmm0, currentTime
+    movss previousTime, xmm0
     xor dword ptr historyIndex, 1
     inc frameCounter
     jmp main_message_loop
@@ -1863,6 +2557,62 @@ release_graphics:
     mov rax, [rcx]
     call qword ptr [rax+880]            ; ID3D11DeviceContext::ClearState
 release_graphics_objects:
+    mov rcx, passConstantBuffer
+    call ReleaseObject
+    mov rcx, reflectionRTV
+    call ReleaseObject
+    mov rcx, reflectionSRV
+    call ReleaseObject
+    mov rcx, reflectionTexture
+    call ReleaseObject
+    mov rcx, reflectionDepthView
+    call ReleaseObject
+    mov rcx, reflectionDepthTexture
+    call ReleaseObject
+    mov rcx, terrainUAV
+    call ReleaseObject
+    mov rcx, terrainSRV
+    call ReleaseObject
+    mov rcx, terrainTexture
+    call ReleaseObject
+    mov rcx, terrainComputeShader
+    call ReleaseObject
+    mov rcx, cameraFrameUAV
+    call ReleaseObject
+    mov rcx, cameraFrameSRV
+    call ReleaseObject
+    mov rcx, cameraFrameBuffer
+    call ReleaseObject
+    mov rcx, batchConstantBuffer
+    call ReleaseObject
+    mov rcx, cameraComputeShader
+    call ReleaseObject
+    mov rcx, meshVertexShader
+    call ReleaseObject
+    mov rcx, meshPixelShader
+    call ReleaseObject
+    mov rcx, shadowVertexShader
+    call ReleaseObject
+    mov rcx, shadowPixelShader
+    call ReleaseObject
+    mov rcx, mainDepthView
+    call ReleaseObject
+    mov rcx, mainDepthTexture
+    call ReleaseObject
+    mov rcx, shadowDepthView
+    call ReleaseObject
+    mov rcx, shadowDepthTexture
+    call ReleaseObject
+    mov rcx, shadowRTV
+    call ReleaseObject
+    mov rcx, shadowSRV
+    call ReleaseObject
+    mov rcx, shadowTexture
+    call ReleaseObject
+    mov rcx, meshRasterizer
+    call ReleaseObject
+    mov rcx, worldDepthState
+    call ReleaseObject
     mov rcx, postSampler
     call ReleaseObject
     mov rcx, historyRTV1

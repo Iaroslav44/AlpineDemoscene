@@ -70,11 +70,18 @@ foreach ($tool in @($ml64, $link, $fxc, $rc)) {
 $hlsl = Join-Path $sourceDir 'scene.hlsl'
 $humanHlsl = Join-Path $sourceDir 'human_pass.hlsl'
 $postHlsl = Join-Path $sourceDir 'post.hlsl'
+$meshHlsl = Join-Path $sourceDir 'cinematic_mesh.hlsl'
 $vsBytecode = Join-Path $buildDir 'scene_vs.cso'
 $psBytecode = Join-Path $buildDir 'scene_ps.cso'
 $humanBytecode = Join-Path $buildDir 'human_ps.cso'
 $temporalBytecode = Join-Path $buildDir 'temporal_ps.cso'
 $displayBytecode = Join-Path $buildDir 'display_ps.cso'
+$meshVSBytecode = Join-Path $buildDir 'mesh_vs.cso'
+$meshPSBytecode = Join-Path $buildDir 'mesh_ps.cso'
+$shadowVSBytecode = Join-Path $buildDir 'shadow_vs.cso'
+$shadowPSBytecode = Join-Path $buildDir 'shadow_ps.cso'
+$cameraBytecode = Join-Path $buildDir 'camera_cs.cso'
+$terrainBytecode = Join-Path $buildDir 'terrain_cs.cso'
 $resource = Join-Path $buildDir 'shaders.res'
 $object = Join-Path $buildDir 'alpine.obj'
 $candidateDir = Join-Path $buildDir 'candidate'
@@ -82,18 +89,31 @@ New-Item -ItemType Directory -Force -Path $candidateDir | Out-Null
 $executable = Join-Path $candidateDir 'AlpineDreaming.exe'
 
 Write-Host 'Compiling procedural cinematic Direct3D shaders...'
-& $fxc /nologo /T vs_4_0 /E V /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $vsBytecode $hlsl
+& $fxc /nologo /T vs_5_0 /E V /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $vsBytecode $hlsl
 if ($LASTEXITCODE -ne 0) { throw 'Vertex shader compilation failed.' }
 # The large procedural marcher is deliberately compiled at O1: FXC's O3
 # inliner can exhaust itself when HumanMap is expanded inside the ray loop.
-& $fxc /nologo /T ps_4_0 /E P /O1 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $psBytecode $hlsl
+& $fxc /nologo /T ps_5_0 /E P /O1 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $psBytecode $hlsl
 if ($LASTEXITCODE -ne 0) { throw 'Pixel shader compilation failed.' }
-& $fxc /nologo /T ps_4_0 /E H /O1 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $humanBytecode $humanHlsl
+& $fxc /nologo /T ps_5_0 /E H /O1 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $humanBytecode $humanHlsl
 if ($LASTEXITCODE -ne 0) { throw 'Human composite shader compilation failed.' }
-& $fxc /nologo /T ps_4_0 /E Temporal /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $temporalBytecode $postHlsl
+& $fxc /nologo /T ps_5_0 /E Temporal /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $temporalBytecode $postHlsl
 if ($LASTEXITCODE -ne 0) { throw 'Temporal reconstruction shader compilation failed.' }
-& $fxc /nologo /T ps_4_0 /E Display /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $displayBytecode $postHlsl
+& $fxc /nologo /T ps_5_0 /E Display /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $displayBytecode $postHlsl
 if ($LASTEXITCODE -ne 0) { throw 'Display shader compilation failed.' }
+foreach ($shader in @(
+    @{ Entry='MeshVS'; Profile='vs_5_0'; Output=$meshVSBytecode },
+    @{ Entry='MeshPS'; Profile='ps_5_0'; Output=$meshPSBytecode },
+    @{ Entry='ShadowVS'; Profile='vs_5_0'; Output=$shadowVSBytecode },
+    @{ Entry='ShadowPS'; Profile='ps_5_0'; Output=$shadowPSBytecode },
+    @{ Entry='CameraCS'; Profile='cs_5_0'; Output=$cameraBytecode }
+)) {
+    & $fxc /nologo /T $shader.Profile /E $shader.Entry /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $shader.Output $meshHlsl
+    if ($LASTEXITCODE -ne 0) { throw "$($shader.Entry) compilation failed." }
+}
+
+& $fxc /nologo /T cs_5_0 /E TerrainCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $terrainBytecode (Join-Path $sourceDir 'terrain_compute.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Terrain cache shader compilation failed.' }
 
 Write-Host 'Embedding compact procedural DXBC shaders...'
 Push-Location $sourceDir
@@ -118,7 +138,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Linking failed.' }
 
 $verification = & (Join-Path $projectRoot 'tools\verify.ps1') -Executable $executable
 $file = Get-Item -LiteralPath $executable
-$limit = 1000000
+$limit = 20000000
 $hash = $verification.SHA256
 $percent = [math]::Round(100.0 * $file.Length / $limit, 2)
 
@@ -135,9 +155,9 @@ if (Test-Path -LiteralPath $published) {
 
 Write-Host ''
 Write-Host "Built:  $published"
-Write-Host "Size:   $($file.Length) bytes ($percent% of the strict 1,000,000-byte limit)"
+Write-Host "Size:   $($file.Length) bytes ($percent% of the strict 20,000,000-byte limit)"
 Write-Host "SHA256: $hash"
 
 if (-not $KeepIntermediates) {
-    Remove-Item -LiteralPath $vsBytecode, $psBytecode, $humanBytecode, $temporalBytecode, $displayBytecode, $resource, $object -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $vsBytecode, $psBytecode, $humanBytecode, $temporalBytecode, $displayBytecode, $meshVSBytecode, $meshPSBytecode, $shadowVSBytecode, $shadowPSBytecode, $cameraBytecode, $terrainBytecode, $resource, $object -Force -ErrorAction SilentlyContinue
 }

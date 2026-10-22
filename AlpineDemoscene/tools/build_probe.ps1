@@ -17,6 +17,10 @@ foreach ($part in @('ucrt','shared','um','winrt')) { $includes+="/I$sdkRoot\Incl
 & $cl /nologo /std:c++17 /EHsc /O2 /W4 @includes "/Fo$build\render_probe.obj" "/Fe$build\render_probe.exe" (Join-Path $PSScriptRoot 'render_probe.cpp') /link "/LIBPATH:$($toolset.FullName)\lib\x64" "/LIBPATH:$($sdk.FullName)\um\x64" "/LIBPATH:$($sdk.FullName)\ucrt\x64" d3d11.lib dxgi.lib
 if ($LASTEXITCODE -ne 0) { throw 'Offscreen probe compilation failed.' }
 $fxc=Join-Path $sdkRoot "bin\$($sdk.Name)\x64\fxc.exe"
-& $fxc /nologo /T ps_4_0 /E CameraProbe /O1 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo (Join-Path $build 'camera_probe.cso') (Join-Path $PSScriptRoot 'camera_probe.hlsl')
+& $fxc /nologo /T ps_5_0 /E CameraProbe /O1 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo (Join-Path $build 'camera_probe.cso') (Join-Path $PSScriptRoot 'camera_probe.hlsl')
 if ($LASTEXITCODE -ne 0) { throw 'Camera diagnostic shader compilation failed.' }
+& $fxc /nologo /T vs_5_0 /E InstanceVS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo (Join-Path $build 'instance_probe_vs.cso') (Join-Path $PSScriptRoot 'instance_probe.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Instance diagnostic vertex shader compilation failed.' }
+& $fxc /nologo /T ps_5_0 /E InstancePS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo (Join-Path $build 'instance_probe_ps.cso') (Join-Path $PSScriptRoot 'instance_probe.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Instance diagnostic pixel shader compilation failed.' }
 Write-Host "Built development-only probe: $build\render_probe.exe"

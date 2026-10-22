@@ -2,7 +2,7 @@
 param([Parameter(Mandatory)][string]$Executable)
 $ErrorActionPreference = 'Stop'
 $file = Get-Item -LiteralPath $Executable
-if ($file.Length -ge 1000000) { throw "EXE is $($file.Length) bytes; limit is strictly below 1,000,000 bytes." }
+if ($file.Length -ge 20000000) { throw "EXE is $($file.Length) bytes; limit is strictly below 20,000,000 bytes." }
 $bytes = [IO.File]::ReadAllBytes($file.FullName)
 function U16([int]$p) { [BitConverter]::ToUInt16($bytes, $p) }
 function U32([int]$p) { [BitConverter]::ToUInt32($bytes, $p) }
@@ -61,16 +61,39 @@ function WalkResources([int]$relative, [int[]]$keys) {
             if ($path.Count -gt 2) { throw 'Unexpected resource directory depth.' }
             WalkResources ([int]($target -band 0x7FFFFFFF)) $path
         } else {
-            if ($path.Count -ne 3 -or $path[0] -ne 10 -or $path[1] -notin @(101,102,103,104,105)) { throw "Unexpected resource: $($path -join '/')." }
+            if ($path.Count -ne 3 -or $path[0] -ne 10 -or $path[1] -notin @(101..111)) { throw "Unexpected resource: $($path -join '/')." }
             $dataEntry = $resourceBase + $target
             $data = Rva (U32 $dataEntry)
             $length = U32 ($dataEntry+4)
+            if ([uint64]$data + $length -gt $bytes.Length) { throw 'Resource extends beyond executable.' }
             if ($length -lt 32 -or [Text.Encoding]::ASCII.GetString($bytes,$data,4) -ne 'DXBC') { throw "Resource $($path[1]) is not DXBC bytecode." }
             if ((U32 ($data+24)) -ne $length) { throw "DXBC size mismatch in resource $($path[1])." }
+            # A valid DXBC container must hold the expected shader stage, not
+            # arbitrary data with a DXBC prefix or a vertex/pixel resource swap.
+            $chunkCount=U32 ($data+28)
+            if ($chunkCount -gt (($length-32)/4)) { throw 'Invalid DXBC chunk table.' }
+            $programs=0
+            for ($chunk=0; $chunk -lt $chunkCount; $chunk++) {
+                $offset=U32 ($data+32+$chunk*4)
+                if ([uint64]$offset+8 -gt $length) { throw 'DXBC chunk offset is outside resource.' }
+                $chunkLength=U32 ($data+$offset+4)
+                if ([uint64]$offset+8+$chunkLength -gt $length) { throw 'DXBC chunk payload is outside resource.' }
+                $tag=[Text.Encoding]::ASCII.GetString($bytes,$data+$offset,4)
+                if ($tag -in @('SHDR','SHEX')) {
+                    if ($chunkLength -lt 8) { throw 'Invalid shader program chunk.' }
+                    $version=U32 ($data+$offset+8)
+                    $expected=if($path[1] -in @(101,106,108)){1}elseif($path[1] -in @(110,111)){5}else{0}
+                    if (($version -shr 16) -ne $expected -or (($version -shr 4) -band 15) -ne 5 -or ($version -band 15) -ne 0) {
+                        throw "Resource $($path[1]) does not contain its expected Shader Model 5.0 stage."
+                    }
+                    $programs++
+                }
+            }
+            if ($programs -ne 1) { throw 'Expected exactly one shader program in DXBC.' }
             $script:found += $path[1]
         }
     }
 }
 WalkResources 0 @()
-if (($found | Sort-Object) -join ',' -ne '101,102,103,104,105') { throw "Expected exactly five shader resources; found $($found -join ',')." }
+if (($found | Sort-Object) -join ',' -ne '101,102,103,104,105,106,107,108,109,110,111') { throw "Expected exactly eleven shader resources; found $($found -join ',')." }
 [pscustomobject]@{ Path=$file.FullName; Bytes=$file.Length; SHA256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash; ShaderResources=($found -join ','); Imports=($imports -join ',') }

@@ -155,14 +155,52 @@ float3 DepthAwareDOF(float2 uv, out float encodedDepth)
     return sum / weightSum;
 }
 
+float3 ResolvedWorld(CameraFrame camera,float2 uv)
+{
+    return camera.origin+CameraRay(camera,uv,O.x/O.y)*DecodeDepth(ResolvedAlpha(uv));
+}
+
+float ScreenContactOcclusion(CameraFrame camera,float2 uv,float depth)
+{
+    if(depth>90.0||depth<0.15)return 1.0;
+    float3 p=ResolvedWorld(camera,uv);
+    float2 pixel=1.0/O.xy;
+    float3 xp=ResolvedWorld(camera,uv+float2(pixel.x*2,0))-p;
+    float3 xm=p-ResolvedWorld(camera,uv-float2(pixel.x*2,0));
+    float3 yp=ResolvedWorld(camera,uv+float2(0,pixel.y*2))-p;
+    float3 ym=p-ResolvedWorld(camera,uv-float2(0,pixel.y*2));
+    float3 dx=dot(xp,xp)<dot(xm,xm)?xp:xm;
+    float3 dy=dot(yp,yp)<dot(ym,ym)?yp:ym;
+    float3 normal=cross(dx,dy);
+    normal*=rsqrt(max(dot(normal,normal),1e-12));
+    if(dot(normal,camera.origin-p)<0.0)normal=-normal;
+    float radius=clamp(0.32*camera.lens*O.y/max(depth,0.1),3.0,46.0);
+    float occlusion=0.0;
+    [unroll]for(int i=0;i<8;++i)
+    {
+        float angle=(i+0.5)*2.39996323;
+        float2 offset=float2(cos(angle),sin(angle))*radius*sqrt((i+0.5)/8.0)*pixel;
+        float2 sampleUV=uv+offset;
+        if(any(sampleUV<=0.0)||any(sampleUV>=1.0))continue;
+        float3 delta=ResolvedWorld(camera,sampleUV)-p;
+        float d2=dot(delta,delta);
+        float horizon=max(0.0,dot(normal,delta)-0.025);
+        occlusion+=horizon*rsqrt(max(d2,0.0004))*saturate(1.0-d2/1.44);
+    }
+    // Applied only at display, not recursively baked into the HDR history.
+    // This is local screen-space contact shading, not global illumination.
+    return 1.0-min(0.32,occlusion*0.23);
+}
+
 float4 Display(VSOut input) : SV_Target
 {
     float2 uv = input.uv;
     float encodedDepth;
     float3 colour = max(DepthAwareDOF(uv, encodedDepth), 0.0);
-    colour = ACESCompact(colour * 1.08);
+    colour*=ScreenContactOcclusion(CurrentFrameCamera(input),uv,DecodeDepth(encodedDepth));
+    colour = ACESCompact(colour * 1.02);
     float2 v = uv * 2.0 - 1.0;
-    colour *= saturate(1.0 - 0.105 * dot(v * v, float2(0.72, 0.46)));
+    colour *= saturate(1.0 - 0.055 * dot(v * v, float2(0.72, 0.46)));
     float noise = Hash12(input.pos.xy + float2(G.w * 17.0, G.w * 43.0)) - 0.5;
     float dither = (frac(dot(input.pos.xy, float2(0.754877666, 0.569840296)) + G.w * 0.618) - 0.5);
     colour = pow(saturate(colour), 1.0 / 2.2);

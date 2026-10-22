@@ -23,7 +23,7 @@ VSOut BuildFrameVertex(uint id,float seconds,float previousSeconds)
     VSOut o;
     o.uv=float2((id<<1)&2,id&2);
     o.pos=float4(o.uv*float2(2,-2)+float2(-1,1),0,1);
-    CameraFrame c=GetCameraFrame(seconds),p=GetCameraFrame(previousSeconds);
+    CameraFrame c=PassCameraFrame(GetCameraFrame(seconds)),p=PassCameraFrame(GetCameraFrame(previousSeconds));
     o.cameraOriginLens=float4(c.origin,c.lens);
     o.cameraForward=c.forward;o.cameraRight=c.right;o.cameraUp=c.up;
     o.previousOriginLens=float4(p.origin,p.lens);

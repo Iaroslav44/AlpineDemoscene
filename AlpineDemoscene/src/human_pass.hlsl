@@ -14,6 +14,8 @@ Texture2D<float4> SceneLow : register(t0);
 
 // One camera/terrain definition is shared with the world and temporal passes.
 #include "frame_vertex.hlsli"
+#include "cinematic_lighting.hlsli"
+#include "people_motion.hlsli"
 #define HP_PI PI
 #define HP_TAU TAU
 #define HP_MAX_DIST MAX_DIST
@@ -24,28 +26,16 @@ Texture2D<float4> SceneLow : register(t0);
 void HPPersonPose(int index,float time,float3 cameraPos,out float3 root,out float3 facing,
                   out float scale,out float personId,out float phase,out float speed)
 {
-    float a=fmod(time,128.0)*(HP_TAU/128.0);
-    float2 c,velocity;
+    float2 c=PeopleCentre(index,time),velocity=PeopleVelocity(index,time);
+    scale=PeopleScale(index);
     if(index==0)
     {
-        c=float2(22.0+4.0*sin(a*2.0),1750.0+10.0*sin(a));
-        velocity=float2(8.0*cos(a*2.0),10.0*cos(a))*(HP_TAU/128.0);
-        scale=1.02;personId=999.0;phase=0.7;
+        personId=999.0;phase=0.7;
     }
     else
     {
         float fi=(float)index;
-        float2 base;
-        if(index==1)base=float2(-22,1737);
-        else if(index==2)base=float2(32,1745);
-        else if(index==3)base=float2(-4,1781);
-        else if(index==4)base=float2(32,1792);
-        else base=float2(-43,1804);
-        float rate=2.0+fmod(fi,3.0);
-        float ph=a*rate+fi*1.37;
-        c=base+float2(sin(ph),cos(ph))*2.6;
-        velocity=float2(cos(ph),-sin(ph))*(2.6*rate*HP_TAU/128.0);
-        scale=0.94+0.02*fmod(fi,5.0);personId=50.0+fi*19.0;phase=fi*1.37;
+        personId=50.0+fi*19.0;phase=fi*1.37;
     }
     // Elevation is sampled only after the inexpensive horizontal ray rejection.
     root=float3(c.x,0.0,c.y);
@@ -84,31 +74,31 @@ float3 HPPBR(float3 albedo,float3 n,float3 v,float3 l,float rough,float3 light)
          +(albedo*(1.0-F)/HP_PI+spec)*light*nl*(3.2*daylight);
 }
 
-float3 HPShade(HumanSurface hs,float3 rd,float3 sun)
+float3 HPShade(HumanSurface hs,float3 p,float3 rd,float3 sun)
 {
-    float warm=1.0-smoothstep(0.10,0.45,sun.y);
-    float3 light=lerp(float3(1.0,0.95,0.82),float3(1.0,0.34,0.08),warm);
-    float daylight=smoothstep(-0.06,0.16,sun.y);
-    float3 v=-rd,hv=v+sun,h=hv*rsqrt(max(dot(hv,hv),1e-8));
+    float3 v=-rd;
     float nl=saturate(dot(hs.normal,sun));
-    float nv=saturate(dot(hs.normal,v)),nh=saturate(dot(hs.normal,h));
-    float3 col=HPPBR(hs.albedo,hs.normal,v,sun,hs.roughness,light);
+    float nv=saturate(dot(hs.normal,v));
+    float visibility=CinematicShadow(p,hs.normal);
+    float roughness=abs(hs.material-HUM_MAT_EYE)<0.5?0.09:hs.roughness;
+    float3 col=CinematicLightingVisible(hs.normal,v,hs.albedo,roughness,0.0,hs.occlusion,visibility);
     if(abs(hs.material-HUM_MAT_SKIN)<0.5)
     {
-        float narrow=pow(nh,150.0)*(0.04+0.96*pow(1.0-saturate(dot(h,v)),5.0));
-        float wrap=saturate((dot(hs.normal,sun)+0.34)/1.34);
-        float back=saturate(dot(-hs.normal,sun))*(1.0-nv);
-        col+=(light*narrow*nl*0.15+hs.albedo*float3(1.0,0.29,0.14)*(0.045*wrap+0.15*back))*daylight;
+        // Diffusion is approximated with a broad red-biased irradiance lobe;
+        // thin ears transmit light while opaque cheeks do not glow through.
+        float wrap=saturate((dot(hs.normal,sun)+0.38)/1.38);
+        float back=pow(saturate(dot(-sun,v)),3.0)*hs.thinSkin;
+        col+=CinematicSunColor()*hs.albedo*float3(1.0,0.43,0.25)
+             *(0.14*max(0.0,wrap-nl)*hs.occlusion+0.20*back)*visibility;
     }
     else if(abs(hs.material-HUM_MAT_EYE)<0.5)
     {
-        col=HPPBR(hs.albedo,hs.normal,v,sun,0.05,light);
-        col+=(pow(saturate(dot(reflect(-sun,hs.normal),v)),420.0)*light*2.6+hs.albedo*0.075)*daylight;
+        col+=pow(saturate(dot(reflect(-sun,hs.normal),v)),500.0)*CinematicSunColor()*0.20*visibility;
     }
     else if(abs(hs.material-HUM_MAT_LIP)<0.5)
-        col+=pow(saturate(dot(reflect(-sun,hs.normal),v)),130.0)*light*(0.42*daylight);
+        col+=pow(saturate(dot(reflect(-sun,hs.normal),v)),130.0)*CinematicSunColor()*(0.045*visibility);
     else if(abs(hs.material-HUM_MAT_HAIR)<0.5)
-        col+=pow(1.0-nv,3.2)*(0.35+0.65*nl)*light*float3(0.16,0.065,0.022)*daylight;
+        col+=pow(1.0-nv,3.2)*nl*CinematicSunColor()*float3(0.035,0.025,0.018)*visibility;
     return col;
 }
 
@@ -147,7 +137,7 @@ float4 H(VSOut input):SV_Target
         if(dot(delta,delta)>350.0*350.0)continue;
         if(horizontalRay>1.0e-9 && crossDistance*crossDistance>0.75*0.75*horizontalRay)continue;
         if(horizontalRay<=1.0e-9 && dot(delta,delta)>0.75*0.75)continue;
-        root.y=Terrain(root.xz)+0.003;
+        root.y=Terrain(root.xz)+0.025;
         float3 ext=float3(0.72,1.12,0.72)*scale;
         float3 center=root+float3(0,0.91*scale,0);float tn,tf;
         if(!HPRayBox(ro,rd,center-ext,center+ext,tn,tf)||tn>=bestT||tf<=0.0)continue;
@@ -182,6 +172,7 @@ float4 H(VSOut input):SV_Target
     if(selected<0||bestT>=sceneT)return background;
     float3 p=ro+rd*bestT;
     HumanSurface hs=HumanSurfacePrepared(p,bestContext,bestId,bestT/(G.y*lens));
-    float3 color=HPShade(hs,rd,HPSun(fmod(G.z,128.0)*(HP_TAU/128.0)));
+    float3 color=HPShade(hs,p,rd,CinematicFrame[8].xyz);
+    color=CinematicFog(color,p);
     return float4(max(color,0.0),-HPEncodeDepth(bestT));
 }
