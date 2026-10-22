@@ -1,0 +1,76 @@
+[CmdletBinding()]
+param([Parameter(Mandatory)][string]$Executable)
+$ErrorActionPreference = 'Stop'
+$file = Get-Item -LiteralPath $Executable
+if ($file.Length -ge 1000000) { throw "EXE is $($file.Length) bytes; limit is strictly below 1,000,000 bytes." }
+$bytes = [IO.File]::ReadAllBytes($file.FullName)
+function U16([int]$p) { [BitConverter]::ToUInt16($bytes, $p) }
+function U32([int]$p) { [BitConverter]::ToUInt32($bytes, $p) }
+function AsciiZ([int]$p) {
+    $end = $p
+    while ($end -lt $bytes.Length -and $bytes[$end] -ne 0) { $end++ }
+    if ($end -eq $bytes.Length) { throw 'Unterminated PE string.' }
+    [Text.Encoding]::ASCII.GetString($bytes, $p, $end - $p)
+}
+if ((U16 0) -ne 0x5A4D) { throw 'Missing MZ signature.' }
+$pe = U32 0x3C
+if ((U32 $pe) -ne 0x4550 -or (U16 ($pe+4)) -ne 0x8664) { throw 'Expected an x64 PE executable.' }
+$optional = $pe + 24
+if ((U16 $optional) -ne 0x20B) { throw 'Expected PE32+.' }
+$sectionStart = $optional + (U16 ($pe+20))
+$sections = @(for ($i=0; $i -lt (U16 ($pe+6)); $i++) {
+    $p = $sectionStart + $i*40
+    [pscustomobject]@{ VA=(U32 ($p+12)); Size=[Math]::Max((U32 ($p+8)),(U32 ($p+16))); Raw=(U32 ($p+20)); RawSize=(U32 ($p+16)) }
+})
+function Rva([uint32]$value) {
+    foreach ($s in $sections) {
+        if ($value -ge $s.VA -and $value -lt $s.VA + $s.Size) {
+            $offset = $value - $s.VA
+            if ($offset -ge $s.RawSize) { throw 'RVA points outside file-backed data.' }
+            return [int]($s.Raw + $offset)
+        }
+    }
+    throw "Unmapped RVA $value."
+}
+$imports = @()
+$importRva = U32 ($optional+120)
+if ($importRva -eq 0) { throw 'Missing import directory.' }
+$p = Rva $importRva
+while ((U32 ($p+12)) -ne 0) {
+    $name = (AsciiZ (Rva (U32 ($p+12)))).ToLowerInvariant()
+    if ($name -notin @('kernel32.dll','user32.dll','d3d11.dll','winmm.dll')) { throw "Unexpected runtime dependency: $name" }
+    $imports += $name
+    $p += 20
+}
+if ((U32 ($optional+216)) -ne 0) { throw 'Delay-loaded DLLs are not permitted.' }
+$resourceRva = U32 ($optional+128)
+if ($resourceRva -eq 0) { throw 'Missing shader resources.' }
+$resourceBase = Rva $resourceRva
+$script:found = @()
+function WalkResources([int]$relative, [int[]]$keys) {
+    $directory = $resourceBase + $relative
+    $named = U16 ($directory+12)
+    $count = $named + (U16 ($directory+14))
+    if ($named -ne 0) { throw 'Named resources are not part of the procedural runtime contract.' }
+    for ($i=0; $i -lt $count; $i++) {
+        $entry = $directory + 16 + $i*8
+        $id = U32 $entry
+        $target = U32 ($entry+4)
+        $path = @($keys) + @([int]$id)
+        if (($target -band 0x80000000L) -ne 0) {
+            if ($path.Count -gt 2) { throw 'Unexpected resource directory depth.' }
+            WalkResources ([int]($target -band 0x7FFFFFFF)) $path
+        } else {
+            if ($path.Count -ne 3 -or $path[0] -ne 10 -or $path[1] -notin @(101,102,103,104,105)) { throw "Unexpected resource: $($path -join '/')." }
+            $dataEntry = $resourceBase + $target
+            $data = Rva (U32 $dataEntry)
+            $length = U32 ($dataEntry+4)
+            if ($length -lt 32 -or [Text.Encoding]::ASCII.GetString($bytes,$data,4) -ne 'DXBC') { throw "Resource $($path[1]) is not DXBC bytecode." }
+            if ((U32 ($data+24)) -ne $length) { throw "DXBC size mismatch in resource $($path[1])." }
+            $script:found += $path[1]
+        }
+    }
+}
+WalkResources 0 @()
+if (($found | Sort-Object) -join ',' -ne '101,102,103,104,105') { throw "Expected exactly five shader resources; found $($found -join ',')." }
+[pscustomobject]@{ Path=$file.FullName; Bytes=$file.Length; SHA256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash; ShaderResources=($found -join ','); Imports=($imports -join ',') }

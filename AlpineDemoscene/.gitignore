@@ -1,0 +1,6 @@
+/build/
+/preview/
+/dist/*.previous.exe
+*.obj
+*.pdb
+*.ilk

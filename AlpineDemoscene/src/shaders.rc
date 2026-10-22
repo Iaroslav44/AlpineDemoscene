@@ -1,0 +1,5 @@
+101 RCDATA "..\\build\\scene_vs.cso"
+102 RCDATA "..\\build\\scene_ps.cso"
+103 RCDATA "..\\build\\human_ps.cso"
+104 RCDATA "..\\build\\temporal_ps.cso"
+105 RCDATA "..\\build\\display_ps.cso"
