@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-27",
+  "baseline": {
+    "commit": "f2ec2731",
+    "tag": "alpine-baseline-20mb-20261027",
+    "bytes": 628224,
+    "sha256": "E710625FCBF6FD131A9B72B7D6B358DA8FF7C58FF4A7062DC1958636B525C6AB"
+  },
+  "release": {
+    "branch": "alpine-cinematic-88mb",
+    "file": "dist/AlpineDreaming.exe",
+    "bytes": 834560,
+    "strict_limit_bytes": 88000000,
+    "sha256": "979B077D03BD6AA0975C30F3889A24559C77E5A91EEF541B473C45896BCED0D1",
+    "shader_resources": "101,102,103,104,105,106,107,108,109,110,111,112,113",
+    "imports": "kernel32.dll,user32.dll,d3d11.dll,winmm.dll"
+  },
+  "cinematic_quality_target_achieved": false,
+  "runtime_predrawn_images": false,
+  "runtime_neural_inference": false,
+  "physical_model_scope": "3DOF glider translation with pilot; linearized variable-depth shallow water with fixed wet mask; harmonic vegetation; ballistic jet with approximate volume rendering; residents remain kinematic",
+  "shader_equivalence": {
+    "previous_sha256": "f9656ee3cf28383ccb93b6632b218d241a1a7569968eeb769f55e9d529d3fa63",
+    "current_sha256": "979b077d03bd6aa0975c30f3889a24559c77e5a91eef541b473c45896bced0d1",
+    "changed_shader_resources": [
+      102,
+      106,
+      108
+    ],
+    "unchanged_shader_resources": [
+      101,
+      103,
+      104,
+      105,
+      107,
+      109,
+      110,
+      111,
+      112,
+      113
+    ]
+  },
+  "flight_gpu": {
+    "samples": 15364,
+    "fixed_step_seconds": 0.00833333,
+    "storage_hz": 30,
+    "startup_gpu_ms": 17.8436,
+    "nonfinite_values": 0,
+    "min_clearance_m": 654.944,
+    "min_airspeed_m_s": 30.4228,
+    "max_airspeed_m_s": 33.5255,
+    "max_abs_bank_rad": 0.230865,
+    "min_lift_coefficient": 0.629217,
+    "max_lift_coefficient": 0.776225
+  },
+  "water_gpu": {
+    "flight_finite": true,
+    "tests": [
+      {
+        "name": "rest_state",
+        "steps": 600,
+        "initial": {
+          "nonfinite_values": 0,
+          "foam_out_of_range": 0,
+          "height_volume_m3": 0,
+          "max_abs_height_m": 0,
+          "max_speed_m_s": 0,
+          "max_foam": 0,
+          "wet_total_depth_lower_bound_m": 0.5
+        },
+        "final": {
+          "nonfinite_values": 0,
+          "foam_out_of_range": 0,
+          "height_volume_m3": 0,
+          "max_abs_height_m": 0,
+          "max_speed_m_s": 0,
+          "max_foam": 0,
+          "wet_total_depth_lower_bound_m": 0.5
+        },
+        "relative_volume_error": 0,
+        "passed": true
+      },
+      {
+        "name": "gaussian_conservation",
+        "steps": 600,
+        "initial": {
+          "nonfinite_values": 0,
+          "foam_out_of_range": 0,
+          "height_volume_m3": 1847.26,
+          "max_abs_height_m": 0.119695,
+          "max_speed_m_s": 0,
+          "max_foam": 0,
+          "wet_total_depth_lower_bound_m": 0.380305
+        },
+        "final": {
+          "nonfinite_values": 0,
+          "foam_out_of_range": 0,
+          "height_volume_m3": 1847.26,
+          "max_abs_height_m": 0.02106,
+          "max_speed_m_s": 0.0115308,
+          "max_foam": 0.000415594,
+          "wet_total_depth_lower_bound_m": 0.47894
+        },
+        "relative_volume_error": 3.0515E-08,
+        "passed": true
+      },
+      {
+        "name": "forced_128_seconds",
+        "steps": 7680,
+        "initial": {
+          "nonfinite_values": 0,
+          "foam_out_of_range": 0,
+          "height_volume_m3": 0,
+          "max_abs_height_m": 0,
+          "max_speed_m_s": 0,
+          "max_foam": 0,
+          "wet_total_depth_lower_bound_m": 0.5
+        },
+        "final": {
+          "nonfinite_values": 0,
+          "foam_out_of_range": 0,
+          "height_volume_m3": 3.53784E-05,
+          "max_abs_height_m": 0.0370996,
+          "max_speed_m_s": 0.0270911,
+          "max_foam": 0.0108848,
+          "wet_total_depth_lower_bound_m": 0.4629
+        },
+        "relative_volume_error": 3.53784E-05,
+        "passed": true
+      }
+    ],
+    "display_partition_bit_exact": true,
+    "backwards_replay_bit_exact": true,
+    "conservative_CFL": 0.0730267,
+    "debug_warnings_errors": 0
+  },
+  "independent_gpu_cache_validation": {
+    "passed": true,
+    "samples": 15364,
+    "max_basis_error": 7.78188077089E-07,
+    "max_airspeed_error_mps": 0.000113996206725,
+    "max_acceleration_residual_mps2": 0.00211256656213,
+    "max_relative_energy_work_residual": 7.95982912526E-06
+  },
+  "water_normal": {
+    "samples": 147456,
+    "time": 64,
+    "deep_limit_checks": 147456,
+    "water_samples": 46937,
+    "nonfinite_normal_or_uv_pixels": 0,
+    "max_normal_length_error": 0,
+    "water_rms_slope": 0.00707741,
+    "debug_warnings_errors": 0,
+    "passed": true
+  },
+  "water_negative_mutation": {
+    "samples": 147456,
+    "time": 64,
+    "deep_limit_checks": 147456,
+    "water_samples": 46937,
+    "nonfinite_normal_or_uv_pixels": 147456,
+    "max_normal_length_error": 0,
+    "water_rms_slope": 0,
+    "debug_warnings_errors": 0,
+    "passed": false
+  },
+  "camera": {
+    "samples": 16384,
+    "min_ground_clearance": 1.5955,
+    "min_water_clearance": 1.64999,
+    "range_start": 0,
+    "range_span": 128,
+    "max_projection_error": 3.35054E-05,
+    "nonfinite_values": 0,
+    "town_y": 149.682
+  },
+  "culling_pixel_equivalence_seconds": [
+    12,
+    24,
+    48,
+    64,
+    96
+  ],
+  "package_negative_cases_passed": 6,
+  "motion": [
+    {
+      "name": "release88_lake",
+      "start_seconds": 64,
+      "frames": 90,
+      "dt": 0.0333333,
+      "width": 1280,
+      "height": 720,
+      "scale": 1,
+      "render_mean_ms": 100.369,
+      "render_median_ms": 111.744,
+      "render_max_ms": 145.85,
+      "debug_errors": 0,
+      "debug_warnings": 0,
+      "unique_frame_hashes": 90
+    },
+    {
+      "name": "release88_glider",
+      "start_seconds": 96,
+      "frames": 90,
+      "dt": 0.0333333,
+      "width": 1280,
+      "height": 720,
+      "scale": 1,
+      "render_mean_ms": 99.331,
+      "render_median_ms": 105.139,
+      "render_max_ms": 129.76,
+      "debug_errors": 0,
+      "debug_warnings": 0,
+      "unique_frame_hashes": 90
+    },
+    {
+      "name": "release88_portrait",
+      "start_seconds": 24,
+      "frames": 60,
+      "dt": 0.0333333,
+      "width": 1280,
+      "height": 720,
+      "scale": 1,
+      "render_mean_ms": 88.993,
+      "render_median_ms": 101.156,
+      "render_max_ms": 128.387,
+      "debug_errors": 0,
+      "debug_warnings": 0,
+      "unique_frame_hashes": 60
+    }
+  ],
+  "performance_notes": "Intel Iris Xe, driver31.0.101.4255, D3D11 debug layer. Values exclude first frame and physics stage; no realtime30/60fps guarantee. Clock/load variation is substantial. Full64-frame route was tested on F965 candidate; physical resources remain identical. Final motion samples read exact release EXE resources.",
+  "native": {
+    "executable": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\dist\\AlpineDreaming.exe",
+    "sha256": "979B077D03BD6AA0975C30F3889A24559C77E5A91EEF541B473C45896BCED0D1",
+    "hold_seconds": 135,
+    "window_was_visible": false,
+    "responsive_before_close": true,
+    "close_latency_seconds": 0.4522,
+    "exit_code": 0,
+    "forced_termination": false
+  },
+  "preview": {
+    "file": "preview/cinematic88-runtime-check.mp4",
+    "bytes": 5269103,
+    "seconds": 8,
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "audio": false,
+    "purpose": "Deterministic offscreen QA render; not measured native playback speed; never loaded by demo."
+  },
+  "remaining_limits": [
+    "Photorealistic cinematic target not achieved",
+    "Synthetic faces and repeated architecture",
+    "Simplified geological geometry and indirect lighting",
+    "No6DOF, full3Dfluid solver, cloth or resident contact dynamics",
+    "Sustained rendering on Iris Xe is slower than30fps in complex scenes"
+  ]
+}

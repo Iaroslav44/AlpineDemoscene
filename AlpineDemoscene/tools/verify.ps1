@@ -2,7 +2,7 @@
 param([Parameter(Mandatory)][string]$Executable)
 $ErrorActionPreference = 'Stop'
 $file = Get-Item -LiteralPath $Executable
-if ($file.Length -ge 20000000) { throw "EXE is $($file.Length) bytes; limit is strictly below 20,000,000 bytes." }
+if ($file.Length -ge 88000000) { throw "EXE is $($file.Length) bytes; limit is strictly below 88,000,000 bytes." }
 $bytes = [IO.File]::ReadAllBytes($file.FullName)
 function U16([int]$p) { [BitConverter]::ToUInt16($bytes, $p) }
 function U32([int]$p) { [BitConverter]::ToUInt32($bytes, $p) }
@@ -61,7 +61,7 @@ function WalkResources([int]$relative, [int[]]$keys) {
             if ($path.Count -gt 2) { throw 'Unexpected resource directory depth.' }
             WalkResources ([int]($target -band 0x7FFFFFFF)) $path
         } else {
-            if ($path.Count -ne 3 -or $path[0] -ne 10 -or $path[1] -notin @(101..111)) { throw "Unexpected resource: $($path -join '/')." }
+            if ($path.Count -ne 3 -or $path[0] -ne 10 -or $path[1] -notin @(101..113)) { throw "Unexpected resource: $($path -join '/')." }
             $dataEntry = $resourceBase + $target
             $data = Rva (U32 $dataEntry)
             $length = U32 ($dataEntry+4)
@@ -82,7 +82,7 @@ function WalkResources([int]$relative, [int[]]$keys) {
                 if ($tag -in @('SHDR','SHEX')) {
                     if ($chunkLength -lt 8) { throw 'Invalid shader program chunk.' }
                     $version=U32 ($data+$offset+8)
-                    $expected=if($path[1] -in @(101,106,108)){1}elseif($path[1] -in @(110,111)){5}else{0}
+                    $expected=if($path[1] -in @(101,106,108)){1}elseif($path[1] -in @(110,111,112,113)){5}else{0}
                     if (($version -shr 16) -ne $expected -or (($version -shr 4) -band 15) -ne 5 -or ($version -band 15) -ne 0) {
                         throw "Resource $($path[1]) does not contain its expected Shader Model 5.0 stage."
                     }
@@ -95,5 +95,5 @@ function WalkResources([int]$relative, [int[]]$keys) {
     }
 }
 WalkResources 0 @()
-if (($found | Sort-Object) -join ',' -ne '101,102,103,104,105,106,107,108,109,110,111') { throw "Expected exactly eleven shader resources; found $($found -join ',')." }
+if (($found | Sort-Object) -join ',' -ne '101,102,103,104,105,106,107,108,109,110,111,112,113') { throw "Expected exactly thirteen shader resources; found $($found -join ',')." }
 [pscustomobject]@{ Path=$file.FullName; Bytes=$file.Length; SHA256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash; ShaderResources=($found -join ','); Imports=($imports -join ',') }

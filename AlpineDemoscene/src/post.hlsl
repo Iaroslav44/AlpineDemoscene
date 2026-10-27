@@ -110,7 +110,7 @@ float ResolvedAlpha(float2 uv)
     return Input0.Load(int3(p,0)).a;
 }
 
-float3 DepthAwareDOF(float2 uv, out float encodedDepth)
+float3 DepthAwareDOF(float2 uv,CameraFrame camera,out float encodedDepth)
 {
     float4 centre = Input0.SampleLevel(LinearClamp, uv, 0.0);
     centre.a=ResolvedAlpha(uv);
@@ -127,28 +127,28 @@ float3 DepthAwareDOF(float2 uv, out float encodedDepth)
     float focusDepth = clamp(DecodeDepth(focusEncoded), 1.0, MAX_DIST);
 
     float portrait = 1.0 - smoothstep(35.0, 180.0, focusDepth);
-    // Moderate aperture: retain architecture/material detail outside a closeup.
-    float maxCoCPixels = lerp(0.35, 2.0, portrait);
-    float relativeDefocus = abs(centreDepth - focusDepth) / max(focusDepth, 1.0);
-    float cocPixels = maxCoCPixels * smoothstep(0.025, 0.55, relativeDefocus);
-    float centreReactive = centre.a < 0.0 ? 1.0 : 0.0;
-    cocPixels *= lerp(1.0, 0.18, centreReactive);
+    // Thin-lens circle of confusion. A24mm-tall sensor and the projection
+    // lens determine focal length; landscapes usef/8, closeupsf/2.8.
+    float focalLength=.012*camera.lens,aperture=lerp(8.0,2.8,portrait);
+    float viewDepth=max(.1,centreDepth*dot(CameraRay(camera,uv,O.x/O.y),camera.forward));
+    float circle=focalLength*focalLength*abs(viewDepth-focusDepth)
+        /(aperture*viewDepth*max(focusDepth-focalLength,.01));
+    float cocPixels=min(8.0,.5*circle/.024*O.y);
 
     float3 sum = centre.rgb;
     float weightSum = 1.0;
     [unroll]
-    for (int i = 0; i < 7; ++i)
+    for (int i = 0; i < 16; ++i)
     {
         float fi = (float)i + 0.5;
         float angle = fi * 2.39996323;
-        float radius = sqrt(fi / 7.0) * cocPixels;
+        float radius = sqrt(fi / 16.0) * cocPixels;
         float2 offset = float2(cos(angle), sin(angle)) * radius / O.xy;
         float4 tap = Input0.SampleLevel(LinearClamp, uv + offset, 0.0);
         tap.a=ResolvedAlpha(uv+offset);
         float tapDepth = DecodeDepth(abs(tap.a));
         float depthDelta = abs(tapDepth - centreDepth) / max(centreDepth, 1.0);
         float w = exp2(-18.0 * depthDelta);
-        w *= tap.a < 0.0 ? 0.20 : 1.0;
         sum += tap.rgb * w;
         weightSum += w;
     }
@@ -196,7 +196,7 @@ float4 Display(VSOut input) : SV_Target
 {
     float2 uv = input.uv;
     float encodedDepth;
-    float3 colour = max(DepthAwareDOF(uv, encodedDepth), 0.0);
+    float3 colour = max(DepthAwareDOF(uv,CurrentFrameCamera(input),encodedDepth),0.0);
     colour*=ScreenContactOcclusion(CurrentFrameCamera(input),uv,DecodeDepth(encodedDepth));
     colour = ACESCompact(colour * 1.02);
     float2 v = uv * 2.0 - 1.0;
@@ -205,5 +205,9 @@ float4 Display(VSOut input) : SV_Target
     float dither = (frac(dot(input.pos.xy, float2(0.754877666, 0.569840296)) + G.w * 0.618) - 0.5);
     colour = pow(saturate(colour), 1.0 / 2.2);
     colour = saturate(colour + (noise * 0.70 + dither * 0.30) / 255.0);
+    // A physical trajectory is not forced to close by injecting energy.
+    // Editorial fades cover the explicit reset of the128s demonstration.
+    float phase=FlightTime(G.z);
+    colour*=smoothstep(0.0,.8,phase)*(1.0-smoothstep(127.2,128.0,phase));
     return float4(colour, 1.0);
 }

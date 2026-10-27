@@ -23,4 +23,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Camera diagnostic shader compilation failed.' 
 if ($LASTEXITCODE -ne 0) { throw 'Instance diagnostic vertex shader compilation failed.' }
 & $fxc /nologo /T ps_5_0 /E InstancePS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo (Join-Path $build 'instance_probe_ps.cso') (Join-Path $PSScriptRoot 'instance_probe.hlsl')
 if ($LASTEXITCODE -ne 0) { throw 'Instance diagnostic pixel shader compilation failed.' }
+& $fxc /nologo /T ps_5_0 /E WaterProbe /O1 /Gis /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo (Join-Path $build 'water_probe.cso') (Join-Path $PSScriptRoot 'water_probe.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Water normal/UV diagnostic shader compilation failed.' }
 Write-Host "Built development-only probe: $build\render_probe.exe"

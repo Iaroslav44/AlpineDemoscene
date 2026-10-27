@@ -16,9 +16,9 @@ function ExpectRejected([string]$label,[byte[]]$fixtureBytes) {
 }
 try {
     & $verify -Executable $Executable | Out-Null
-    $large=New-Object byte[] 20000000
+    $large=New-Object byte[] 88000000
     [Array]::Copy($bytes,$large,[Math]::Min($bytes.Length,$large.Length))
-    ExpectRejected 'exactly 20,000,000 bytes' $large
+    ExpectRejected 'exactly 88,000,000 bytes' $large
     $broken=$bytes.Clone();$broken[0]=0
     ExpectRejected 'invalid PE' $broken
     $text=[Text.Encoding]::ASCII.GetString($bytes)

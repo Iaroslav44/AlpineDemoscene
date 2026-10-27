@@ -15,6 +15,7 @@ static const float HUM_MAT_TOP   = 25.0;
 static const float HUM_MAT_LEG   = 26.0;
 static const float HUM_MAT_SHOE  = 27.0;
 static const float HUM_MAT_MOUTH = 28.0;
+static const float HUM_MAT_PACK  = 29.0;
 
 struct HumanHit
 {
@@ -241,6 +242,8 @@ HumanHit HumanMapLocalPose(float3 p, HumanPose pose)
     {
     // Contact-aware walking legs.  The knee advances before the lifted foot;
     // each person gets the same coherent gait at an independent phase.
+    if(p.y<1.075+bob)
+    {
     float3 hipL = float3(-0.105 + sway, 0.91 + bob, 0.0);
     float3 hipR = float3( 0.105 + sway, 0.91 + bob, 0.0);
     float3 ankleL = float3(-0.100, 0.098 + 0.075 * liftL, footCycleL.x);
@@ -257,11 +260,22 @@ HumanHit HumanMapLocalPose(float3 p, HumanPose pose)
     float footL = HumSdEllipsoid(p - (ankleL + float3(0.0, -0.045, 0.065)), float3(0.080, 0.052, 0.145));
     float footR = HumSdEllipsoid(p - (ankleR + float3(0.0, -0.045, 0.065)), float3(0.080, 0.052, 0.145));
     HumTake(hit.distance, hit.material, min(footL, footR), HUM_MAT_SHOE);
+    }
+    else hit.distance=p.y-(1.025+bob);
+
+    // Legs occupy less than1.025m. Conversely the lowest moving fingertips
+    // stay above0.72m. Hierarchical bounds avoid evaluating every body part at
+    // every ray step without changing the visible field at a surface.
+    if(p.y<.68+bob)
+    {
+        hit.distance=min(hit.distance,.72+bob-p.y);
+        return hit;
+    }
 
     // Pelvis, rib cage and shoulders form one breathing cloth volume.
     float3 tp = p - float3(sway, bob, 0.0);
     tp.z /= 1.0 + 0.018 * pose.breath;
-    float torso = HumSdEllipsoid(tp - float3(0.0, 1.235, 0.0), float3(0.190, 0.245, 0.113));
+    float torso = HumSdEllipsoid(tp - float3(0.0, 1.235, 0.0), float3(0.198, 0.245, 0.128));
     torso = HumSmoothMin(torso, HumSdEllipsoid(tp - float3(0.0, 1.365, -0.008), float3(0.221, 0.087, 0.105)), 0.030);
     torso = HumSmoothMin(torso, HumSdEllipsoid(tp - float3(0.0, 1.035, 0.0), float3(0.155, 0.170, 0.105)), 0.035);
     torso = HumSmoothMin(torso, HumSdEllipsoid(tp - float3(0.0, 0.962, 0.0), float3(0.170, 0.108, 0.108)), 0.024);
@@ -269,16 +283,17 @@ HumanHit HumanMapLocalPose(float3 p, HumanPose pose)
     // Millimetre-scale fabric displacement is attenuated before it becomes
     // subpixel. Its maximum derivative is below 0.28; the marcher uses 0.70.
     float foldGate=smoothstep(0.90,1.02,tp.y)*(1.0-smoothstep(1.27,1.42,tp.y));
-    float folds=sin(tp.y*74.0+abs(tp.x)*26.0+0.30*pose.breath)
-               *sin(tp.y*31.0-tp.x*18.0);
-    torso+=folds*(0.0015*foldGate*pose.garmentDetail);
+    float folds=sin(tp.y*60.0+abs(tp.x)*19.0+0.30*pose.breath)
+               *sin(tp.y*27.0-tp.x*14.0);
+    torso+=folds*(0.0028*foldGate*pose.garmentDetail);
 
     // A real raised hiking-jacket collar follows the same breathing transform
     // as the cloth volume. It stays inside the conservative whole-body bound.
-    float3 collarP=float3(abs(tp.x)-0.054,tp.y-1.438,tp.z-0.084);
-    collarP.yz=float2(collarP.y*0.62-collarP.z*0.785,collarP.y*0.785+collarP.z*0.62);
-    float collar=HumSdEllipsoid(collarP,float3(0.032,0.050,0.0035));
-    torso=HumSmoothMin(torso,collar,0.006);
+    float collarOuter=HumSdEllipsoid(tp-float3(0,1.451,-0.016),float3(0.090,0.068,0.078));
+    float collarInner=HumSdEllipsoid(tp-float3(0,1.473,0.005),float3(0.065,0.082,0.056));
+    float collar=max(collarOuter,-collarInner);
+    collar=max(collar,-tp.y+1.408);
+    torso=HumSmoothMin(torso,collar,0.009);
 
     // Arms counter-swing against the legs.  A slight elbow bend prevents the
     // pendulum look common in cheap procedural walkers.
@@ -294,6 +309,14 @@ HumanHit HumanMapLocalPose(float3 p, HumanPose pose)
     sleeveR=HumSmoothMin(sleeveR,HumSdTaperedLimb(p,elbowR,wristR,0.048,0.032),0.018);
     torso=HumSmoothMin(torso,min(sleeveL,sleeveR),0.024);
     HumTake(hit.distance,hit.material,torso,HUM_MAT_TOP);
+    // The pack and shoulder straps are separate rounded volumes. Their
+    // silhouettes and cast/contact shadows remain present without textures.
+    float pack=HumSdEllipsoid(tp-float3(0,1.205,-0.139),float3(0.153,0.213,0.085));
+    float strap=HumSdTaperedLimb(float3(abs(tp.x),tp.y,tp.z),
+                               float3(.119,1.408,.059),float3(.126,1.142,.122),.018,.015);
+    strap=HumSmoothMin(strap,HumSdTaperedLimb(float3(abs(tp.x),tp.y,tp.z),
+                               float3(.126,1.142,.122),float3(.155,1.026,.077),.015,.012),.009);
+    HumTake(hit.distance,hit.material,min(pack,strap),HUM_MAT_PACK);
     float handSide=p.x<0.0?-1.0:1.0;
     float3 hand=p-(handSide<0.0?wristL:wristR);hand.x*=handSide;
     float handBound=length(hand-float3(0,-0.060,0.010))-0.095;
@@ -340,13 +363,20 @@ HumanHit HumanMapLocalPose(float3 p, HumanPose pose)
     // Low-amplitude changes in the underlying mass, not separate cheek/brow
     // solids: the latter produced visible prosthetic-looking lobes in QA.
     float2 cheekPlane=(float2(abs(hp.x),hp.y)-float2(0.043,1.638))/float2(0.030,0.036);
-    float2 browPlane=(float2(abs(hp.x),hp.y)-float2(0.030,1.683))/float2(0.030,0.014);
-    float facialPlane=(0.0015*exp2(-dot(cheekPlane,cheekPlane)*1.5)
-                     +0.0008*exp2(-dot(browPlane,browPlane)*1.5))*smoothstep(0.015,0.065,hp.z);
+    float2 browPlane=(float2(abs(hp.x),hp.y)-float2(0.030,1.682))/float2(0.029,0.011);
+    float2 cheekHollow=(float2(abs(hp.x),hp.y)-float2(0.051,1.612))/float2(0.024,0.023);
+    float2 temple=(float2(abs(hp.x),hp.y)-float2(0.069,1.681))/float2(0.016,0.030);
+    // Broad anatomical planes: malar ridge, supraorbital ridge, buccal hollow,
+    // and temples. Their derivatives stay small enough for the SDF safety step.
+    float facialPlane=(0.0032*exp2(-dot(cheekPlane,cheekPlane)*1.5)
+                     +0.0025*exp2(-dot(browPlane,browPlane)*1.5)
+                     -0.0028*exp2(-dot(cheekHollow,cheekHollow)*1.5)
+                     -0.0015*exp2(-dot(temple,temple)*1.5))*smoothstep(0.015,0.065,hp.z);
     float3 faceP=hp;faceP.z-=facialPlane;
+    faceP.x-=.0012*sin((hp.y-1.61)*17.0)*smoothstep(.02,.07,hp.z);
     float skin=HumSdEllipsoid(faceP-float3(0,1.673,-0.005),float3(0.080,0.103,0.090));
     skin=HumSmoothMin(skin,HumSdEllipsoid(faceP-float3(0.0013,1.604,0.023),float3(0.069,0.080,0.071)),0.016);
-    skin=HumSmoothMin(skin,HumSdEllipsoid(hp-float3(-0.0008,1.565,0.029),float3(0.057,0.036,0.046)),0.010);
+    skin=HumSmoothMin(skin,HumSdEllipsoid(hp-float3(-0.0008,1.565,0.033),float3(0.052,0.033,0.048)),0.010);
     float3 sym=hp; sym.x=abs(sym.x);
     float ear=HumSdEllipsoid(sym-float3(0.081,1.656,-0.008),float3(0.010,0.030,0.014));
     float concha=HumSdEllipsoid(sym-float3(0.087,1.660,0.002),float3(0.006,0.020,0.010));
@@ -354,9 +384,9 @@ HumanHit HumanMapLocalPose(float3 p, HumanPose pose)
     skin=HumSmoothMin(skin,ear,0.004);
     // Tapered nasal bridge and alae; actual nostril subtraction prevents black
     // dots floating in front of the face.
-    float nose=HumSdCapsule(hp,float3(0,1.667,0.085),float3(0,1.631,0.113),0.009);
-    nose=HumSmoothMin(nose,HumSdEllipsoid(hp-float3(0,1.626,0.114),float3(0.014,0.011,0.016)),0.005);
-    nose=HumSmoothMin(nose,HumSdEllipsoid(sym-float3(0.012,1.621,0.104),float3(0.009,0.008,0.010)),0.004);
+    float nose=HumSdTaperedLimb(hp,float3(0,1.671,0.084),float3(0,1.631,0.112),0.0065,0.0085);
+    nose=HumSmoothMin(nose,HumSdEllipsoid(hp-float3(0,1.626,0.114),float3(0.012,0.010,0.014)),0.005);
+    nose=HumSmoothMin(nose,HumSdEllipsoid(sym-float3(0.012,1.621,0.104),float3(0.007,0.007,0.009)),0.005);
     float nostril=HumSdEllipsoid(sym-float3(0.010,1.619,0.114),float3(0.004,0.003,0.006));
     nose=max(nose,-nostril);
     skin=HumSmoothMin(skin,nose,0.006);
@@ -368,14 +398,22 @@ HumanHit HumanMapLocalPose(float3 p, HumanPose pose)
     float almond=sqrt(saturate(1.0-pow(ep.x/0.014,2.0)));
     float eyeOpen=1.0-pose.blink;
     float asymmetry=hp.x<0.0?0.96:1.04;
-    float upper=0.0047*almond*eyeOpen*asymmetry+0.0001;
+    float eyeTilt=ep.x*0.055;
+    ep.y-=eyeTilt;
+    float upper=0.0038*almond*eyeOpen*asymmetry+0.0001;
     float lower=-0.0023*almond*eyeOpen-0.0001;
     float aperture=max(ep.y-upper,lower-ep.y);
     aperture=max(aperture,abs(ep.x)-0.014);
     float eyeCut=max(eyeBall-0.0018,aperture);
     skin=max(skin,-eyeCut);
-    float eyelid=max(abs(eyeBall)-0.0014,-aperture);
-    skin=HumSmoothMin(skin,eyelid,0.0025);
+    float eyelid=max(abs(eyeBall)-0.0012,-aperture);
+    skin=HumSmoothMin(skin,eyelid,0.0030);
+    // The superior lid fold is a shallow recess following the lid's arc,
+    // rather than a painted line or a second disconnected eyelid.
+    float creaseY=0.0071*almond*eyeOpen+0.0025;
+    float crease=HumSdCapsule(float3(ep.x,ep.y-creaseY,ep.z),
+                             float3(-.012,0,.0105),float3(.012,0,.0105),.00075);
+    skin=HumSmoothMax(skin,-crease,.0008);
     if(pose.blink<0.98)HumTake(hit.distance,hit.material,max(eyeBall,aperture),HUM_MAT_EYE);
 
     // The lips sit on the facial plane. One analytic curve supplies both the
@@ -383,8 +421,9 @@ HumanHit HumanMapLocalPose(float3 p, HumanPose pose)
     float mouthY=1.591+hp.x*0.025+pose.emotion*0.003*pow(saturate(abs(hp.x)/0.025),1.6);
     float mouthHalf=0.025;
     float lipShape=sqrt(saturate(1.0-pow(hp.x/mouthHalf,2.0)));
-    float upperLip=HumSdEllipsoid(float3(hp.x,hp.y-mouthY-0.0015,hp.z-0.094),float3(0.025,0.0030,0.006));
-    float lowerLip=HumSdEllipsoid(float3(hp.x,hp.y-mouthY+0.0035,hp.z-0.094),float3(0.024,0.0040,0.006));
+    float cupid=0.0009*(1.0-exp2(-pow(hp.x/.006,2.0)));
+    float upperLip=HumSdEllipsoid(float3(hp.x,hp.y-mouthY-0.0015-cupid,hp.z-0.094),float3(0.025,0.0026,0.0045));
+    float lowerLip=HumSdEllipsoid(float3(hp.x,hp.y-mouthY+0.0033,hp.z-0.094),float3(0.024,0.0033,0.005));
     float mouthCavity=max(length(float2((hp.x/0.024)*0.0018,hp.y-mouthY))-0.0018,abs(hp.z-0.090)-0.010);
     skin=max(skin,-mouthCavity);
     HumTake(hit.distance,hit.material,min(upperLip,lowerLip),HUM_MAT_LIP);
@@ -528,7 +567,7 @@ void HumanMaterialLocal(float3 p, HumanPose pose, float personId,
     float pores = (HumHash31(floor(surfaceP * 360.0 + pose.seed * 23.0)) - 0.5)
                 * (1.0-smoothstep(0.0007,0.003,footprint));
     albedo = lerp(skinDark, skinLight, skinTone) * (1.0 + pores * 0.045);
-    roughness = 0.56 + pores * 0.035;
+    roughness = 0.59 + pores * 0.035;
 
     // Broad chromatic zones survive low resolution; pores are never substituted
     // for face structure. All features remain attached to the articulated head.
@@ -545,7 +584,7 @@ void HumanMaterialLocal(float3 p, HumanPose pose, float personId,
     albedo*=1.0-beardMask*stubble;
     roughness=lerp(roughness,0.54,beardMask*0.7);
     float noseOil=faceMask*exp2(-hp.x*hp.x*3300.0-pow((hp.y-1.64)*24.0,2.0));
-    roughness=lerp(roughness,0.42,noseOil*0.65);
+    roughness=lerp(roughness,0.46,noseOil*0.65);
     // Eyebrows are a filtered hair coverage band on the brow ridge, not dark
     // solid cylinders hovering over the eyelids. Individual fibres vanish
     // below a pixel while the soft coverage stays stable.
@@ -573,6 +612,12 @@ void HumanMaterialLocal(float3 p, HumanPose pose, float personId,
         float limbal=HumLineMask(irisRadius-0.0055,0.0005,footprint);
         albedo = lerp(albedo, irisA * radial*(1.0-0.45*limbal),irisMask);
         albedo = lerp(albedo, float3(0.004, 0.003, 0.002), 1.0 - smoothstep(0.0024-eyeAA,0.0024+eyeAA,irisRadius));
+        // Upper eyelid shades the cornea and sclera. The medial canthus has
+        // subdued vascular colour, avoiding two luminous floating eye whites.
+        float lidShade=smoothstep(-.002,.0045,eyeLocal.y);
+        albedo*=1.0-.42*lidShade;
+        float canthus=smoothstep(.009,.013,-eyeLocal.x*sign(hp.x));
+        albedo=lerp(albedo,float3(.25,.095,.070),canthus*.55);
         roughness = 0.075;
     }
     else if (abs(material - HUM_MAT_HAIR) < 0.5)
@@ -589,19 +634,19 @@ void HumanMaterialLocal(float3 p, HumanPose pose, float personId,
         albedo = lerp(float3(0.13,0.050,0.043),float3(0.31,0.13,0.105),skinTone);
         float grooves=sin(hp.x*1350.0+sin(hp.y*180.0))*HumDetailAttenuation(1400.0,footprint);
         albedo*=1.0+0.035*grooves;
-        roughness = 0.34+0.025*grooves;
+        roughness = 0.43+0.025*grooves;
     }
     else if (abs(material - HUM_MAT_TOP) < 0.5)
     {
-        float weave = 0.96 + 0.04 * sin(tp.x * 330.0) * sin(tp.y * 310.0)
+        float weave = 0.99 + 0.01 * sin(tp.x * 330.0) * sin(tp.y * 310.0)
                             * HumDetailAttenuation(455.0,footprint);
-        albedo = lerp(float3(0.025, 0.075, 0.105), float3(0.30, 0.055, 0.032), seed2) * weave;
+        albedo = lerp(float3(0.018, 0.045, 0.060), float3(0.21, 0.048, 0.027), seed2) * weave;
         float front=smoothstep(0.015,0.085,tp.z)*(1.0-smoothstep(0.21,0.25,abs(tp.x)));
         float shoulder=smoothstep(1.305,1.330,tp.y)*smoothstep(0.095,0.15,abs(tp.x));
         float sleeve=smoothstep(0.225,0.255,abs(tp.x));
         float collar=smoothstep(1.405,1.44,tp.y);
-        albedo*=lerp(1.0,0.46,max(collar,max(shoulder,sleeve*0.6)));
-        roughness = 0.78;
+        albedo*=lerp(1.0,0.71,max(collar,max(shoulder,sleeve*0.6)));
+        roughness = 0.86;
 
         // A broad zipper tape and panel seams remain readable. Fine teeth and
         // stitching dissolve to their mean when smaller than a pixel.
@@ -621,8 +666,8 @@ void HumanMaterialLocal(float3 p, HumanPose pose, float personId,
         float pocketEdge=HumRectMask(pocket,float2(0.047,0.055),footprint)
                          -HumRectMask(pocket,float2(0.043,0.051),footprint);
         float pocketZip=HumRectMask(pocket-float2(0,0.041),float2(0.043,0.003),footprint);
-        float seam=max(pocketEdge,pocketZip)*front;
-        albedo*=1.0-0.58*seam;
+        float seam=max(pocketEdge*.38,pocketZip)*front;
+        albedo*=1.0-0.38*seam;
         float stitching=0.65+0.35*sin((abs(tp.x)+tp.y)*1380.0)*HumDetailAttenuation(1900.0,footprint);
         float hem=HumLineMask(tp.y-0.967,0.004,footprint)*front;
         albedo*=1.0-0.28*hem*stitching;
@@ -631,6 +676,17 @@ void HumanMaterialLocal(float3 p, HumanPose pose, float personId,
         button*=smoothstep(0.075,0.10,tp.z);
         albedo=lerp(albedo,float3(0.10,0.11,0.12),button);
         roughness=lerp(roughness,0.32,button);
+    }
+    else if (abs(material - HUM_MAT_PACK) < 0.5)
+    {
+        albedo=float3(.022,.027,.025);
+        float webbing=.97+.03*sin(p.y*850.0)*HumDetailAttenuation(850.0,footprint);
+        albedo*=webbing;
+        roughness=.9;
+        float buckle=HumRectMask(float2(abs(tp.x)-.127,tp.y-1.153),float2(.020,.015),footprint)
+                       *smoothstep(.10,.13,tp.z);
+        albedo=lerp(albedo,float3(.075,.078,.072),buckle);
+        roughness=lerp(roughness,.47,buckle);
     }
     else if (abs(material - HUM_MAT_LEG) < 0.5)
     {

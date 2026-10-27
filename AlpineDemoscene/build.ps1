@@ -82,6 +82,8 @@ $shadowVSBytecode = Join-Path $buildDir 'shadow_vs.cso'
 $shadowPSBytecode = Join-Path $buildDir 'shadow_ps.cso'
 $cameraBytecode = Join-Path $buildDir 'camera_cs.cso'
 $terrainBytecode = Join-Path $buildDir 'terrain_cs.cso'
+$flightBytecode = Join-Path $buildDir 'flight_cs.cso'
+$waterBytecode = Join-Path $buildDir 'water_cs.cso'
 $resource = Join-Path $buildDir 'shaders.res'
 $object = Join-Path $buildDir 'alpine.obj'
 $candidateDir = Join-Path $buildDir 'candidate'
@@ -91,8 +93,8 @@ $executable = Join-Path $candidateDir 'AlpineDreaming.exe'
 Write-Host 'Compiling procedural cinematic Direct3D shaders...'
 & $fxc /nologo /T vs_5_0 /E V /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $vsBytecode $hlsl
 if ($LASTEXITCODE -ne 0) { throw 'Vertex shader compilation failed.' }
-# The large procedural marcher is deliberately compiled at O1: FXC's O3
-# inliner can exhaust itself when HumanMap is expanded inside the ray loop.
+# O1 is the verified stable profile for the large procedural world marcher.
+# The current O3 experiment produced identical DXBC, with no runtime benefit.
 & $fxc /nologo /T ps_5_0 /E P /O1 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $psBytecode $hlsl
 if ($LASTEXITCODE -ne 0) { throw 'Pixel shader compilation failed.' }
 & $fxc /nologo /T ps_5_0 /E H /O1 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $humanBytecode $humanHlsl
@@ -114,6 +116,11 @@ foreach ($shader in @(
 
 & $fxc /nologo /T cs_5_0 /E TerrainCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $terrainBytecode (Join-Path $sourceDir 'terrain_compute.hlsl')
 if ($LASTEXITCODE -ne 0) { throw 'Terrain cache shader compilation failed.' }
+
+& $fxc /nologo /T cs_5_0 /E FlightCS /D ALPINE_FLIGHT_SIM=1 /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $flightBytecode (Join-Path $sourceDir 'physics_simulation.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Flight physics shader compilation failed.' }
+& $fxc /nologo /T cs_5_0 /E WaterCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $waterBytecode (Join-Path $sourceDir 'physics_simulation.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Water physics shader compilation failed.' }
 
 Write-Host 'Embedding compact procedural DXBC shaders...'
 Push-Location $sourceDir
@@ -138,7 +145,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Linking failed.' }
 
 $verification = & (Join-Path $projectRoot 'tools\verify.ps1') -Executable $executable
 $file = Get-Item -LiteralPath $executable
-$limit = 20000000
+$limit = 88000000
 $hash = $verification.SHA256
 $percent = [math]::Round(100.0 * $file.Length / $limit, 2)
 
@@ -155,9 +162,9 @@ if (Test-Path -LiteralPath $published) {
 
 Write-Host ''
 Write-Host "Built:  $published"
-Write-Host "Size:   $($file.Length) bytes ($percent% of the strict 20,000,000-byte limit)"
+Write-Host "Size:   $($file.Length) bytes ($percent% of the strict 88,000,000-byte limit)"
 Write-Host "SHA256: $hash"
 
 if (-not $KeepIntermediates) {
-    Remove-Item -LiteralPath $vsBytecode, $psBytecode, $humanBytecode, $temporalBytecode, $displayBytecode, $meshVSBytecode, $meshPSBytecode, $shadowVSBytecode, $shadowPSBytecode, $cameraBytecode, $terrainBytecode, $resource, $object -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $vsBytecode, $psBytecode, $humanBytecode, $temporalBytecode, $displayBytecode, $meshVSBytecode, $meshPSBytecode, $shadowVSBytecode, $shadowPSBytecode, $cameraBytecode, $terrainBytecode, $flightBytecode, $waterBytecode, $resource, $object -Force -ErrorAction SilentlyContinue
 }

@@ -9,3 +9,5 @@
 109 RCDATA "..\\build\\shadow_ps.cso"
 110 RCDATA "..\\build\\camera_cs.cso"
 111 RCDATA "..\\build\\terrain_cs.cso"
+112 RCDATA "..\\build\\flight_cs.cso"
+113 RCDATA "..\\build\\water_cs.cso"

@@ -49,6 +49,28 @@ float FBM3(float3 p)
     return s;
 }
 
+// Tetrahedral gradient noise with an analytic derivative. Unlike stacked
+// 2D slices it has no horizontal lattice planes on a tall exposed cliff.
+float4 RockNoise(float3 p)
+{
+    float3 cell=floor(p+dot(p,float3(1.0/3.0,1.0/3.0,1.0/3.0)));
+    float3 x0=p-cell+dot(cell,float3(1.0/6.0,1.0/6.0,1.0/6.0));
+    float3 rank=step(x0.yzx,x0.xyz),inverse=1.0-rank;
+    float3 i1=min(rank,inverse.zxy),i2=max(rank,inverse.zxy);
+    float value=0;float3 gradient=0;
+    [unroll]for(int corner=0;corner<4;++corner)
+    {
+        float3 offset=corner==0?float3(0,0,0):(corner==1?i1:(corner==2?i2:float3(1,1,1)));
+        float3 c=cell+offset,x=x0-offset+(float)corner/6.0;
+        float2 seed=c.xy+c.z*float2(19.19,73.13);
+        float3 g=float3(Hash21(seed),Hash21(seed+31.7),Hash21(seed+83.1))*2.0-1.0;
+        g*=rsqrt(max(dot(g,g),.001));
+        float t=max(.6-dot(x,x),0),t2=t*t,t3=t2*t,t4=t2*t2,d=dot(g,x);
+        value+=t4*d;gradient+=t4*g-8.0*t3*d*x;
+    }
+    return float4(.5+21.0*value,21.0*gradient);
+}
+
 // Every animated layer samples this coherent periodic wind field.
 float2 WindField(float2 xz, float loopA)
 {
@@ -159,19 +181,19 @@ float3 ShadeTerrain(float3 p, float3 rd, float3 sun, float loopA,float footprint
     float3 n = TerrainNormal(p.xz);
     float slope = saturate(1.0 - n.y);
     float fine = FBM2(p.xz * 0.016);
-    float strata = 0.88 + 0.12 * Noise2(float2(p.x*0.011+p.z*0.007,p.y*0.049)+Noise2(p.xz*0.004)*3.0);
+    float rockColour=RockNoise(p*.018+float3(19,41,7)).x;
     float3 grass = lerp(float3(0.045,0.063,0.026), float3(0.19,0.21,0.095), fine);
-    float3 rock = lerp(float3(0.085,0.083,0.077), float3(0.31,0.29,0.26), fine) * strata;
+    float3 rock = lerp(float3(0.12,0.116,0.105), float3(0.28,0.265,0.24), rockColour);
     float snowLine=80.0*(Noise2(p.xz*0.009)-0.5)+30.0*(Noise2(p.xz*0.037)-0.5);
     // Snow collects on sheltered shelves and in gullies, leaving exposed ribs.
     float shelter=saturate(0.60+0.35*n.y-0.25*dot(n,float3(-.7,0,.7)));
-    float snow = smoothstep(790.0,1100.0,p.y+snowLine)*(1.0-smoothstep(0.18,0.62,slope))*shelter;
+    float snow = smoothstep(1500.0,1900.0,p.y+snowLine)*(1.0-smoothstep(0.18,0.62,slope))*shelter;
     float melt = 0.5 + 0.5 * sin(loopA - 0.6);
     snow *= lerp(1.0, 0.72, melt);
     float3 albedo = lerp(grass, rock, smoothstep(0.08, 0.43, slope));
     albedo = lerp(albedo, float3(0.82,0.88,0.93), snow);
     float forest = smoothstep(0.58, 0.77, Noise2(p.xz * 0.021 + 12.0));
-    forest *= (1.0-snow)*(1.0-smoothstep(0.24,0.52,slope))*(1.0-smoothstep(610.0,1000.0,p.y));
+    forest *= (1.0-snow)*(1.0-smoothstep(0.24,0.52,slope))*(1.0-smoothstep(1050.0,1400.0,p.y));
     float2 wind = WindField(p.xz, loopA);
     float grassSway = 0.94 + 0.06 * sin(dot(p.xz, wind) * 0.12 + loopA * 19.0);
     albedo = lerp(albedo * grassSway, float3(0.026,0.043,0.021), forest * 0.32);
@@ -192,15 +214,25 @@ float3 ShadeTerrain(float3 p, float3 rd, float3 sun, float loopA,float footprint
     float rockMask=smoothstep(0.06,0.36,slope)*(1.0-snow);
     float3 gradient=0;
     float grain=0;
+    // Tilted bedding planes and intersecting rock joints are world-space
+    // material relief, filtered independently of the geometric height cache.
+    // Their scale is metres to tens of metres, avoiding uniform fine speckle.
+    float3 beddingScale=float3(.018,.075,.021);
+    float4 bedding=RockNoise(p*beddingScale+float3(7,13,29));
+    float beddingBand=DetailBand(fp,.075)*rockMask;
+    gradient+=bedding.yzw*beddingScale*1.6*beddingBand;
+    albedo*=1.0-.18*beddingBand*smoothstep(.46,.65,bedding.x);
+    float4 fracture=RockNoise(p*.065+float3(11,39,7));
+    gradient+=fracture.yzw*.065*1.0*DetailBand(fp,.065)*rockMask;
     // Metre-scale fractures down to fine grains. Subpixel bands fade to their
     // average; the field stays fixed in world space while the camera moves.
-    [loop]for(int band=0;band<3;++band)
+    [loop]for(int band=0;band<2;++band)
     {
         float f=0.32*exp2((float)band*2.0);
         float visible=DetailBand(fp,f);
         if(visible>0.001)
         {
-            float4 sample=DetailNoise3(p*f+float3(9.1,17.3,band*13.7));
+            float4 sample=RockNoise(p*f+float3(9.1,17.3,band*13.7));
             float amplitude=lerp(0.024,0.24,rockMask)*exp2(-(float)band*1.7);
             gradient+=sample.yzw*(f*amplitude*visible);
             grain+=(sample.x-0.5)*visible*exp2(-(float)band)*0.36;
@@ -259,41 +291,30 @@ bool RayBox(float3 ro, float3 rd, float3 bmin, float3 bmax, out float tNear, out
     return tFar >= max(tNear, 0.0);
 }
 
-// Six travelling sine-wave components (height field, not Gerstner displacement).
-// Integer temporal phase counts make the
-// 128-second visual and musical loops meet without a discontinuity.
+// The coarse surface is a numerical shallow-water solution, shared with
+// diagnostics. Short capillary/gravity waves below grid scale affect shading.
 float3 WaterField(float2 xz,float loopA)
 {
-    float h=0.0,dx=0.0,dz=0.0;
-    float gustPhase = loopA*3.0 + dot(xz,float2(0.0010,0.0013));
-    float gust = 0.12*sin(gustPhase);
-    float2 gustGradient = 0.12*cos(gustPhase)*float2(0.0010,0.0013);
-    [unroll]for(int i=0;i<6;++i)
-    {
-        float fi=(float)i;
-        float2 dir=normalize(float2(cos(1.73*fi+0.4),sin(2.11*fi+0.8)));
-        float k=0.012*exp2(fi*0.43),amp=1.15*exp2(-fi*0.63),speed=17.0+8.0*fi;
-        float ph=dot(xz,dir)*k+loopA*speed+fi*1.9+gust;
-        float2 gradient = dir*k + gustGradient;
-        h+=amp*sin(ph);dx+=amp*gradient.x*cos(ph);dz+=amp*gradient.y*cos(ph);
-    }
-    return float3(h,dx,dz);
+    return PhysicalWaterField(xz);
 }
 
 float LakeMask(float2 xz)
 {
-    return 1.0-smoothstep(0.92,1.0,length((xz-LAKE_C)/float2(900.0,610.0)));
+    float lake=1.0-smoothstep(1.02,1.06,length((xz-LAKE_C)/float2(900.0,610.0)));
+    float channel=(1.0-smoothstep(45.0,55.0,abs(xz.x-350.0)))
+        *smoothstep(4610.0,4630.0,xz.y)*(1.0-smoothstep(4820.0,4845.0,xz.y));
+    return max(lake,channel);
 }
 
 float WaterHit(float3 ro,float3 rd,float maxT,float loopA)
 {
     if(abs(rd.y)<0.0001)return maxT+1.0;
     float boundsNear,boundsFar;
-    if(!RayBox(ro,rd,float3(LAKE_C.x-900.0,LAKE_Y-3.3,LAKE_C.y-610.0),
-                     float3(LAKE_C.x+900.0,LAKE_Y+3.3,LAKE_C.y+610.0),boundsNear,boundsFar)
+    if(!RayBox(ro,rd,float3(LAKE_C.x-960.0,LAKE_Y-3.3,LAKE_C.y-650.0),
+                     float3(LAKE_C.x+960.0,LAKE_Y+3.3,LAKE_C.y+650.0),boundsNear,boundsFar)
        || boundsNear>maxT)return maxT+1.0;
-    // The sum of all six amplitudes is below 3.3 m. Bracket that entire slab
-    // and use safeguarded Newton steps, including the horizontal derivative.
+    // Bracket the validated wave envelope and use safeguarded Newton steps,
+    // including the horizontal derivative of the simulated surface.
     // Fixed point division by rd.y diverged precisely at reflective grazing angles.
     float a=(LAKE_Y-3.3-ro.y)/rd.y,b=(LAKE_Y+3.3-ro.y)/rd.y;
     float lo=max(0.0,min(a,b)),hi=min(maxT,max(a,b));
@@ -334,16 +355,18 @@ float4 CloudLayer(float3 ro,float3 rd,float maxT,float3 sun,float loopA,float2 p
     if(abs(rd.y)<0.002){if(ro.y<650.0||ro.y>1190.0)return 0.0;tn=0.0;tf=maxT;}
     else{float a=(650.0-ro.y)/rd.y,b=(1190.0-ro.y)/rd.y;tn=max(0.0,min(a,b));tf=min(maxT,max(a,b));}
     if(tf<=tn)return 0.0;
-    float span=tf-tn,jitter=Hash21(pixel+floor(G.z*24.0)*0.37);
+    float span=tf-tn;
     float3 accum=0.0;float trans=1.0;
-    [loop]for(int i=0;i<6;++i)
+    [loop]for(int i=0;i<12;++i)
     {
-        float t=tn+span*((i+jitter)/6.0);float3 p=ro+rd*t;float den=CloudDensity(p,loopA);
+        float t=tn+span*((i+0.5)/12.0);float3 p=ro+rd*t;float den=CloudDensity(p,loopA);
         // Beer-Lambert optical depth integrates density times EACH step length.
-        float alpha=1.0-exp(-den*(span/6.0)*0.00105);
-        float light=saturate(0.35+0.65*dot(sun,float3(0,1,0)));
-        float3 cc=lerp(float3(0.25,0.29,0.34),float3(1.0,0.91,0.75),light);
-        cc+=pow(saturate(dot(rd,sun)),12.0)*float3(0.38,0.20,0.07);
+        float alpha=1.0-exp(-den*(span/12.0)*0.00105);
+        float optical=CloudDensity(p+sun*65.0,loopA)*.14+CloudDensity(p+sun*180.0,loopA)*.25;
+        float light=exp(-optical*5.0);
+        float mu=dot(rd,sun),g=.64;
+        float phase=(1.0-g*g)/pow(max(.05,1.0+g*g-2.0*g*mu),1.5);
+        float3 cc=float3(.17,.22,.29)+float3(.70,.65,.55)*light*(.55+.10*phase);
         accum+=trans*alpha*cc;trans*=1.0-alpha;
     }
     return float4(accum,1.0-trans);
@@ -363,21 +386,27 @@ float3 SkyWithCloudReflection(float3 rd,float3 p,float3 sun,float loopA)
     return col;
 }
 
-float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
+float3 WaterShadingNormal(float3 p,float3 rd,float loopA,float footprint,out float unresolved)
 {
     float3 w=WaterField(p.xz,loopA);
     float2 rippleGradient=0;
-    float unresolved=0;
+    unresolved=0;
     float fp=footprint/max(abs(rd.y),0.08);
-    // Short wind waves modulate the true water normal rather than translating
-    // a reflection image. All phase counts are integral over the128s loop.
-    [loop]for(int band=0;band<4;++band)
+    // Sub-grid waves use the gravity/capillary dispersion relation in SI units:
+    // omega²=(g*k+surfaceTension/density*k³)*tanh(k*depth).
+    float localDepth=max(.1,p.y-Terrain(p.xz));
+    [loop]for(int band=0;band<8;++band)
     {
-        float b=(float)band,k=0.21*exp2(b*0.91),amplitude=0.045*exp2(-1.25*b);
+        float b=(float)band,k=0.45*exp2(b*.9),amplitude=.014*exp2(-1.1*b);
         float2 direction=normalize(float2(cos(b*1.67+0.23),sin(b*1.37+0.51)));
-        float3 warp=DetailNoise2(p.xz*(k*0.23)+float2(b*17.1,9.7));
-        float phase=dot(p.xz,direction)*k+warp.x*5.0+loopA*(67.0+23.0*b);
-        float2 phaseGradient=direction*k+warp.yz*(k*1.15);
+        // FXC lowers tanh to exponentials: large positive k*depth can become
+        // inf/inf on SM5 hardware. This equivalent positive-domain expression
+        // stays bounded, including the deep-water limit of exactly1.
+        float decay=exp(-2.0*k*localDepth);
+        float finiteDepth=(1.0-decay)/(1.0+decay);
+        float omega=sqrt((9.81*k+.000074*k*k*k)*finiteDepth);
+        float phase=dot(p.xz,direction)*k-FlightTime(G.z)*omega+b*2.31;
+        float2 phaseGradient=direction*k;
         // Reflection changes much faster than the water height. Filter the
         // short-wave slope conservatively, including the grazing footprint,
         // instead of reflecting sharp ridges through an undersampled grating.
@@ -386,6 +415,14 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
         unresolved+=amplitude*k*(1.0-visible);
     }
     float3 n=normalize(float3(-w.y-rippleGradient.x,1.0,-w.z-rippleGradient.y));
+    return n;
+}
+
+float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
+{
+    float unresolved;
+    float3 n=WaterShadingNormal(p,rd,loopA,footprint,unresolved);
+    float fp=footprint/max(abs(rd.y),0.08);
     float3 reflectedRay=reflect(rd,n);
     float3 reflection=SkyWithCloudReflection(reflectedRay,p,sun,loopA);
     CameraFrame camera;
@@ -421,7 +458,7 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
             // Reflection LOD avoids another full shadow march per water pixel.
             float3 rn=TerrainNormal(rp.xz);
             float rock=smoothstep(0.08,0.43,1.0-rn.y);
-            float snow=smoothstep(790.0,1100.0,rp.y)*(1.0-smoothstep(0.18,0.62,1.0-rn.y));
+            float snow=smoothstep(1500.0,1900.0,rp.y)*(1.0-smoothstep(0.18,0.62,1.0-rn.y));
             float3 ra=lerp(float3(0.06,0.09,0.035),float3(0.25,0.23,0.20),rock);
             ra=lerp(ra,float3(0.82,0.88,0.93),snow);
             float3 reflectedTerrain=ra*(0.22+2.4*saturate(dot(rn,sun))*smoothstep(-0.06,0.16,sun.y));
@@ -441,16 +478,20 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
     float3 refractedRay=refract(rd,n,1.0/1.333);
     float opticalDepth=depth/max(abs(refractedRay.y),0.12);
     float3 bed=float3(.23,.25,.18);
-    if(depth<26.0)
+    if(depth<32.0)
     {
         float bt=TraceTerrain(p+n*.04,refractedRay,220.0);
         if(bt<220.0)
         {
             float3 bp=p+n*.04+refractedRay*bt;
             float sediment=Noise2(bp.xz*.42)*.65+Noise2(bp.xz*1.7)*.35;
-            bed=lerp(float3(.14,.16,.12),float3(.37,.39,.29),sediment);
-            bed*=.35+.85*saturate(dot(TerrainNormal(bp.xz),sun));
-            opticalDepth=bt;
+            float3 resolvedBed=lerp(float3(.14,.16,.12),float3(.37,.39,.29),sediment);
+            resolvedBed*=.35+.85*saturate(dot(TerrainNormal(bp.xz),sun));
+            // Fade the expensive bed trace into the deep-water approximation
+            // continuously; a hard26m switch drew a ring across the lake.
+            float bedWeight=1.0-smoothstep(20.0,32.0,depth);
+            bed=lerp(bed,resolvedBed,bedWeight);
+            opticalDepth=lerp(opticalDepth,bt,bedWeight);
         }
     }
     float3 transmission=exp(-opticalDepth*float3(.12,.047,.024));
@@ -464,79 +505,93 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
     float foam=(1.0-smoothstep(0.18,1.1,depth))*smoothstep(0.61,0.80,shoreNoise);
     float streakPhase=dot(p.xz,float2(0.91,0.38))+loopA*29.0;
     foam*=0.72+0.28*sin(streakPhase)*DetailBand(fp,0.16);
+    foam=max(foam,PhysicalWaterFoam(p.xz));
     return lerp(col,float3(0.63,0.69,0.65),foam*0.32);
 }
 
-float WaterfallHit(float3 ro,float3 rd,float maxT,float loopA)
+// Ballistic jet: horizontal launch velocity15m/s and gravity9.81m/s².
+// The flow follows a trajectory through space, not the shape of the cliff.
+float3 WaterfallSource()
 {
-    // The escarpment is sloped. A vertical card detached its upper stream and
-    // buried its lower half. Trace a thin cascade following the actual terrain.
-    float tn,tf;
-    if(!RayBox(ro,rd,float3(320.0,295.0,5010.0),float3(380.0,820.0,5240.0),tn,tf))return maxT+1.0;
-    float t=max(0.0,tn),endT=min(tf,maxT);
-    float slopeDen=max(abs(rd.y)+5.35*length(rd.xz),0.12);
-    [loop]for(int i=0;i<96;++i)
+    return float3(350.0,Terrain(float2(350.0,4915.0))+1.2,4915.0);
+}
+float3 WaterfallTrajectory(float age)
+{
+    float3 source=WaterfallSource();
+    return source+float3(0.0,-4.905*age*age,-15.0*age);
+}
+float4 WaterfallVolume(float3 ro,float3 rd,float maxT,float seconds,out float firstDepth)
+{
+    float3 source=WaterfallSource();
+    float fallAge=sqrt(max(0.0,2.0*(source.y-LAKE_Y)/9.81));
+    float tn,tf;firstDepth=maxT+1.0;
+    if(!RayBox(ro,rd,float3(310.0,LAKE_Y,source.z-15.0*fallAge-35.0),
+        float3(390.0,source.y+2.0,source.z+4.0),tn,tf))return 0;
+    tn=max(0.0,tn);tf=min(tf,maxT);
+    if(tf<=tn)return 0;
+    float ds=(tf-tn)/48.0,trans=1.0;
+    float3 result=0;
+    [loop]for(int i=0;i<48;++i)
     {
-        if(t>=endT)break;
-        float3 q=ro+rd*t;
-        float film=0.80+0.25*sin(q.x*0.072+loopA*31.0)+0.15*sin(q.z*0.041+loopA*43.0);
-        float d=q.y-Terrain(q.xz)-film;
-        if(d<max(0.035,t*0.00010))
-        {
-            float width=14.0+8.0*(1.0-smoothstep(330.0,760.0,q.y));
-            if(abs(q.x-350.0)<width)return t;
-            break;
-        }
-        t+=min(d/slopeDen,28.0);
+        float t=tn+(i+.5)*ds;float3 p=ro+rd*t;
+        float age=sqrt(max(0.0,2.0*(source.y-p.y)/9.81));
+        float centreZ=source.z-15.0*age;
+        float width=6.5+age*.55,thickness=1.2+age*.32;
+        float parcelAge=age-seconds;
+        float turbulence=smoothstep(.3,4.0,age);
+        float centreX=source.x+turbulence*(1.1*sin(parcelAge*2.4)+.65*sin(parcelAge*5.1));
+        float2 q=float2((p.x-centreX)/width,(p.z-centreZ)/thickness);
+        float parcel=Noise3(float3(p.x*.38,p.z*.28,(age-seconds)*2.3));
+        float fine=Noise3(float3(p.x*.91,p.z*.56,(age-seconds)*5.7));
+        float breakup=smoothstep(.12,.84,parcel*.65+fine*.35);
+        // Constant mass flux: expansion and acceleration dilute the jet;
+        // entrained bubbles/droplet area increase the scattering cross-section.
+        float speed=sqrt(225.0+pow(9.81*age,2.0));
+        float dilution=(15.0/speed)*(6.5*1.2)/(width*thickness);
+        float bubbles=1.0+5.0*smoothstep(.4,6.0,age);
+        // Advected coherent filaments leave translucent gaps inside the jet;
+        // this is optical breakup, not a separately claimed particle solver.
+        float strands=.5+.5*sin((p.x-centreX)*1.15+sin(parcelAge*3.7)*.8);
+        float density=exp(-dot(q,q)*1.8)*(.16+.84*breakup)*lerp(1.0,.35+.95*strands,turbulence)*dilution*bubbles;
+        density*=step(p.y,source.y)*step(LAKE_Y,p.y);
+        float alpha=1.0-exp(-density*ds*1.15);
+        // Several individually thin samples can become visible together.
+        // Record the first visible cumulative extinction, so transparent
+        // fringes receive fog at the jet rather than the background depth.
+        if(1.0-trans*(1.0-alpha)>.001&&firstDepth>maxT)firstDepth=t;
+        float back=saturate(dot(rd,CinematicFrame[8].xyz));
+        float3 light=float3(.32,.39,.44)+CinematicSunColor()*(.54+.18*back);
+        light*=.83+.17*breakup;
+        result+=trans*alpha*light;trans*=1.0-alpha;
+        if(trans<.015)break;
     }
-    return maxT+1.0;
-}
-
-float FallingNoise(float2 p)
-{
-    float2 cell=floor(p),f=frac(p);f=f*f*(3.0-2.0*f);
-    float y0=fmod(fmod(cell.y,64.0)+64.0,64.0),y1=fmod(y0+1.0,64.0);
-    return lerp(lerp(Hash21(float2(cell.x,y0)),Hash21(float2(cell.x+1.0,y0)),f.x),
-        lerp(Hash21(float2(cell.x,y1)),Hash21(float2(cell.x+1.0,y1)),f.x),f.y);
-}
-
-float4 ShadeWaterfall(float3 p,float3 rd,float3 sun,float loopA)
-{
-    // Wrapped noise advection gives the water irregular falling parcels, rather
-    // than bright sine stripes painted across a flat blue ribbon.
-    float phase=loopA*19.0;
-    float2 turbulence=float2(Noise2(float2(p.x*.025,p.y*.013)+float2(cos(phase),sin(phase))),
-        Noise2(float2(p.x*.041,p.y*.009)+float2(sin(phase),cos(phase))*1.7));
-    float travel=loopA*(64.0/TAU);
-    float flow=FallingNoise(float2(p.x*.19+turbulence.x*1.4,p.y*.023+travel*2.0));
-    float small=FallingNoise(float2(p.x*.67+turbulence.y,p.y*.083+travel*7.0));
-    float aeration=smoothstep(.29,.72,flow*.75+small*.25);
-    float dhdx=0.25*0.072*cos(p.x*0.072+loopA*31.0),dhdz=0.15*0.041*cos(p.z*0.041+loopA*43.0);
-    float3 baseN=TerrainNormal(p.xz);
-    float3 n=normalize(float3(baseN.x/max(baseN.y,0.05)-dhdx,1.0,baseN.z/max(baseN.y,0.05)-dhdz));
-    if(dot(n,-rd)<0.0)n=-n;
-    float spec=pow(saturate(dot(reflect(-sun,n),-rd)),90.0);
-    float3 col=lerp(float3(.14,.20,.21),float3(.72,.78,.77),aeration)+spec*float3(1.2,1.1,.9);
-    float edge=smoothstep(5010.0,5026.0,p.z)*(1.0-smoothstep(5218.0,5240.0,p.z));
-    float width=14.0+8.0*(1.0-smoothstep(330.0,760.0,p.y));
-    edge*=1.0-smoothstep(width-4.0,width,abs(p.x-350.0)+turbulence.x*3.0);
-    return float4(col,(.40+.49*aeration)*edge);
+    return float4(result,1.0-trans);
 }
 
 float4 SprayLayer(float3 ro,float3 rd,float maxT,float loopA,float2 pixel)
 {
-    float3 center=float3(350.0,Terrain(float2(350.0,5020.0))+12.0,5015.0),radius=float3(90.0,65.0,90.0);
-    float3 o=(ro-center)/radius,d=rd/radius;float A=dot(d,d),B=dot(o,d),C=dot(o,o)-1.0,H=B*B-A*C;
-    if(H<=0.0)return 0.0;H=sqrt(H);float tn=max(0.0,(-B-H)/A),tf=min(maxT,(-B+H)/A);
-    if(tf<=tn)return 0.0;float span=tf-tn,jitter=Hash21(pixel+91.0),density=0.0;
-    [loop]for(int i=0;i<5;++i)
+    float3 source=WaterfallSource();
+    float impactAge=sqrt(max(0.0,2.0*(source.y-LAKE_Y)/9.81));
+    float3 impact=float3(source.x,LAKE_Y,source.z-15.0*impactAge);
+    float seconds=FlightTime(G.z);
+    float3 wind=PhysicalWind(impact,seconds);
+    float3 center=impact+float3(wind.x*2.0,12.0,wind.z*2.0);
+    float3 radius=float3(40.0,28.0,42.0);
+    float3 o=(ro-center)/radius,d=rd/radius;
+    float A=dot(d,d),B=dot(o,d),C=dot(o,o)-1.0,H=B*B-A*C;
+    if(H<=0.0)return 0;H=sqrt(H);
+    float tn=max(0.0,(-B-H)/A),tf=min(maxT,(-B+H)/A);
+    if(tf<=tn)return 0;
+    float ds=(tf-tn)/12.0,trans=1.0;float3 accum=0;
+    [loop]for(int i=0;i<12;++i)
     {
-        float t=tn+span*((i+jitter)/5.0);float3 p=ro+rd*t,q=(p-center)/radius;
-        float2 wind=WindField(p.xz,loopA);
-        float n=FBM3(p*0.013+float3(wind.x,sin(loopA*5.0),wind.y));
-        density+=exp(-dot(q,q)*2.2)*smoothstep(0.48,0.78,n);
+        float t=tn+(i+.5)*ds;float3 p=ro+rd*t,q=(p-center)/radius;
+        float n=FBM3((p-wind*seconds)*.13+float3(0,-seconds*.7,0));
+        float density=exp(-dot(q,q)*2.5)*smoothstep(.24,.72,n)*smoothstep(LAKE_Y,LAKE_Y+3.0,p.y);
+        float alpha=1.0-exp(-density*ds*.032);
+        accum+=trans*alpha*float3(.52,.62,.68);trans*=1.0-alpha;
     }
-    float alpha=1.0-exp(-density*(span/5.0)*0.0042);return float4(float3(0.60,0.70,0.75)*alpha,alpha);
+    return float4(accum,1.0-trans);
 }
 
 float3 ApplyFog(float3 col,float3 rd,float dist,float3 p,float3 sun)
@@ -584,12 +639,14 @@ WorldOutput P(VSOut input)
     if(solidT<=MAX_DIST)col=ApplyFog(col,rd,solidT,hitP,sun);
 
     float3 effectsOrigin=ro+rd*rayStart;
-    float waterfallT=validTerrainRay?rayStart+WaterfallHit(effectsOrigin,rd,max(0.0,solidT-rayStart),loopA):MAX_DIST+1.0;
-    if(waterfallT<solidT)
+    float waterfallT=MAX_DIST+1.0;
+    float4 fall=validTerrainRay?WaterfallVolume(effectsOrigin,rd,max(0.0,solidT-rayStart),FlightTime(G.z),waterfallT):0;
+    waterfallT+=rayStart;
+    if(fall.a>.001)
     {
-        float3 wp=ro+rd*waterfallT;float4 fall=ShadeWaterfall(wp,rd,sun,loopA);
-        col=lerp(col,ApplyFog(fall.rgb,rd,waterfallT,wp,sun),fall.a);
-        solidT=min(solidT,waterfallT);
+        float3 wp=ro+rd*min(waterfallT,MAX_DIST);
+        col=lerp(col,ApplyFog(fall.rgb/max(fall.a,.001),rd,waterfallT,wp,sun),fall.a);
+        if(fall.a>.65)solidT=min(solidT,waterfallT);
         reactive=1.0;
     }
 

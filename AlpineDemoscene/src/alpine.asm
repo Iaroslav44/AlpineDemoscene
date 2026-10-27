@@ -6,6 +6,7 @@ option casemap:none
 
 EXTERN  ExitProcess:PROC
 EXTERN  GetModuleHandleA:PROC
+EXTERN  GetStartupInfoA:PROC
 EXTERN  VirtualAlloc:PROC
 EXTERN  VirtualFree:PROC
 EXTERN  QueryPerformanceCounter:PROC
@@ -57,6 +58,9 @@ CW_RENDER_HEIGHT                EQU 720
 CW_LOW_WIDTH                    EQU 1280
 CW_LOW_HEIGHT                   EQU 720
 SHADOW_SIZE                     EQU 2048
+FLIGHT_ELEMENTS                 EQU 61456
+FLIGHT_BYTES                    EQU 983296
+WATER_SIZE                      EQU 256
 
 DXGI_FORMAT_R8G8B8A8_UNORM      EQU 28
 DXGI_USAGE_RENDER_TARGET_OUTPUT EQU 20h
@@ -199,7 +203,7 @@ shadowViewport:
 shadowSurfaceDesc:
     dd SHADOW_SIZE, SHADOW_SIZE, 1, 1, 41, 1, 0, 0, 28h, 0, 0 ; R32_FLOAT
 terrainSurfaceDesc:
-    dd 2048, 2048, 1, 1, 41, 1, 0, 0, 88h, 0, 0 ; R32_FLOAT SRV|UAV
+    dd 4096, 4096, 1, 1, 41, 1, 0, 0, 88h, 0, 0 ; R32_FLOAT SRV|UAV
 reflectionSurfaceDesc:
     dd 640, 360, 1, 1, 10, 1, 0, 0, 28h, 0, 0 ; RGBA16F
 reflectionDepthDesc:
@@ -222,6 +226,17 @@ cameraSRVDesc:
     dd 0, 1, 0, 12, 0, 0               ; UNKNOWN, BUFFER, 12 elements
 cameraUAVDesc:
     dd 0, 1, 0, 12, 0
+flightBufferDesc:
+    dd FLIGHT_BYTES, 0, 88h, 0, 40h, 16
+flightSRVDesc:
+    dd 0, 1, 0, FLIGHT_ELEMENTS, 0, 0
+flightUAVDesc:
+    dd 0, 1, 0, FLIGHT_ELEMENTS, 0
+waterSurfaceDesc:
+    dd WATER_SIZE, WATER_SIZE, 1, 1, 2, 1, 0, 0, 88h, 0, 0 ; RGBA32F SRV|UAV
+physicsRate REAL4 60.0
+physicsDelta REAL4 0.0166666666667
+physicsConstants dd 3C888889h, 0, 0, 0 ; dt,time,mode,integer step as float
 meshRasterizerDesc:
     dd 3, 1, 0, 0, 0, 0, 1, 0, 0, 0 ; SOLID, CULL_NONE, depth clip on
 worldDepthStateDesc:
@@ -234,10 +249,10 @@ worldDepthStateDesc:
 ; the procedural dispatch base explicitly in b1; both API start offsets are 0.
 meshDrawBatches:
     dd 0, 0, 0, 0, 3600, 32, 0, 0
-    dd 1000, 0, 0, 0, 8712, 192, 0, 0
+    dd 1000, 0, 0, 0, 15624, 192, 0, 0
     dd 2000, 0, 0, 0, 18, 12288, 0, 0
     dd 20000, 0, 0, 0, 240, 384, 0, 0
-    dd 30000, 0, 0, 0, 216, 4, 0, 0
+    dd 30000, 0, 0, 0, 12288, 4, 0, 0
     dd 40000, 0, 0, 0, 288, 6144, 0, 0
     dd 50000, 0, 0, 0, 432, 6, 0, 0    ; shadow-only residents
 
@@ -301,6 +316,22 @@ shadowVertexShader      dq ?
 shadowPixelShader       dq ?
 cameraComputeShader     dq ?
 terrainComputeShader    dq ?
+flightComputeShader     dq ?
+waterComputeShader      dq ?
+physicsConstantBuffer   dq ?
+flightBuffer            dq ?
+flightSRV               dq ?
+flightUAV               dq ?
+waterTextures           dq 2 dup (?)
+waterSRVs               dq 2 dup (?)
+waterUAVs               dq 2 dup (?)
+waterIndex              dd ?
+waterStep               dd ?
+physicsTargetStep       dd ?
+physicsBinding          dq ?
+startupCancelled        dd ?
+startupHidden           dd ?
+startupInfo             db 104 dup (?) ; STARTUPINFOA, native x64 layout
 terrainTexture          dq ?
 terrainSRV              dq ?
 terrainUAV              dq ?
@@ -693,6 +724,264 @@ UpdatePassConstants PROC
     add rsp, 38h
     ret
 UpdatePassConstants ENDP
+
+; Startup and long fixed-step catch-up remain cancellable between GPU calls.
+; A driver call itself may still be synchronous; this does not claim otherwise.
+PumpInitializationMessages PROC
+    sub rsp, 28h
+pump_init_loop:
+    lea rcx, messageData
+    xor edx, edx
+    xor r8d, r8d
+    xor r9d, r9d
+    mov dword ptr [rsp+20h], PM_REMOVE
+    call PeekMessageA
+    test eax, eax
+    jz pump_init_done
+    cmp dword ptr messageData[8], WM_QUIT
+    je pump_init_cancel
+    lea rcx, messageData
+    call TranslateMessage
+    lea rcx, messageData
+    call DispatchMessageA
+    jmp pump_init_loop
+pump_init_cancel:
+    mov startupCancelled, 1
+pump_init_done:
+    mov eax, startupCancelled
+    add rsp, 28h
+    ret
+PumpInitializationMessages ENDP
+
+; rcx=texture descriptor, rdx/r8/r9=texture/SRV/UAV output slots.
+CreateComputeSurface PROC
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    sub rsp, 28h
+    mov rbx, rcx
+    mov rsi, rdx
+    mov rdi, r8
+    mov r12, r9
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, rbx
+    xor r8d, r8d
+    mov r9, rsi
+    call qword ptr [rax+40]
+    test eax, eax
+    js compute_surface_done
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, [rsi]
+    xor r8d, r8d
+    mov r9, rdi
+    call qword ptr [rax+56]
+    test eax, eax
+    js compute_surface_done
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, [rsi]
+    xor r8d, r8d
+    mov r9, r12
+    call qword ptr [rax+64]
+compute_surface_done:
+    add rsp, 28h
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+CreateComputeSurface ENDP
+
+UpdatePhysicsConstants PROC
+    sub rsp, 38h
+    lea rax, physicsConstants
+    mov qword ptr [rsp+20h], rax
+    mov dword ptr [rsp+28h], 0
+    mov dword ptr [rsp+30h], 0
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, physicsConstantBuffer
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+384]
+    add rsp, 38h
+    ret
+UpdatePhysicsConstants ENDP
+
+ResetWaterSimulation PROC
+    sub rsp, 28h
+    mov waterIndex, 0
+    mov waterStep, 0
+    mov dword ptr physicsConstants[4], 0
+    mov dword ptr physicsConstants[8], 0
+    mov dword ptr physicsConstants[12], 0
+    call UpdatePhysicsConstants
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 7
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+200]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 7
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 7
+    mov r8d, 1
+    lea r9, waterSRVs[8]
+    call qword ptr [rax+536]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, waterComputeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+552]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, waterUAVs
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 32
+    mov r8d, 32
+    mov r9d, 1
+    call qword ptr [rax+328]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    add rsp, 28h
+    ret
+ResetWaterSimulation ENDP
+
+; Fixed 60Hz integration follows the audio clock, independent of display FPS.
+; Replay starts from deterministic state after backwards seeks or the loop cut.
+AdvanceWaterSimulation PROC
+    push rbx
+    sub rsp, 30h
+    movss xmm0, currentTime
+    movaps xmm1, xmm0
+    divss xmm1, loopSeconds
+    cvttss2si eax, xmm1
+    cvtsi2ss xmm1, eax
+    mulss xmm1, loopSeconds
+    subss xmm0, xmm1
+    maxss xmm0, clearHistoryColour
+    mulss xmm0, physicsRate
+    cvttss2si eax, xmm0
+    mov physicsTargetStep, eax
+    cmp eax, waterStep
+    jae water_no_reset
+    call ResetWaterSimulation
+water_no_reset:
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 7
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+200]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 7
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, waterComputeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+552]
+water_step_loop:
+    mov eax, waterStep
+    cmp eax, physicsTargetStep
+    jae water_step_done
+    cvtsi2ss xmm0, eax
+    movss dword ptr physicsConstants[12], xmm0
+    divss xmm0, physicsRate
+    movss dword ptr physicsConstants[4], xmm0
+    mov dword ptr physicsConstants[8], 3F800000h
+    call UpdatePhysicsConstants
+    mov ebx, waterIndex
+    lea r9, waterSRVs
+    lea r9, [r9+rbx*8]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 7
+    mov r8d, 1
+    call qword ptr [rax+536]
+    xor ebx, 1
+    lea r9, waterUAVs
+    lea r9, [r9+rbx*8]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 32
+    mov r8d, 32
+    mov r9d, 1
+    call qword ptr [rax+328]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov waterIndex, ebx
+    inc waterStep
+    test waterStep, 63
+    jnz water_step_loop
+    call PumpInitializationMessages
+    test eax, eax
+    jnz water_sim_cancel
+    jmp water_step_loop
+water_step_done:
+    mov ebx, waterIndex
+    lea rax, waterSRVs
+    mov rax, [rax+rbx*8]
+    mov physicsBinding, rax
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 7
+    mov r8d, 1
+    lea r9, physicsBinding
+    call qword ptr [rax+200]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 7
+    mov r8d, 1
+    lea r9, physicsBinding
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 7
+    mov r8d, 1
+    lea r9, physicsBinding
+    call qword ptr [rax+536]
+    xor eax, eax
+water_sim_cancel:
+    add rsp, 30h
+    pop rbx
+    ret
+AdvanceWaterSimulation ENDP
 
 
 GenerateSineTable PROC
@@ -1330,6 +1619,18 @@ GenerateAudio ENDP
 start PROC
     sub rsp, 28h
 
+    ; Respect an explicit hidden launch. This permits unattended validation
+    ; of the delivered EXE without briefly opening a visible native window.
+    mov dword ptr startupInfo[0], 104
+    lea rcx, startupInfo
+    call GetStartupInfoA
+    test dword ptr startupInfo[60], 1   ; STARTF_USESHOWWINDOW
+    jz startup_visibility_ready
+    cmp word ptr startupInfo[64], 0    ; SW_HIDE
+    jne startup_visibility_ready
+    mov startupHidden, 1
+startup_visibility_ready:
+
     xor ecx, ecx
     call GetModuleHandleA
     mov hInstance, rax
@@ -1370,6 +1671,10 @@ start PROC
     lea rdx, className
     lea r8, windowTitle
     mov r9d, WS_POPUP or WS_VISIBLE
+    cmp startupHidden, 0
+    je create_window_style_ready
+    mov r9d, WS_POPUP
+create_window_style_ready:
     sub rsp, 40h
     mov eax, windowX
     mov dword ptr [rsp+20h], eax
@@ -1391,11 +1696,14 @@ start PROC
     mov hWindow, rax
     mov qword ptr swapDesc[48], rax
 
+    cmp startupHidden, 0
+    jne window_visibility_ready
     mov rcx, rax
     mov edx, SW_SHOW
     call ShowWindow
     mov rcx, hWindow
     call UpdateWindow
+window_visibility_ready:
 
     ; Create D3D11 hardware device; WARP is an automatic software fallback.
     xor ecx, ecx
@@ -1521,12 +1829,18 @@ d3d_created:
     call rax
     test eax, eax
     js init_failed
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
 
     mov ecx, 103
     lea rdx, humanShader
     call LoadEmbeddedPixelShader
     test eax, eax
     js init_failed
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
 
     mov ecx, 104
     lea rdx, temporalShader
@@ -1545,6 +1859,9 @@ d3d_created:
     call LoadEmbeddedVertexShader
     test eax, eax
     js init_failed
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
     mov ecx, 107
     lea rdx, meshPixelShader
     call LoadEmbeddedPixelShader
@@ -1555,6 +1872,9 @@ d3d_created:
     call LoadEmbeddedVertexShader
     test eax, eax
     js init_failed
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
     mov ecx, 109
     lea rdx, shadowPixelShader
     call LoadEmbeddedPixelShader
@@ -1567,6 +1887,22 @@ d3d_created:
     js init_failed
     mov ecx, 111
     lea rdx, terrainComputeShader
+    call LoadEmbeddedComputeShader
+    test eax, eax
+    js init_failed
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
+    mov ecx, 112
+    lea rdx, flightComputeShader
+    call LoadEmbeddedComputeShader
+    test eax, eax
+    js init_failed
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
+    mov ecx, 113
+    lea rdx, waterComputeShader
     call LoadEmbeddedComputeShader
     test eax, eax
     js init_failed
@@ -1691,6 +2027,52 @@ d3d_created:
     lea rdx, cameraBufferDesc
     xor r8d, r8d
     lea r9, cameraFrameBuffer
+    call qword ptr [rax+24]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, flightBufferDesc
+    xor r8d, r8d
+    lea r9, flightBuffer
+    call qword ptr [rax+24]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, flightBuffer
+    lea r8, flightSRVDesc
+    lea r9, flightSRV
+    call qword ptr [rax+56]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, flightBuffer
+    lea r8, flightUAVDesc
+    lea r9, flightUAV
+    call qword ptr [rax+64]
+    test eax, eax
+    js init_failed
+    lea rcx, waterSurfaceDesc
+    lea rdx, waterTextures
+    lea r8, waterSRVs
+    lea r9, waterUAVs
+    call CreateComputeSurface
+    test eax, eax
+    js init_failed
+    lea rcx, waterSurfaceDesc
+    lea rdx, waterTextures[8]
+    lea r8, waterSRVs[8]
+    lea r9, waterUAVs[8]
+    call CreateComputeSurface
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, batchBufferDesc
+    xor r8d, r8d
+    lea r9, physicsConstantBuffer
     call qword ptr [rax+24]
     test eax, eax
     js init_failed
@@ -1864,10 +2246,10 @@ d3d_created:
     call qword ptr [rax+544]            ; CSSetUnorderedAccessViews
     mov rcx, d3dContext
     mov rax, [rcx]
-    mov edx, 256
-    mov r8d, 256
+    mov edx, 512
+    mov r8d, 512
     mov r9d, 1
-    call qword ptr [rax+328]            ; Dispatch(256,256,1)
+    call qword ptr [rax+328]            ; Dispatch(512,512,1),4096 terrain
     mov rcx, d3dContext
     mov rax, [rcx]
     xor edx, edx
@@ -1912,6 +2294,76 @@ d3d_created:
     lea r9, postSampler
     call qword ptr [rax+560]            ; CS sampler s1
 
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, physicsConstantBuffer
+    call qword ptr [rax+568]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, physicsConstantBuffer
+    call qword ptr [rax+56]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, physicsConstantBuffer
+    call qword ptr [rax+128]
+    call UpdatePhysicsConstants
+    ; Solve four independent flight trajectories on the GPU at startup. Only
+    ; solver code is embedded; positions/velocities are produced at runtime.
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, flightComputeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+552]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, flightUAV
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    mov r8d, 1
+    mov r9d, 1
+    call qword ptr [rax+328]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 6
+    mov r8d, 1
+    lea r9, flightSRV
+    call qword ptr [rax+200]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 6
+    mov r8d, 1
+    lea r9, flightSRV
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 6
+    mov r8d, 1
+    lea r9, flightSRV
+    call qword ptr [rax+536]
+    call ResetWaterSimulation
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
+
     ; Session entropy controls the restrained musical mutations and shader seed.
     lea rcx, qpcFrequency
     call QueryPerformanceFrequency
@@ -1944,6 +2396,14 @@ seed_nonzero:
     mov audioBuffer, rax
     call GenerateSineTable
     call GenerateAudio
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
+
+    ; A hidden diagnostic launch still synthesizes the score but uses QPC
+    ; instead of playing it through the user's speakers.
+    cmp startupHidden, 0
+    jne audio_skipped
 
 IFDEF QA_SILENT_AUDIO
     ; Test builds can expose the finished PCM buffer for analysis without
@@ -2083,6 +2543,9 @@ reflection_unavailable:
     lea rcx, passMainUnavailable
 pass_mode_ready:
     call UpdatePassConstants
+    call AdvanceWaterSimulation
+    test eax, eax
+    jnz clean_exit
 
     ; Any SRV left by the preceding display pass must be detached before one of
     ; the ping-pong resources can become an RTV again.
@@ -2557,6 +3020,30 @@ release_graphics:
     mov rax, [rcx]
     call qword ptr [rax+880]            ; ID3D11DeviceContext::ClearState
 release_graphics_objects:
+    mov rcx, physicsConstantBuffer
+    call ReleaseObject
+    mov rcx, flightComputeShader
+    call ReleaseObject
+    mov rcx, flightUAV
+    call ReleaseObject
+    mov rcx, flightSRV
+    call ReleaseObject
+    mov rcx, flightBuffer
+    call ReleaseObject
+    mov rcx, waterComputeShader
+    call ReleaseObject
+    mov rcx, waterUAVs[0]
+    call ReleaseObject
+    mov rcx, waterUAVs[8]
+    call ReleaseObject
+    mov rcx, waterSRVs[0]
+    call ReleaseObject
+    mov rcx, waterSRVs[8]
+    call ReleaseObject
+    mov rcx, waterTextures[0]
+    call ReleaseObject
+    mov rcx, waterTextures[8]
+    call ReleaseObject
     mov rcx, passConstantBuffer
     call ReleaseObject
     mov rcx, reflectionRTV
