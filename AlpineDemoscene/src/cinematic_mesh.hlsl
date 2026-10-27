@@ -1,15 +1,22 @@
 // Runtime geometry: no vertex buffers, imported meshes or bitmap textures.
 // DrawInstanced(vertices, instances, 0, 0), with absolute type base in Batch.x:
-// houses 3600,32,0; firs 15624,192,1000; grass18,12288,2000;
+// houses 11520,64,0; firs 15624,192,1000; grass48,12288,2000;
 // rocks240,384,20000; gliders12288,4,30000. All entry points target SM5.
 #include "cinematic_lighting.hlsli"
 #include "physics_common.hlsli"
 #include "people_motion.hlsli"
+#include "material_common.hlsli"
 cbuffer Frame : register(b0) { float4 G; float4 G2; };
 // SM5 SV_InstanceID starts at zero for each draw. StartInstanceLocation only
 // offsets instance-buffer fetches; it DOES NOT offset this system value.
 cbuffer DrawBatch : register(b1) { uint4 Batch; };
 RWStructuredBuffer<float4> FrameOutput : register(u0);
+// SceneInstancesCS writes this table once after CameraCS; draw passes only read it.
+// 31,360 objects have two float4 records each: house0, near tree64,
+// far tree256, grass18688, rock30976. Record62720 begins96 branch wind
+// records for each of192 near trees. Total81,152 float4 =1,298,432bytes.
+// Dispatch778 groups of64 (49,792 threads). Unbindt12 before its UAV is bound.
+StructuredBuffer<float4> SceneInstanceData : register(t12);
 float LoopAngle(){return fmod(G.z,128.0)*(TAU/128.0);}
 
 float2 PlantDeflection(float3 root,float mass,float omega0,float dampingRatio,float area)
@@ -52,6 +59,13 @@ void CameraCS(uint3 id:SV_DispatchThreadID)
     center+=su*(floor(dot(center,su)/texel)*texel-dot(center,su));
     FrameOutput[8]=float4(sun,3.2);FrameOutput[9]=float4(center,1.0/2048.0);
     FrameOutput[10]=float4(sr,extent);FrameOutput[11]=float4(su,2000.0);
+    float farExtent=1800.0,farTexel=2.0*farExtent/1024.0;
+    float3 farCenter=c.origin+c.forward*900.0;
+    farCenter.y=Terrain(farCenter.xz)+250.0;
+    farCenter+=sr*(floor(dot(farCenter,sr)/farTexel)*farTexel-dot(farCenter,sr));
+    farCenter+=su*(floor(dot(farCenter,su)/farTexel)*farTexel-dot(farCenter,su));
+    FrameOutput[12]=float4(farCenter,1.0/1024.0);
+    FrameOutput[13]=float4(sr,farExtent);FrameOutput[14]=float4(su,4000.0);
 }
 
 struct Geometry { float3 p; float3 n; float2 uv; float3 local; float material; float seed; float moving; };
@@ -108,86 +122,32 @@ void Gable(uint v,float width,float rise,float depth,float base,inout Geometry g
     else{a=b=c=lf;}
     g.p=k==0?a:(k==1?b:c);float3 n=cross(b-a,c-a);g.n=n*rsqrt(max(dot(n,n),1e-8));g.uv=g.p.xy;
 }
-void HousePlacement(uint id,out float3 center,out float3 size,out float angle,out float seed)
-{
-    seed=Hash21(float2(id,71));uint col=id%4,row=id/4;
-    float x=(col==0?-46.0:(col==1?-14.4:(col==2?14.4:46.0)));
-    float z=1658.0+row*37.0+Hash21(float2(id,39))*7.0;
-    x+=(Hash21(float2(id,19))-0.5)*(col==1||col==2?2.8:9.0);
-    center=float3(x,Terrain(float2(x,z))-0.08,z);
-    size=float3(4.0+seed*2.5,6.0+Hash21(float2(id,43))*3.0,4.0+Hash21(float2(id,47))*2.0);
-    angle=(Hash21(float2(id,53))-0.5)*0.10+(x<0.0?PI:0.0);
-}
-Geometry HouseGeometry(uint v,uint id)
-{
-    Geometry g=(Geometry)0;float3 center,hs;float angle,seed;
-    HousePlacement(id,center,hs,angle,seed);g.seed=seed;g.material=1;
-    uint part=v/36,q=v%36;float3 c=0,b=0;
-    float roofRise=hs.x*0.64,roofAngle=atan(0.64),roofHalf=hs.x+0.62;
-    if(part==0){c=float3(0,0.42,0);b=float3(hs.x+0.12,0.50,hs.z+0.12);g.material=2;}
-    else if(part==1){c=float3(0,hs.y*0.5,0);b=float3(hs.x,hs.y*0.5,hs.z);}
-    else if(part==2){c=float3(0,hs.y-0.40,0);b=float3(hs.x+0.08,0.40,hs.z+0.08);g.material=3;}
-    else if(part==3||part==4)
-    {
-        float side=part==3?-1.0:1.0;
-        Box(q,0,float3(roofHalf*0.5*sqrt(1.0+0.64*0.64),0.11,hs.z+0.65),g);
-        g.p=RotateZ(g.p,-side*roofAngle)+float3(side*roofHalf*0.5,hs.y+roofRise-roofHalf*0.32,0);
-        g.n=RotateZ(g.n,-side*roofAngle);g.material=4;
-    }
-    else if(part==5||part==6)
-    {
-        Gable(q,hs.x,roofRise,0.07,hs.y,g);g.p.z+=(part==5?1.0:-1.0)*(hs.z-0.07);g.material=3;
-    }
-    else if(part==7){c=float3(hs.x*0.37,hs.y+roofRise-0.15,hs.z*0.35);b=float3(0.36,1.25,0.40);g.material=2;}
-    else if(part==8){c=float3(-hs.x-0.85,0.15,0);b=float3(0.85,0.16,1.45);g.material=2;}
-    else if(part==9){c=float3(-hs.x-0.025,1.10,0);b=float3(0.08,1.10,0.63);g.material=3;}
-    else if(part==10){c=float3(-hs.x-0.12,1.12,0);b=float3(0.025,1.01,0.49);g.material=7;}
-    else if(part<83)
-    {
-        uint wi=(part-11)/6,wp=(part-11)%6;
-        // Four windows on each street facade, two on each gable facade.
-        uint face=wi/4;uint w=wi%4;float side=(face==0?-1.0:1.0);
-        float height=(w/2==0?2.05:4.85);
-        float along=(w%2==0?-1.0:1.0)*(face<2?hs.z*0.54:hs.x*0.54);
-        float3 wc=face<2?float3(side*(hs.x+0.085),height,along):float3(along,height,hs.z+0.085);
-        float3 wb=float3(0.11,1.01,0.79);float3 offset=0;
-        g.material=3;
-        if(wp==1){wb=float3(0.027,0.88,0.66);offset.x=0.12;g.material=5;}
-        else if(wp==2){wb=float3(0.036,0.90,0.026);offset.x=0.16;}
-        else if(wp==3){wb=float3(0.038,0.032,0.68);offset.x=0.16;}
-        else if(wp==4||wp==5){wb=float3(0.075,0.96,0.24);offset=float3(0.015,0,(wp==4?-1.0:1.0)*1.05);g.material=6;}
-        if(face<2){offset.x*=side;c=wc+offset;b=wb;}
-        else{c=wc+float3(offset.z,offset.y,offset.x);b=wb.zyx;}
-    }
-    else if(part==83){c=float3(-hs.x-0.85,3.53,0);b=float3(1.05,0.11,hs.z*0.80);g.material=3;}
-    else if(part==84){c=float3(-hs.x-1.85,4.58,0);b=float3(0.055,0.05,hs.z*0.81);g.material=3;}
-    else if(part==85){c=float3(-hs.x-1.85,4.01,0);b=float3(0.07,0.52,0.065);g.material=3;}
-    else if(part<90)
-    {
-        uint rail=part-86;c=float3((rail<2?-1.0:1.0)*(hs.x+1.3),0.55+(rail%2)*0.40,hs.z+2.1);
-        b=float3(0.045,0.048,3.5);g.material=3;
-    }
-    else if(part<98)
-    {
-        uint post=part-90;c=float3((post<4?-1.0:1.0)*(hs.x+1.3),0.59,hs.z-1.4+(post%4)*2.33);
-        b=float3(0.055,0.62,0.055);g.material=3;
-    }
-    else{float step=part-98;c=float3(-hs.x-1.15-step*0.42,0.10-step*0.035,0);b=float3(0.30,0.11-step*0.035,1.05);g.material=2;}
-    if(part!=3&&part!=4&&part!=5&&part!=6)Box(q,c,b,g);
-    g.local=g.p;g.p=RotateY(g.p,angle)+center;g.n=RotateY(g.n,angle);
-    return g;
-}
-void TreePlacement(uint id,out float3 center,out float height,out float seed)
+#include "settlement_geometry.hlsli"
+void TreePlacementRaw(uint id,out float3 center,out float height,out float seed)
 {
     seed=Hash21(float2(id,111));float2 xz;
-    if(id<16)xz=float2((id%2==0?-1:1)*(8.5+seed),1678.0+floor(id/2.0)*37.0);
+    if(id<16)xz=float2((id%2==0?-1:1)*(8.2+seed*.8),1668.0+floor(id/2.0)*39.0+Hash21(float2(id,119))*7.0);
     else if(id<96)xz=float2((id%2==0?-1:1)*(64.0+seed*75.0),1570.0+Hash21(float2(id,112))*445.0);
     else
     {
         float a=(id-96)*2.39996323;float r=0.98+seed*0.20;
         xz=LAKE_C+float2(cos(a)*930.0,sin(a)*650.0)*r;
     }
-    center=float3(xz.x,Terrain(xz)-0.08,xz.y);height=14.0+Hash21(float2(id,117))*11.0;
+    center=float3(xz.x,Terrain(xz)-0.08,xz.y);
+    height=id<16?8.0+Hash21(float2(id,117))*5.0:12.0+Hash21(float2(id,117))*15.0;
+}
+void TreePlacement(uint id,out float3 center,out float height,out float seed)
+{
+    float4 a=SceneInstanceData[(64+id)*2],b=SceneInstanceData[(64+id)*2+1];
+    center=a.xyz;height=a.w;seed=b.x;
+}
+void NearTreeBranch(uint segment,uint id,float height,float seed,out float3 start,out float3 end,out float branchSeed)
+{
+    float tier=segment/95.0;branchSeed=Hash21(float2(segment,id+9));
+    float y=(0.16+tier*0.80+(branchSeed-0.5)*0.016)*height;
+    float a=segment*2.39996323+seed*TAU;
+    float len=pow(saturate(1.0-y/height),0.72)*(3.0+height*0.10)*(0.66+branchSeed*0.40);
+    start=float3(0,y,0);end=float3(cos(a)*len,y-len*(0.12+branchSeed*0.17),sin(a)*len);
 }
 Geometry TreeGeometry(uint v,uint id)
 {
@@ -197,12 +157,9 @@ Geometry TreeGeometry(uint v,uint id)
     else
     {
         uint segment=(v-72)/162,part=(v-72)%162;
-        float tier=segment/95.0,branchSeed=Hash21(float2(segment,id+9));
-        float y=(0.16+tier*0.80+(branchSeed-0.5)*0.016)*height;
-        float a=segment*2.39996323+seed*TAU;
-        float len=pow(saturate(1.0-y/height),0.72)*(3.0+height*0.10)*(0.66+branchSeed*0.40);
-        float3 start=float3(0,y,0),end=float3(cos(a)*len,y-len*(0.12+branchSeed*0.17),sin(a)*len);
-        float2 wind=PlantDeflection(center+start,max(.04,.6*len*len),4.0*sqrt(3.0/max(len,.15)),.28,.2*len);
+        float tier=segment/95.0,branchSeed;float3 start,end;
+        NearTreeBranch(segment,id,height,seed,start,end,branchSeed);
+        float2 wind=SceneInstanceData[62720+id*96+segment].xy;
         float3 branchAxis=normalize(end-start),load=float3(wind.x,0,wind.y);
         end+=load-branchAxis*dot(load,branchAxis);
         if(part<18)Cylinder(part,3,start,end,0.038*(1.0-tier*0.72),g);
@@ -215,42 +172,47 @@ Geometry TreeGeometry(uint v,uint id)
             float3 twigAxis=normalize(axis*0.68+side*twigSide*0.66+up*(0.15+branchSeed*0.15));
             float3 twigRight=normalize(cross(twigAxis,up)),twigUp=cross(twigAxis,twigRight);
             float3 radial=twigRight*cos(cardAngle)+twigUp*sin(cardAngle);
-            float span=0.58+branchSeed*0.35,width=0.23+branchSeed*0.065;
+            float span=0.42+branchSeed*0.28,width=0.09+branchSeed*0.04;
             g.p=lerp(start,end,t)+twigAxis*(uv.x*span)+radial*((uv.y-0.5)*width*2.0);
             g.n=normalize(cross(twigAxis,radial));g.uv=uv;g.material=21;g.seed=branchSeed;
         }
     }
     float bend=pow(saturate(g.p.y/height),2.0);
-    float2 trunk=PlantDeflection(center,.20*height*height,2.6*20.0/height,.22,.7*height);
+    float2 trunk=SceneInstanceData[(64+id)*2+1].yz;
     g.p.xz+=bend*trunk;
     g.n.y-=dot(g.n.xz,trunk)*(2.0*saturate(g.p.y/height)/height);g.n=normalize(g.n);
     g.local=g.p;g.p+=center;
-    bool water=center.y<LAKE_Y+0.7&&length((center.xz-LAKE_C)/float2(970,690))<1.08;
-    if(water||center.y>930.0)g.p=center;
+    if(SceneInstanceData[(64+id)*2+1].w<.5)g.p=center;
     return g;
+}
+void GrassPlacementRaw(uint id,out float3 center,out float seed,out float valid)
+{
+    float2 cell=float2(id%128,id/128)-float2(64,48)+floor(CinematicFrame[0].xz/.72);
+    seed=Hash21(cell);float2 xz=(cell+float2(seed,Hash21(cell+73.0)))*.72;
+    float ground=Terrain(xz);center=float3(xz.x,ground-.015,xz.y);
+    bool road=(abs(xz.x)<3.85||length(xz-float2(0,1755))<10.35)&&xz.y>1600.0&&xz.y<2020.0;
+    bool water=ground<LAKE_Y+.4&&length((xz-LAKE_C)/float2(930,650))<1.1;
+    valid=(!road&&!water&&ground<=680.0&&length(center-CinematicFrame[0].xyz)<=84.0)?1.0:0.0;
 }
 Geometry GrassGeometry(uint v,uint id)
 {
     Geometry g=(Geometry)0;g.material=22;g.moving=1;
-    float2 cell=float2(id%128,id/128)-float2(64,48)+floor(CinematicFrame[0].xz/1.05);
-    float seed=Hash21(cell);g.seed=seed;
-    float2 xz=(cell+float2(seed,Hash21(cell+73.0)))*1.05;
-    float ground=Terrain(xz);uint blade=v/6;float2 uv=Corner(v);
-    float a=seed*TAU+blade*2.1,height=0.20+Hash21(cell+blade*19.0)*0.43;
-    float3 right=float3(cos(a),0,sin(a)),origin=float3(xz.x,ground-0.015,xz.y);
-    float2 deflection=PlantDeflection(origin,.0015,22.0,.35,.012*height/.4);
-    float3 bend=float3(deflection.x,0,deflection.y);
-    g.p=origin+right*((uv.x-0.5)*(0.035+seed*0.025)*(1.0-uv.y*0.94))+float3(0,uv.y*height,0)+bend*uv.y*uv.y;
-    g.n=normalize(cross(right,float3(0,1,0)+bend));g.uv=uv;g.local=g.p-origin;
-    // Include maximum blade bend so no tips grow across cobbles/plaza edges.
-    bool road=(abs(xz.x)<3.85||length(xz-float2(0,1755))<10.35)&&xz.y>1600.0&&xz.y<2020.0;
-    bool water=ground<LAKE_Y+0.4&&length((xz-LAKE_C)/float2(930,650))<1.1;
-    if(road||water||ground>680.0||length(origin-CinematicFrame[0].xyz)>84.0)g.p=origin;
+    float4 placement=SceneInstanceData[(18688+id)*2],motion=SceneInstanceData[(18688+id)*2+1];
+    float seed=placement.w;g.seed=seed;float3 origin=placement.xyz;
+    float2 cell=floor(origin.xz/.72);
+    uint blade=v/12,segment=(v%12)/6;float2 uv=Corner(v);uv.y=(segment+uv.y)*.5;
+    float a=seed*TAU+blade*2.39996323,height=.12+Hash21(cell+blade*19.0)*.27;
+    float3 right=float3(cos(a),0,sin(a));float2 deflection=motion.xy*height;
+    float3 bend=float3(deflection.x,0,deflection.y)+float3(sin(a),0,-cos(a))*height*.22;
+    float2 tuftOffset=float2(cos(a),sin(a))*(.07+.07*seed);
+    g.p=origin+float3(tuftOffset.x,0,tuftOffset.y)+right*((uv.x-.5)*(.019+seed*.015)*(1.0-uv.y*.97))+float3(0,uv.y*height,0)+bend*uv.y*uv.y;
+    g.n=normalize(cross(right,float3(0,height,0)+bend*2.0*uv.y));g.uv=uv;g.local=g.p-origin;
+    if(motion.z<.5)g.p=origin;
     return g;
 }
-Geometry RockGeometry(uint v,uint id)
+void RockPlacementRaw(uint id,out float3 center,out float size,out float seed)
 {
-    Geometry g=(Geometry)0;g.material=23;float seed=Hash21(float2(id,211));g.seed=seed;
+    seed=Hash21(float2(id,211));
     float2 xz;
     if(id<160)xz=float2((id%2==0?-1:1)*(5.0+seed*100.0),1600+Hash21(float2(id,213))*430.0);
     else
@@ -258,11 +220,17 @@ Geometry RockGeometry(uint v,uint id)
         float a=id*2.39996323,r=0.87+seed*0.22;
         xz=LAKE_C+float2(cos(a)*930,sin(a)*650)*r;
     }
-    float size=0.24+pow(seed,3.0)*2.8;float3 center=float3(xz.x,Terrain(xz)-size*0.24,xz.y);
+    size=0.24+pow(seed,3.0)*2.8;center=float3(xz.x,Terrain(xz)-size*0.24,xz.y);
+}
+Geometry RockGeometry(uint v,uint id)
+{
+    float4 placement=SceneInstanceData[(30976+id)*2],shape=SceneInstanceData[(30976+id)*2+1];
+    Geometry g=(Geometry)0;g.material=23;float seed=shape.w;g.seed=seed;
+    float3 center=placement.xyz;float size=placement.w;
     uint quad=v/6;float2 uv=Corner(v);float a=(quad%10+uv.x)*TAU/10.0,b=(quad/10+uv.y)*PI/4.0;
     float3 s=float3(cos(a)*sin(b),cos(b),sin(a)*sin(b));
     float irregular=0.76+0.31*Hash21(floor(s.xz*19+s.y*11)+id);
-    float3 scale=float3(1.0,0.65+seed*0.43,0.71+seed*0.41)*size;
+    float3 scale=shape.xyz;
     g.p=center+s*scale*irregular;g.n=normalize(s/scale);g.uv=uv;g.local=g.p-center;return g;
 }
 float2 SurfaceGrid(uint v,uint columns,uint rows)
@@ -350,23 +318,101 @@ Geometry GliderGeometry(uint v,uint id)
     }
     g.local=g.p;g.p=center+rr*g.p.x+uu*g.p.y+forward*g.p.z;g.n=normalize(rr*g.n.x+uu*g.n.y+forward*g.n.z);return g;
 }
-void ForestPlacement(uint id,out float3 center,out float height,out float seed,out float ground)
+void ForestPlacementRaw(uint id,out float3 center,out float height,out float seed,out float ground)
 {
     seed=Hash21(float2(id,317));
     float2 xz;
     if(id<12288)
     {
         float a=id*2.39996323;
-        float r=sqrt(lerp(.97*.97,1.53*1.53,Hash21(float2(id,323))));
-        xz=LAKE_C+float2(cos(a)*900.0,sin(a)*610.0)*r;
+        float2 direction=float2(cos(a),sin(a));
+        float edge=.99+.034*sin(a*3.0)+.022*sin(a*7.0);
+        float width=.21+.055*sin(a*5.0+1.7);
+        float edgeNoise=(Noise2(direction*4.3+17.0)-.5)*.085;
+        width+=edgeNoise;
+        float r=sqrt(lerp(edge*edge,(edge+width)*(edge+width),Hash21(float2(id,323))));
+        if(Hash21(float2(id,337))<.18)
+        {
+            // A half-normal woodland fringe keeps a dense core while sparse
+            // young stands extend around100m past its irregular outer edge.
+            float gaussian=abs(sqrt(-2.0*log(max(.008,Hash21(float2(id,339)))))*cos(TAU*Hash21(float2(id,341))));
+            r=edge+width-.022+min(2.8,gaussian)*.075;
+        }
+        xz=LAKE_C+direction*float2(900.0,610.0)*r;
     }
     else
     {
-        uint k=id-12288;float z=1750.0+Hash21(float2(k,322))*2450.0;
-        float x=ValleyCenter(z)+(k%2==0?-1.0:1.0)*(220.0+seed*650.0);
+        uint k=id-12288;float z=1750.0+Hash21(float2(k,322))*2400.0;
+        float edge=205.0+28.0*sin(z*.006)+(Noise2(float2(z*.004,11.0))-.5)*65.0;
+        float width=130.0+45.0*sin(z*.004+1.3),offset=edge+seed*width;
+        float fringe=Hash21(float2(k,343));
+        float gaussian=abs(sqrt(-2.0*log(max(.008,Hash21(float2(k,347)))))*cos(TAU*Hash21(float2(k,349))));
+        if(fringe<.17)offset=edge+width-20.0+min(2.8,gaussian)*65.0;
+        else if(fringe>.97)offset=max(170.0,edge-gaussian*30.0);
+        float x=ValleyCenter(z)+(k%2==0?-1.0:1.0)*offset;
         xz=float2(x,z);
     }
-    height=13.0+seed*12.0;ground=Terrain(xz);center=float3(xz.x,ground-0.05,xz.y);
+    height=16.0+seed*15.0;ground=Terrain(xz);center=float3(xz.x,ground-0.05,xz.y);
+}
+void ForestPlacement(uint id,out float3 center,out float height,out float seed,out float ground)
+{
+    float4 a=SceneInstanceData[(256+id)*2],b=SceneInstanceData[(256+id)*2+1];
+    center=a.xyz;height=a.w;seed=b.x;ground=center.y+.05;
+}
+[numthreads(64,1,1)]
+void SceneInstancesCS(uint3 thread:SV_DispatchThreadID)
+{
+    uint id=thread.x;float4 a=0,b=0;
+    // Never call the cached wrappers here: t12 is unbound while u0 writes it.
+    if(id>=31360)
+    {
+        uint k=id-31360,tree=k/96,segment=k%96;
+        if(tree>=192)return;
+        float3 center,start,end;float height,seed,branchSeed;
+        TreePlacementRaw(tree,center,height,seed);
+        NearTreeBranch(segment,tree,height,seed,start,end,branchSeed);
+        float len=length((end-start).xz);
+        float2 wind=PlantDeflection(center+start,max(.04,.6*len*len),4.0*sqrt(3.0/max(len,.15)),.28,.2*len);
+        FrameOutput[62720+k]=float4(wind,0,0);return;
+    }
+    if(id<64)
+    {
+        float3 center,size;float angle,seed;
+        HousePlacementRaw(id,center,size,angle,seed);
+        a=float4(center,angle);b=float4(size,seed);
+    }
+    else if(id<18688)
+    {
+        float3 center;float height,seed,ground,valid=1.0;
+        if(id<256)
+        {
+            TreePlacementRaw(id-64,center,height,seed);ground=center.y;
+            if(ground>930.0||(ground<LAKE_Y+.7&&length((center.xz-LAKE_C)/float2(970,690))<1.08))valid=0;
+        }
+        else
+        {
+            ForestPlacementRaw(id-256,center,height,seed,ground);
+            float2 xz=center.xz;
+            float slope=length(float2(Terrain(xz+float2(3,0))-Terrain(xz-float2(3,0)),Terrain(xz+float2(0,3))-Terrain(xz-float2(0,3))))/6.0;
+            if(ground<150.0||ground>1350.0||slope>1.15||
+                (ground<LAKE_Y+1.0&&length((xz-LAKE_C)/float2(970,690))<1.08))valid=0;
+        }
+        float2 wind=PlantDeflection(center,.20*height*height,2.6*20.0/height,.22,.7*height);
+        a=float4(center,height);b=float4(seed,wind,valid);
+    }
+    else if(id<30976)
+    {
+        float3 center;float seed,valid;
+        GrassPlacementRaw(id-18688,center,seed,valid);
+        float2 wind=PlantDeflection(center,.0015,22.0,.35,.012/.4);
+        a=float4(center,seed);b=float4(wind,valid,0);
+    }
+    else
+    {
+        float3 center;float size,seed;RockPlacementRaw(id-30976,center,size,seed);
+        a=float4(center,size);b=float4(float3(1.0,.65+seed*.43,.71+seed*.41)*size,seed);
+    }
+    FrameOutput[id*2]=a;FrameOutput[id*2+1]=b;
 }
 Geometry ForestGeometry(uint v,uint id)
 {
@@ -389,19 +435,43 @@ Geometry ForestGeometry(uint v,uint id)
         uint card=(v-12)/6,layer=card/2;float2 uv=Corner(v-12);
         float y=height*(.14+layer*.105),angle=layer*2.39996323+seed*TAU+(card%2)*PI*.5;
         float branchSeed=Hash21(float2(layer,id));
-        float spread=pow(saturate(1.0-y/height),.73)*(4.2+seed*1.8)*(.85+branchSeed*.20);
+        float spread=pow(saturate(1.0-y/height),.73)*(4.8+seed*2.2)*(.85+branchSeed*.20);
         float3 r=float3(cos(angle),0,sin(angle));
         g.p=float3(0,y+uv.y*height*.27,0)+r*((uv.x-.5)*spread*2.0);
         g.n=float3(-r.z,.24,r.x);g.uv=uv;g.material=24;
     }
-    float2 trunk=PlantDeflection(center,.20*height*height,2.6*20.0/height,.22,.7*height);
+    float2 trunk=SceneInstanceData[(256+id)*2+1].yz;
     g.p.xz+=pow(saturate(g.p.y/height),2.0)*trunk;
     g.n.y-=dot(g.n.xz,trunk)*(2.0*saturate(g.p.y/height)/height);g.n=normalize(g.n);
     g.local=g.p;g.p+=center;
-    float slope=length(float2(Terrain(xz+float2(3,0))-Terrain(xz-float2(3,0)),Terrain(xz+float2(0,3))-Terrain(xz-float2(0,3))))/6.0;
-    bool water=ground<LAKE_Y+1.0&&length((xz-LAKE_C)/float2(970,690))<1.08;
-    if(ground<150.0||ground>1350.0||slope>1.15||water)g.p=center;
+    if(SceneInstanceData[(256+id)*2+1].w<.5)g.p=center;
     return g;
+}
+Geometry CoarseNearTreeGeometry(uint v,uint id)
+{
+    Geometry g=(Geometry)0;float3 center;float height,seed;
+    TreePlacement(id,center,height,seed);g.seed=seed;g.moving=1;g.material=20;
+    if(v<12)
+    {
+        float2 uv=Corner(v);float angle=seed*TAU+(v/6)*PI*.5;
+        float3 r=float3(cos(angle),0,sin(angle));
+        g.p=r*((uv.x-.5)*.52*(1.0-.94*uv.y))+float3(0,height*.97*uv.y,0);
+        g.n=float3(-r.z,0,r.x);g.uv=uv;
+    }
+    else
+    {
+        uint card=(v-12)/6,layer=card/2;float2 uv=Corner(v-12);
+        float y=height*(.16+layer*.033),angle=layer*2.39996323+seed*TAU+(card%2)*PI*.5;
+        float branchSeed=Hash21(float2(layer,id));
+        float spread=pow(saturate(1.0-y/height),.72)*(3.0+height*.10)*(.80+branchSeed*.22);
+        float3 r=float3(cos(angle),0,sin(angle));
+        g.p=float3(0,y+uv.y*height*.13,0)+r*((uv.x-.5)*spread*2.0);
+        g.n=float3(-r.z,.24,r.x);g.uv=uv;g.material=24;
+    }
+    float2 trunk=SceneInstanceData[(64+id)*2+1].yz;
+    g.p.xz+=pow(saturate(g.p.y/height),2.0)*trunk;
+    g.n.y-=dot(g.n.xz,trunk)*(2.0*saturate(g.p.y/height)/height);g.n=normalize(g.n);
+    g.local=g.p;g.p+=center;return g;
 }
 Geometry PersonShadowGeometry(uint v,uint id)
 {
@@ -433,7 +503,11 @@ Geometry BuildGeometry(uint vertex,uint instance)
     else if(instance>=30000)g=GliderGeometry(vertex,instance-30000);
     else if(instance>=20000)g=RockGeometry(vertex,instance-20000);
     else if(instance>=2000)g=GrassGeometry(vertex,instance-2000);
-    else if(instance>=1000)g=TreeGeometry(vertex,instance-1000);
+    else if(instance>=1000)
+    {
+        if(PassMode.z>.5)g=CoarseNearTreeGeometry(vertex,instance-1000);
+        else g=TreeGeometry(vertex,instance-1000);
+    }
     else g=HouseGeometry(vertex,instance);
     return g;
 }
@@ -448,8 +522,10 @@ bool OutsideMeshBounds(float3 center,float radius,bool shadowPass)
     if(shadowPass)
     {
         float3 q=CinematicShadowPosition(center);
-        float xyRadius=radius/CinematicFrame[10].w;
-        float zRadius=radius/(2.0*CinematicFrame[11].w);
+        float xyExtent=PassMode.z>.5?CinematicFrame[13].w:CinematicFrame[10].w;
+        float zExtent=PassMode.z>.5?CinematicFrame[14].w:CinematicFrame[11].w;
+        float xyRadius=radius/xyExtent;
+        float zRadius=radius/(2.0*zExtent);
         return any(abs(q.xy)>1.0+xyRadius)||q.z+zRadius<0.0||q.z-zRadius>1.0;
     }
     CameraFrame camera;
@@ -474,9 +550,7 @@ bool CullMeshGroup(uint vertex,uint instance,bool shadowPass)
     {
         float ground;
         ForestPlacement((instance-40000)*3+vertex/96,center,height,seed,ground);
-        // Preserve the existing ground/water rejection before crown/wind work.
-        if(ground<150.0||ground>1350.0||
-           (ground<LAKE_Y+1.0&&length((center.xz-LAKE_C)/float2(970,690))<1.08))return true;
+        if(SceneInstanceData[(256+(instance-40000)*3+vertex/96)*2+1].w<.5)return true;
         return OutsideMeshBounds(center+float3(0,height*.5,0),height*.6+3.0,shadowPass);
     }
     if(instance>=20000)return false;
@@ -486,24 +560,20 @@ bool CullMeshGroup(uint vertex,uint instance,bool shadowPass)
         // camera in every pass. This whole-batch bound has exactly that effect.
         if(CinematicFrame[0].y>764.0)return true;
         uint id=instance-2000;
-        float2 cell=float2(id%128,id/128)-float2(64,48)+floor(CinematicFrame[0].xz/1.05);
-        seed=Hash21(cell);float2 xz=(cell+float2(seed,Hash21(cell+73.0)))*1.05;
-        float ground=Terrain(xz);center=float3(xz.x,ground-.015,xz.y);
-        bool road=(abs(xz.x)<3.85||length(xz-float2(0,1755))<10.35)&&xz.y>1600.0&&xz.y<2020.0;
-        bool water=ground<LAKE_Y+.4&&length((xz-LAKE_C)/float2(930,650))<1.1;
-        if(road||water||ground>680.0||length(center-CinematicFrame[0].xyz)>84.0)return true;
+        center=SceneInstanceData[(18688+id)*2].xyz;
+        if(SceneInstanceData[(18688+id)*2+1].z<.5)return true;
         return OutsideMeshBounds(center+float3(0,.32,0),1.0,shadowPass);
     }
     if(instance>=1000)
     {
         TreePlacement(instance-1000,center,height,seed);
-        if(center.y>930.0||(center.y<LAKE_Y+.7&&length((center.xz-LAKE_C)/float2(970,690))<1.08))return true;
+        if(SceneInstanceData[(64+instance-1000)*2+1].w<.5)return true;
         return OutsideMeshBounds(center+float3(0,height*.5,0),height*.6+3.0,shadowPass);
     }
     float3 size;float angle;
     HousePlacement(instance,center,size,angle,seed);
     // Includes roofs, chimney, balcony, stairs and the complete fence rails.
-    return OutsideMeshBounds(center+float3(0,6,0),20.0,shadowPass);
+    return OutsideMeshBounds(center+float3(0,instance==31?13.0:6.0,0),instance==31?38.0:26.0,shadowPass);
 }
 MeshOut CulledMeshVertex()
 {
@@ -537,24 +607,22 @@ void FoliageCoverage(MeshOut i)
     if(i.tag.x==21)
     {
         float2 uv=i.uv;float seed=i.tag.y;
-        float span=0.58+seed*0.35,halfWidth=0.23+seed*0.065;
+        float span=0.42+seed*0.28,halfWidth=0.09+seed*0.04;
         float u=uv.x*span,v=abs((uv.y-0.5)*2.0*halfWidth);
-        float envelope=halfWidth*(0.30+0.70*pow(saturate(sin(uv.x*PI)),0.52));
+        float envelope=halfWidth*(0.18+0.82*pow(saturate(sin(uv.x*PI)),0.66));
         envelope*=.90+.065*sin(uv.x*37.0+seed*29.0)+.035*sin(uv.x*81.0+seed*17.0);
-        // Secondary twig: offshoots every7.5cm, each with2.6cm needle reach.
-        // Fine needles are1.2cm apart along the offshoot, about2mm thick.
-        float dx=(frac((u-v*0.65)/0.075+seed*0.4+0.5)-0.5)*0.075;
-        float needlePhase=v*1.2/0.012-abs(dx)*44.0;
-        float needleDistance=abs(frac(needlePhase)-0.5)*0.012;
-        float needleRadius=0.0011+min(0.0034,fwidth(needlePhase)*0.003);
-        float needles=min(0.026-abs(dx),needleRadius-needleDistance);
-        float offshoot=max(0.002-abs(dx),needles);
-        // Subpixel needles integrate to dense needle coverage. Keeping every
-        // binary gap at distance made a spruce look like a transparent fern.
+        // Fir shoots stay narrow and separated at mid distance. Only the
+        // 2mm needles integrate; the gaps between secondary shoots survive.
+        float dx=(frac((u-v*.78)/.041+seed*.4+.5)-.5)*.041;
+        float needlePhase=v/0.008-abs(dx)*63.0;
+        float needleDistance=abs(frac(needlePhase)-.5)*.008;
+        float needleRadius=.0009+min(.0018,fwidth(needlePhase)*.0015);
+        float needles=min(.013-abs(dx),needleRadius-needleDistance);
+        float offshoot=max(.0013-abs(dx),needles);
         float footprint=max(fwidth(u),fwidth(v));
-        float resolved=max(0.0025-v,offshoot);
-        float volume=envelope*(.74+.12*sin(u*47.0+seed*13.0))-v;
-        float coverage=lerp(resolved,max(resolved,volume),smoothstep(.0015,.006,footprint));
+        float resolved=max(.0015-v,offshoot);
+        float integrated=max(.0015-v,.0105-abs(dx));
+        float coverage=lerp(resolved,integrated,smoothstep(.002,.008,footprint));
         clip(min(envelope-v,coverage));
     }
     else if(i.tag.x==24)
@@ -563,6 +631,12 @@ void FoliageCoverage(MeshOut i)
         float lobes=.87+.08*sin(uv.y*37.0+i.tag.y*39.0)+.05*sin(uv.x*61.0+i.tag.y*17.0);
         float envelope=(1.0-uv.y*.94)*lobes;
         clip(min(envelope-x,uv.y+.025-.065*x));
+    }
+    else if(i.tag.x==37||i.tag.x==38)
+    {
+        float2 q=i.uv*2.0-1.0;
+        float petals=i.tag.x==38?.82+.18*cos(atan2(q.y,q.x)*5.0):1.0;
+        clip(petals-length(q));
     }
 }
 float ShadowPS(MeshOut i):SV_Target
@@ -610,13 +684,16 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
     float mottling=Noise2(i.world.xz*0.57+i.world.y*0.37);
     if(mat==1)
     {
-        color=lerp(float3(0.63,0.61,0.53),float3(0.77,0.69,0.55),seed);
-        color*=0.975+0.03*mottling;ao=lerp(0.78,1.0,smoothstep(0.6,2.0,i.local.y));
-        color*=1.0-0.11*(1.0-smoothstep(0.65,1.5,i.local.y))*Noise2(i.local.xz*2.1);
+        RuntimeMaterial plaster=TriplanarRuntimeMaterial(3,i.world,n,.24,.45);
+        color=plaster.albedo*lerp(float3(.89,.86,.76),float3(1.04,.98,.86),seed);
+        n=plaster.normal;rough=plaster.roughness;ao=lerp(.68,1.0,smoothstep(.2,1.8,i.local.y));
+        float groundStain=(1.0-smoothstep(.15,1.65,i.local.y))*(.14+.18*Noise2(i.world.xz*.71));
+        color*=1.0-groundStain;
     }
     else if(mat==2||mat==23)
     {
-        color=lerp(float3(0.22,0.25,0.24),float3(0.39,0.37,0.31),mottling);
+        RuntimeMaterial stone=TriplanarRuntimeMaterial(0,i.world,n,.48,.58);
+        color=stone.albedo*lerp(.77,1.05,mottling);n=stone.normal;
         if(mat==2)
         {
             float horizontal=abs(n.x)>abs(n.z)?i.local.z:i.local.x;
@@ -630,29 +707,56 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         }
         rough=0.91;
     }
-    else if(mat==3||mat==6||mat==7)
+    else if(mat==3||mat==6||mat==7||mat==35)
     {
-        color=lerp(float3(0.14,0.068,0.032),float3(0.29,0.16,0.075),seed);
-        float board=FilteredLines(i.local.y*(mat==6?8.0:4.0),0.045);
-        color*=0.79+0.25*mottling;color*=1.0-0.35*board;
-        if(mat==6)color=lerp(color,float3(0.08,0.16,0.14),step(0.55,seed));
-        ao=0.82;
+        RuntimeMaterial timber=TriplanarRuntimeMaterial(2,i.world*float3(1,.8,1),n,.64,.45);
+        float horizontal=abs(n.x)>abs(n.z)?i.local.z:i.local.x;
+        float boardCoordinate=(mat==7?i.local.z:i.local.y)*(mat==6?8.0:5.8);
+        float boardID=floor(boardCoordinate),boardSeed=Hash21(float2(boardID,seed*97.0));
+        float weather=Noise2(float2(horizontal*.21,i.local.y*.35)+seed*43.0);
+        float silver=saturate((weather-.32)*1.45+boardSeed*.22);
+        color=timber.albedo*lerp(float3(.67,.61,.54),float3(.83,.79,.70),seed);
+        float luminance=dot(color,float3(.30,.59,.11));
+        color=lerp(color,luminance*float3(1.10,1.07,.99)+float3(.022,.024,.023),silver*.76);
+        float board=FilteredLines(boardCoordinate,.021);
+        float endGrain=FilteredLines(horizontal*.34+boardSeed*17.0,.007);
+        color*=(.79+.30*boardSeed)*(1.0-.46*board)*(1.0-.18*endGrain);
+        n=timber.normal;rough=max(.78,timber.roughness);
+        if(mat==6)color=lerp(color,lerp(float3(.055,.10,.08),float3(.15,.038,.022),step(.78,seed)),step(.40,seed));
+        if(mat==35)color*=.83+.17*smoothstep(0,2.0,i.local.y);
+        ao=.83;
     }
     else if(mat==4)
     {
         float row=floor(i.local.z*3.2),tile=Hash21(float2(floor(i.local.x*2.8+row*0.5),row)+seed*71);
-        color=lerp(float3(0.14,0.17,0.18),float3(0.28,0.29,0.27),tile);
+        RuntimeMaterial slate=TriplanarRuntimeMaterial(4,i.world,n,.45,.42);
+        color=slate.albedo*lerp(.75,1.15,tile);n=slate.normal;
+        color*=lerp(float3(.88,.98,1.05),float3(1.25,.61,.36),step(.72,seed));
         float mortar=max(FilteredLines(i.local.z*3.2,0.055),FilteredLines(i.local.x*2.8+row*0.5,0.045));
         color*=1.0-mortar*0.40;rough=0.70;
     }
     else if(mat==5||mat==31){color=float3(0.022,0.032,0.040);rough=0.075;ao=0.20;}
-    else if(mat==20){color=float3(0.14,0.095,0.052)*(0.8+0.4*mottling);rough=0.95;}
+    else if(mat==20)
+    {
+        float azimuth=atan2(i.local.z+.00001,i.local.x);
+        float2 barkUV=float2(azimuth*3.18,i.local.y*.40);
+        float bark=Noise2(barkUV*float2(1.7,.8));
+        float fissures=FilteredLines(barkUV.x+Noise2(barkUV*.51)*.32,.09);
+        float plates=FilteredLines(barkUV.y*3.0+floor(barkUV.x)*.47,.018);
+        color=lerp(float3(.055,.046,.036),float3(.16,.13,.094),bark);
+        color*=1.0-.64*fissures;color*=1.0-.24*plates;
+        float lichen=smoothstep(.66,.82,Noise2(i.world.xz*7.1+i.world.y*.63));
+        color=lerp(color,float3(.16,.18,.13),lichen*.28);
+        float3 tangent=float3(-sin(azimuth),0,cos(azimuth));
+        n=normalize(n+tangent*sin(barkUV.x*TAU+bark*2.0)*.13);
+        rough=.97;
+    }
     else if(mat==21||mat==24)
     {
         color=lerp(float3(.024,.049,.027),float3(.052,.090,.042),seed);
         color*=0.85+0.20*i.uv.x;rough=.92;ao=.69;
     }
-    else if(mat==22){color=lerp(float3(0.075,0.14,0.025),float3(0.19,0.23,0.047),seed);color*=0.6+0.4*i.uv.y;rough=0.91;ao=0.72+0.28*i.uv.y;}
+    else if(mat==22){color=lerp(float3(.035,.065,.017),float3(.12,.15,.035),seed);color*=.52+.48*i.uv.y;rough=.91;ao=.58+.42*i.uv.y;}
     else if(mat==30)
     {
         color=float3(.73,.76,.74);rough=.22;
@@ -662,6 +766,27 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         color=lerp(color,float3(.67,.16,.035),max(tips,max(tail,stripe)));
     }
     else if(mat==32){color=float3(.35,.19,.12);rough=.55;}
+    else if(mat==36){color=float3(.16,.17,.15);rough=.38;metal=.75;}
+    else if(mat==37){color=lerp(float3(.022,.048,.012),float3(.075,.12,.025),mottling);rough=.92;ao=.65;}
+    else if(mat==38){color=lerp(float3(.40,.025,.025),float3(.52,.20,.045),step(.55,seed));rough=.82;ao=.8;}
+    else if(mat==39)
+    {
+        RuntimeMaterial paving=TriplanarRuntimeMaterial(5,i.world,n,.6,.6);
+        color=paving.albedo;n=paving.normal;rough=paving.roughness;ao=.83;
+    }
+    else if(mat==40)
+    {
+        float slats=FilteredLines(i.local.y*9.0,.14);
+        color=lerp(float3(.012,.009,.006),float3(.07,.045,.022),slats);rough=.82;ao=.3;
+    }
+    else if(mat==41)
+    {
+        float2 q=i.uv*2.0-1.0;float r=length(q),angle=atan2(q.y,q.x);
+        float ring=smoothstep(.77,.82,r),minuteMark=step(.91,cos(angle*12.0))*smoothstep(.58,.68,r);
+        float hands=max((1.0-smoothstep(.018,.035,abs(q.x+.25*q.y)))*step(0,q.y),
+            (1.0-smoothstep(.018,.035,abs(q.y-.45*q.x)))*step(0,q.x)*(1.0-smoothstep(.40,.5,r)));
+        color=lerp(float3(.58,.52,.38),float3(.018,.019,.015),saturate(ring+minuteMark+hands));rough=.65;
+    }
     float sunVisibility=CinematicShadow(i.world,n);
     float3 lit=CinematicLightingVisible(n,view,color,rough,metal,ao,sunVisibility);
     if(mat==21||mat==22||mat==24)
@@ -672,7 +797,17 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
     if(mat==5)
     {
         float fresnel=0.04+0.96*pow(1.0-saturate(dot(n,view)),5.0);
-        lit+=float3(0.22,0.31,0.39)*fresnel*0.65;
+        float3 tangent=normalize(cross(abs(n.y)<.95?float3(0,1,0):float3(1,0,0),n));
+        float3 vertical=cross(n,tangent);
+        float2 roomUV=i.uv+float2(dot(view,tangent),dot(view,vertical))*.32/max(.15,abs(dot(n,view)));
+        float floorMask=1.0-smoothstep(.08,.18,roomUV.y);
+        float wallEdge=smoothstep(.0,.09,roomUV.x)*(1.0-smoothstep(.91,1.0,roomUV.x));
+        float3 room=lerp(float3(.022,.016,.010),float3(.053,.043,.032),floorMask)*lerp(.55,1.0,wallEdge);
+        float curtainEdge=.16+.035*sin(i.uv.y*18.0+seed*19.0);
+        float curtain=1.0-smoothstep(curtainEdge,curtainEdge+.035,min(i.uv.x,1.0-i.uv.x));
+        room=lerp(room,float3(.12,.11,.083)*(.80+.20*sin(i.uv.x*71.0)),curtain*.85);
+        room+=float3(.015,.008,.002)*step(.72,seed)*smoothstep(.25,.45,roomUV.y)*(1.0-smoothstep(.7,.9,roomUV.y));
+        lit=room*(1.0-fresnel)+AtmosphereEnvironment(reflect(-view,n))*fresnel+lit*.25;
     }
     else if(mat==31)
     {
@@ -681,7 +816,7 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         float3 localNormal=float3(dot(n,r),dot(n,u),dot(n,f));
         float3 inside=CanopyInterior(i.local,localView,localNormal);
         float3 reflected=reflect(-view,n);
-        float3 sky=lerp(float3(.11,.13,.10),float3(.31,.48,.65),saturate(reflected.y*.75+.40));
+        float3 sky=AtmosphereEnvironment(reflected);
         float sunGlint=pow(saturate(dot(reflected,CinematicFrame[8].xyz)),900.0);
         sky+=CinematicSunColor()*sunGlint*3.2*sunVisibility;
         float fresnel=.039+(.961)*pow(1.0-saturate(dot(n,view)),5.0);

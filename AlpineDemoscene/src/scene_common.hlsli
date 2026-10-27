@@ -59,10 +59,25 @@ float AlpinePeak(float2 xz,float2 centre,float2 spread,float height)
     float radius=length(q),angle=atan2(q.y,q.x);
     // Uneven radiating aretes descend from each summit. Their strength fades
     // at the apex, so a noisy field cannot turn the peak into a rounded lump.
-    float angular=angle*5.0+1.4*GeologicalNoise(q*2.4+centre*0.001);
-    float ravine=pow(abs(sin(angular)),1.6)+0.31*pow(abs(sin(angle*11.0+0.7)),2.0);
-    float carving=ravine*0.24*sqrt(saturate(radius))*saturate(1.0-radius);
-    return height*pow(saturate(1.0-radius-carving),0.88);
+    float angular=angle*5.0+1.3*GeologicalNoise(q*3.4+centre*0.001);
+    float ravine=pow(abs(sin(angular)),2.3)+0.17*pow(abs(sin(angle*13.0+1.7)),2.0);
+    float carving=ravine*.19*sqrt(saturate(radius))*saturate(1.0-radius);
+    // A broad shoulder descends into scree fans. Exponents below one made
+    // every foot of the massif a nearly vertical artificial circular wall.
+    return height*pow(saturate(1.0-radius-carving),1.23);
+}
+
+float MountainFracture(float2 p)
+{
+    float sum=0,amplitude=1,weight=1;
+    [unroll]for(int i=0;i<6;++i)
+    {
+        float ridge=1.0-abs(2.0*GeologicalNoise(p)-1.0);
+        ridge*=ridge;sum+=ridge*amplitude*weight;
+        weight=saturate(ridge*1.8);amplitude*=.47;
+        p=float2(1.77*p.x-1.13*p.y,1.13*p.x+1.77*p.y)+13.71;
+    }
+    return sum;
 }
 
 // One continuous Alpine height field shared by intersections and grounding.
@@ -77,17 +92,22 @@ float TerrainRaw(float2 xz)
     ridge *= ridge;
     float center = ValleyCenter(xz.y);
     float across = abs(xz.x - center);
-    float wall = smoothstep(220.0, 1650.0, across);
+    float wall = smoothstep(300.0, 2050.0, across);
     float floorY = 88.0 + xz.y * 0.041 + 22.0 * n1;
-    float mountain = floorY + 85.0 * n0 + wall * (210.0 + 620.0 * ridge + 120.0 * n2);
+    float mountain = floorY + 35.0 * n0 + wall * (150.0 + 330.0 * ridge + 80.0 * n2);
     float h = lerp(floorY + 18.0 * n2, mountain, wall);
-    float2 warp=float2(n1-0.5,n2-0.5)*190.0;
+    float2 warp=float2(n1-0.5,n2-0.5)*125.0;
     float2 rockXZ=xz+warp;
-    float peaks=AlpinePeak(rockXZ,float2(-1450,3820),float2(1200,2200),1220);
-    peaks=max(peaks,AlpinePeak(rockXZ,float2(1640,4480),float2(1400,2100),1520));
-    peaks=max(peaks,AlpinePeak(rockXZ,float2(-570,6140),float2(1450,1300),1720));
-    peaks=max(peaks,AlpinePeak(rockXZ,float2(660,6530),float2(1350,1400),1930));
-    peaks=max(peaks,AlpinePeak(rockXZ,float2(-2070,6100),float2(1450,1900),1540));
+    // Separate foothills, a connected ridge chain and distant summits. The
+    // old five cones sat directly at the shore and enclosed the lake in walls.
+    float peaks=AlpinePeak(rockXZ,float2(-2150,4140),float2(1450,2450),1380);
+    peaks=max(peaks,AlpinePeak(rockXZ,float2(2140,4750),float2(1580,2500),1640));
+    peaks=max(peaks,AlpinePeak(rockXZ,float2(-1780,6740),float2(1530,1700),1990));
+    peaks=max(peaks,AlpinePeak(rockXZ,float2(-680,7220),float2(1360,1900),2220));
+    peaks=max(peaks,AlpinePeak(rockXZ,float2(390,6970),float2(1250,1900),2380));
+    peaks=max(peaks,AlpinePeak(rockXZ,float2(1390,7530),float2(1410,2200),2530));
+    peaks=max(peaks,AlpinePeak(rockXZ,float2(2770,7090),float2(1500,2000),2140));
+    peaks=max(peaks,AlpinePeak(rockXZ,float2(-2980,6040),float2(1650,1900),1670));
     float mass=smoothstep(180.0,700.0,peaks);
     // Aligned ribs and ravines break silhouettes from kilometre to 10m scales.
     float2 rockUV=float2(xz.x*0.0031,xz.y*0.0027)+float2(n1,n2)*0.65;
@@ -95,26 +115,51 @@ float TerrainRaw(float2 xz)
     float gully=1.0-abs(2.0*GeologicalNoise(rockUV*2.13+float2(9.2,4.7))-1.0);
     float fractured=GeologicalNoise(rockUV*5.17+float2(31.7,12.9))-0.5;
     // Nested drainage-shaped channels replace equal-sized soft bumps.
-    float dissection=pow(1.0-rib,2.0)*110.0+pow(1.0-gully,2.0)*(20.0+45.0*(1.0-rib));
-    h=max(h,floorY+peaks-dissection*mass+fractured*9.0*mass);
+    float dissection=pow(1.0-rib,2.0)*85.0+pow(1.0-gully,2.0)*(18.0+36.0*(1.0-rib));
+    float rockSpurs=(MountainFracture(xz*.0026+37.0)-.72)*74.0;
+    h=max(h,floorY+peaks+(rockSpurs-dissection+fractured*7.0)*mass);
     float town = 1.0 - smoothstep(245.0, 530.0, length((xz - TOWN_C) / float2(0.85, 1.0)));
     h = lerp(h, 145.0 + 3.5 * n2, town * 0.96);
     float2 lq = (xz - LAKE_C) / float2(900.0, 610.0);
-    float lr = length(lq);
-    float lake = 1.0 - smoothstep(0.82, 1.50, lr);
+    float lr = length(lq)+.035*(GeologicalNoise(xz*.0041)-.5)
+        +.016*(GeologicalNoise(xz*.0107+11.0)-.5);
+    float lake = 1.0 - smoothstep(0.82, 1.42, lr);
     float basin = LAKE_Y - 2.0 - 48.0 * pow(saturate(1.0 - lr),0.65) + 2.0 * n2;
     // A carved basin with a continuous sloping shoreline. Blending a flat
     // lakebed into a 1km mountain over a narrow ring made an artificial wall.
-    float shoreDistance=max(0.0,lr-.87)*610.0;
-    float valleyCut=basin+0.011*shoreDistance*shoreDistance;
-    h=min(h,valleyCut);
+    float shoreDistance=(lr-.94)*610.0;
+    float shoreRise=max(0.0,shoreDistance);
+    float valleyCut=basin+shoreRise*.22+.0019*shoreRise*shoreRise;
+    float bowl=1.0-smoothstep(1.12,1.72,lr);
+    // Close the basin before the finite water solver domain ends. A minimum
+    // alone left low valley sectors below water but outside its ellipse.
+    float shoreFloor=LAKE_Y+3.0+shoreRise*.12;
+    float carved=min(h,valleyCut);
+    carved=lerp(carved,max(carved,shoreFloor),smoothstep(.94,1.015,lr));
+    h=lerp(h,carved,bowl);
     // A narrow hanging valley. The lip feeds a ballistic fall and a runoff
     // channel, rather than a water material following a kilometre-wide wall.
-    float gorge=1.0-smoothstep(42.0,155.0,abs(xz.x-350.0));
-    gorge*=smoothstep(4590.0,4680.0,xz.y)*(1.0-smoothstep(5110.0,5240.0,xz.y));
-    float cliff=LAKE_Y-2.0+0.008*max(0.0,xz.y-4650.0)+360.0*smoothstep(4870.0,4915.0,xz.y);
-    float cliffRock=(GeologicalNoise(xz*.024)-.5)*3.0*smoothstep(4860.0,4910.0,xz.y);
-    h=lerp(h,cliff+cliffRock,gorge);
+    float lip=4884.0+52.0*(GeologicalNoise(float2(xz.x*.0081,17.3))-.5)
+        +24.0*(GeologicalNoise(float2(xz.x*.0247,8.1))-.5);
+    float shelfWidth=1.0-smoothstep(240.0,900.0,abs(xz.x-350.0));
+    float cliff=smoothstep(lip-4.0,lip+6.0,xz.y);
+    float backRise=90.0*smoothstep(4970.0,5800.0,xz.y);
+    float strata=(GeologicalNoise(float2(xz.x*.016,xz.y*.035))-.5)*36.0;
+    float shelf=LAKE_Y+240.0+backRise+strata;
+    float foothill=LAKE_Y+12.0+45.0*GeologicalNoise(xz*.006+17.0);
+    float escarpment=lerp(foothill,shelf,cliff);
+    float escarpmentWeight=shelfWidth*smoothstep(4730.0,4860.0,xz.y)
+        *(1-smoothstep(5600.0,6300.0,xz.y));
+    // This ledge joins the higher landscape behind it; it is not a cone
+    // standing alone in the lake. The lip is a finite-width rocky cliff.
+    h=lerp(h,max(h,escarpment),escarpmentWeight);
+    float cliffFace=escarpmentWeight*4.0*cliff*(1.0-cliff);
+    h+=cliffFace*((GeologicalNoise(xz*.027+13.0)-.5)*28.0
+        +(GeologicalNoise(xz*.071+7.0)-.5)*5.0);
+    float gorge=1.0-smoothstep(38.0,125.0,abs(xz.x-350.0));
+    gorge*=smoothstep(4590.0,4680.0,xz.y)*(1.0-smoothstep(4860.0,4882.0,xz.y));
+    float channel=LAKE_Y-3.0+0.004*max(0.0,xz.y-4650.0);
+    h=lerp(h,channel,gorge);
     // Resolved rocky relief, excluded from the village foundations/lake basin.
     // Unlike a colour overlay, these ridges alter silhouettes and intersections.
     float rugged=(1.0-town)*(1.0-lake);
@@ -123,7 +168,7 @@ float TerrainRaw(float2 xz)
     // No height-modulated noise rows. Metre relief is confined to massifs.
     float joints=1.0-abs(2.0*GeologicalNoise(xz*.011+float2(63.1,12.7))-1.0);
     float blocks=1.0-abs(2.0*GeologicalNoise(xz*.027+float2(7.3,39.2))-1.0);
-    h+=rugged*(1.0-gorge)*smoothstep(380.0,820.0,h)*((joints-.62)*35.0+(blocks-.62)*12.0+crag*5.0+talus*.9);
+    h+=rugged*(1.0-gorge)*smoothstep(380.0,820.0,h)*((joints-.62)*11.0+(blocks-.62)*4.0+crag*1.5+talus*.4);
     return h;
 }
 

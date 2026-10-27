@@ -1,60 +1,55 @@
 {
-  "schema_version": 1,
-  "date": "2026-10-27",
-  "baseline": {
-    "commit": "f2ec2731",
-    "tag": "alpine-baseline-20mb-20261027",
-    "bytes": 628224,
-    "sha256": "E710625FCBF6FD131A9B72B7D6B358DA8FF7C58FF4A7062DC1958636B525C6AB"
+  "executable": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\build\\final_revision_validated_reference.exe",
+  "bytes": 1274880,
+  "sha256": "70C6D86D2E49A495BA8C4ED9DACC47776860CCDD482A28FB49DB438C033754F6",
+  "shader_resources": [
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    110,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    118,
+    119
+  ],
+  "route": {
+    "frames": 64,
+    "start_seconds": 0,
+    "step_seconds": 2,
+    "debug_errors": 0,
+    "debug_warnings": 0,
+    "cloud_changed_depth_pixels": 0.0,
+    "reflection_cloud_changed_depth_pixels": 0.0,
+    "instance_nonfinite_values": 0.0,
+    "invalid_instance_flags": 0.0,
+    "water_nonfinite_values": 0.0,
+    "maximum_water_displacement_m": 0.0739111
   },
-  "release": {
-    "branch": "alpine-cinematic-88mb",
-    "file": "dist/AlpineDreaming.exe",
-    "bytes": 834560,
-    "strict_limit_bytes": 88000000,
-    "sha256": "979B077D03BD6AA0975C30F3889A24559C77E5A91EEF541B473C45896BCED0D1",
-    "shader_resources": "101,102,103,104,105,106,107,108,109,110,111,112,113",
-    "imports": "kernel32.dll,user32.dll,d3d11.dll,winmm.dll"
-  },
-  "cinematic_quality_target_achieved": false,
-  "runtime_predrawn_images": false,
-  "runtime_neural_inference": false,
-  "physical_model_scope": "3DOF glider translation with pilot; linearized variable-depth shallow water with fixed wet mask; harmonic vegetation; ballistic jet with approximate volume rendering; residents remain kinematic",
-  "shader_equivalence": {
-    "previous_sha256": "f9656ee3cf28383ccb93b6632b218d241a1a7569968eeb769f55e9d529d3fa63",
-    "current_sha256": "979b077d03bd6aa0975c30f3889a24559c77e5a91eef541b473c45896bced0d1",
-    "changed_shader_resources": [
-      102,
-      106,
-      108
-    ],
-    "unchanged_shader_resources": [
-      101,
-      103,
-      104,
-      105,
-      107,
-      109,
-      110,
-      111,
-      112,
-      113
-    ]
-  },
-  "flight_gpu": {
+  "flight": {
     "samples": 15364,
     "fixed_step_seconds": 0.00833333,
     "storage_hz": 30,
-    "startup_gpu_ms": 17.8436,
+    "startup_gpu_ms": 36.0385,
     "nonfinite_values": 0,
-    "min_clearance_m": 654.944,
+    "min_clearance_m": 737.231,
     "min_airspeed_m_s": 30.4228,
     "max_airspeed_m_s": 33.5255,
     "max_abs_bank_rad": 0.230865,
     "min_lift_coefficient": 0.629217,
     "max_lift_coefficient": 0.776225
   },
-  "water_gpu": {
+  "physics": {
     "flight_finite": true,
     "tests": [
       {
@@ -97,12 +92,12 @@
           "nonfinite_values": 0,
           "foam_out_of_range": 0,
           "height_volume_m3": 1847.26,
-          "max_abs_height_m": 0.02106,
-          "max_speed_m_s": 0.0115308,
-          "max_foam": 0.000415594,
-          "wet_total_depth_lower_bound_m": 0.47894
+          "max_abs_height_m": 0.0210668,
+          "max_speed_m_s": 0.0114841,
+          "max_foam": 0.000415131,
+          "wet_total_depth_lower_bound_m": 0.478933
         },
-        "relative_volume_error": 3.0515E-08,
+        "relative_volume_error": 1.05751E-08,
         "passed": true
       },
       {
@@ -120,13 +115,13 @@
         "final": {
           "nonfinite_values": 0,
           "foam_out_of_range": 0,
-          "height_volume_m3": 3.53784E-05,
-          "max_abs_height_m": 0.0370996,
-          "max_speed_m_s": 0.0270911,
-          "max_foam": 0.0108848,
-          "wet_total_depth_lower_bound_m": 0.4629
+          "height_volume_m3": -2.14304E-05,
+          "max_abs_height_m": 0.0444613,
+          "max_speed_m_s": 0.0406888,
+          "max_foam": 0.0229823,
+          "wet_total_depth_lower_bound_m": 0.455539
         },
-        "relative_volume_error": 3.53784E-05,
+        "relative_volume_error": 2.14304E-05,
         "passed": true
       }
     ],
@@ -134,36 +129,6 @@
     "backwards_replay_bit_exact": true,
     "conservative_CFL": 0.0730267,
     "debug_warnings_errors": 0
-  },
-  "independent_gpu_cache_validation": {
-    "passed": true,
-    "samples": 15364,
-    "max_basis_error": 7.78188077089E-07,
-    "max_airspeed_error_mps": 0.000113996206725,
-    "max_acceleration_residual_mps2": 0.00211256656213,
-    "max_relative_energy_work_residual": 7.95982912526E-06
-  },
-  "water_normal": {
-    "samples": 147456,
-    "time": 64,
-    "deep_limit_checks": 147456,
-    "water_samples": 46937,
-    "nonfinite_normal_or_uv_pixels": 0,
-    "max_normal_length_error": 0,
-    "water_rms_slope": 0.00707741,
-    "debug_warnings_errors": 0,
-    "passed": true
-  },
-  "water_negative_mutation": {
-    "samples": 147456,
-    "time": 64,
-    "deep_limit_checks": 147456,
-    "water_samples": 46937,
-    "nonfinite_normal_or_uv_pixels": 147456,
-    "max_normal_length_error": 0,
-    "water_rms_slope": 0,
-    "debug_warnings_errors": 0,
-    "passed": false
   },
   "camera": {
     "samples": 16384,
@@ -175,87 +140,702 @@
     "nonfinite_values": 0,
     "town_y": 149.682
   },
-  "culling_pixel_equivalence_seconds": [
-    12,
-    24,
-    48,
-    64,
-    96
-  ],
-  "package_negative_cases_passed": 6,
-  "motion": [
-    {
-      "name": "release88_lake",
-      "start_seconds": 64,
-      "frames": 90,
-      "dt": 0.0333333,
-      "width": 1280,
-      "height": 720,
-      "scale": 1,
-      "render_mean_ms": 100.369,
-      "render_median_ms": 111.744,
-      "render_max_ms": 145.85,
-      "debug_errors": 0,
-      "debug_warnings": 0,
-      "unique_frame_hashes": 90
+  "terrain_trace": {
+    "samples": 512,
+    "ray_classes": {
+      "0": 103,
+      "1": 103,
+      "2": 102,
+      "3": 102,
+      "4": 102
     },
-    {
-      "name": "release88_glider",
-      "start_seconds": 96,
-      "frames": 90,
-      "dt": 0.0333333,
-      "width": 1280,
-      "height": 720,
-      "scale": 1,
-      "render_mean_ms": 99.331,
-      "render_median_ms": 105.139,
-      "render_max_ms": 129.76,
-      "debug_errors": 0,
-      "debug_warnings": 0,
-      "unique_frame_hashes": 90
-    },
-    {
-      "name": "release88_portrait",
-      "start_seconds": 24,
-      "frames": 60,
-      "dt": 0.0333333,
-      "width": 1280,
-      "height": 720,
-      "scale": 1,
-      "render_mean_ms": 88.993,
-      "render_median_ms": 101.156,
-      "render_max_ms": 128.387,
-      "debug_errors": 0,
-      "debug_warnings": 0,
-      "unique_frame_hashes": 60
-    }
-  ],
-  "performance_notes": "Intel Iris Xe, driver31.0.101.4255, D3D11 debug layer. Values exclude first frame and physics stage; no realtime30/60fps guarantee. Clock/load variation is substantial. Full64-frame route was tested on F965 candidate; physical resources remain identical. Final motion samples read exact release EXE resources.",
-  "native": {
+    "failures": 0,
+    "unresolved_dense_reference_cases": 0,
+    "maximum_matching_distance_error_m": 0.0024862289428710938,
+    "maximum_surface_residual_m": 0.0045166015625,
+    "first_failures": [],
+    "first_unresolved": []
+  },
+  "water_normals": {
+    "samples": 147456,
+    "time": 64,
+    "deep_limit_checks": 147456,
+    "water_samples": 46933,
+    "nonfinite_normal_or_uv_pixels": 0,
+    "max_normal_length_error": 0,
+    "water_rms_slope": 0.00707776,
+    "debug_warnings_errors": 0,
+    "passed": true
+  },
+  "negative_packaging_tests_passed": 6,
+  "negative_water_regression_rejected": true,
+  "native_full_loop": {
     "executable": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\dist\\AlpineDreaming.exe",
-    "sha256": "979B077D03BD6AA0975C30F3889A24559C77E5A91EEF541B473C45896BCED0D1",
+    "sha256": "70C6D86D2E49A495BA8C4ED9DACC47776860CCDD482A28FB49DB438C033754F6",
     "hold_seconds": 135,
     "window_was_visible": false,
     "responsive_before_close": true,
-    "close_latency_seconds": 0.4522,
+    "close_latency_seconds": 0.4664,
     "exit_code": 0,
     "forced_termination": false
   },
+  "current_candidate": {
+    "executable": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\dist\\AlpineDreaming.exe",
+    "bytes": 1274880,
+    "sha256": "70C6D86D2E49A495BA8C4ED9DACC47776860CCDD482A28FB49DB438C033754F6",
+    "changed_resource": 102,
+    "equivalence_report": "build/final_revision_resource_equivalence.json",
+    "component_tests_retained_from_reference": [
+      "flight",
+      "physics",
+      "camera",
+      "terrain_trace",
+      "water_normals",
+      "terrain_bounds",
+      "instance_cache"
+    ]
+  },
+  "schema_version": 2,
+  "date": "2026-10-27",
+  "validated_route_build_sha256": "E92EFF968657FE931459CF6A7ACF5B88278E1ACED110A490751F4C4990B69A80",
+  "strict_limit_bytes": 88000000,
+  "branch": "alpine-cinematic-88mb",
+  "previous_release": {
+    "commit": "4f29be0e",
+    "tag": "alpine-physics-88mb-20261027",
+    "bytes": 834560,
+    "sha256": "979B077D03BD6AA0975C30F3889A24559C77E5A91EEF541B473C45896BCED0D1"
+  },
+  "size_increase_bytes": 440320,
+  "size_increase_percent": 52.76073619631902,
+  "cinematic_quality_target_achieved": false,
+  "runtime_predrawn_images": false,
+  "runtime_imported_meshes": false,
+  "runtime_neural_inference": false,
+  "shader_equivalence": {
+    "reference": {
+      "Path": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\build\\final_revision_validated_reference.exe",
+      "Bytes": 1268736,
+      "SHA256": "E92EFF968657FE931459CF6A7ACF5B88278E1ACED110A490751F4C4990B69A80",
+      "ShaderResources": "101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119",
+      "Imports": "kernel32.dll,user32.dll,d3d11.dll,winmm.dll"
+    },
+    "candidate": {
+      "Path": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\dist\\AlpineDreaming.exe",
+      "Bytes": 1274880,
+      "SHA256": "70C6D86D2E49A495BA8C4ED9DACC47776860CCDD482A28FB49DB438C033754F6",
+      "ShaderResources": "101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119",
+      "Imports": "kernel32.dll,user32.dll,d3d11.dll,winmm.dll"
+    },
+    "expected_changed_resources": [
+      102
+    ],
+    "changed_resources": [
+      102
+    ],
+    "all_other_resources_identical": true,
+    "host_runtime_sections_identical_excluding_linker_metadata": true,
+    "reference_normalized_metadata": [
+      {
+        "bytes": 4,
+        "original": 1793138510,
+        "kind": "debug_timestamp",
+        "offset": 16676
+      },
+      {
+        "original": 960,
+        "name": ".rsrc$01",
+        "bytes": 4,
+        "kind": "resource_contribution_size",
+        "offset": 16948
+      },
+      {
+        "original": 1245688,
+        "name": ".rsrc$02",
+        "bytes": 4,
+        "kind": "resource_contribution_size",
+        "offset": 16968
+      }
+    ],
+    "candidate_normalized_metadata": [
+      {
+        "bytes": 4,
+        "original": 1793138821,
+        "kind": "debug_timestamp",
+        "offset": 16676
+      },
+      {
+        "original": 960,
+        "name": ".rsrc$01",
+        "bytes": 4,
+        "kind": "resource_contribution_size",
+        "offset": 16948
+      },
+      {
+        "original": 1251840,
+        "name": ".rsrc$02",
+        "bytes": 4,
+        "kind": "resource_contribution_size",
+        "offset": 16968
+      }
+    ],
+    "resources": [
+      {
+        "id": 101,
+        "reference_bytes": 78860,
+        "candidate_bytes": 78860,
+        "reference_sha256": "207E83DCBD1EE93CC07C7BBA0B018336045A9F3E5CB44BF722570D50320AA74D",
+        "candidate_sha256": "207E83DCBD1EE93CC07C7BBA0B018336045A9F3E5CB44BF722570D50320AA74D",
+        "identical": true
+      },
+      {
+        "id": 102,
+        "reference_bytes": 138132,
+        "candidate_bytes": 144288,
+        "reference_sha256": "768A85121435C5E679FA76EC01EC3A0B061077EDFF6C10E92502EB356707A04D",
+        "candidate_sha256": "E684CA32E952037F766F6A9D44944519403F5429A17197C82830C21CEB8C1123",
+        "identical": false
+      },
+      {
+        "id": 103,
+        "reference_bytes": 228172,
+        "candidate_bytes": 228172,
+        "reference_sha256": "F9981D3BB570B519F239CF197ABAEB5F9E89311D6987C020A5E08F2FA8DC476E",
+        "candidate_sha256": "F9981D3BB570B519F239CF197ABAEB5F9E89311D6987C020A5E08F2FA8DC476E",
+        "identical": true
+      },
+      {
+        "id": 104,
+        "reference_bytes": 11724,
+        "candidate_bytes": 11724,
+        "reference_sha256": "D654293D343C2C4D8D37145D0853C8E2589D123F93A36444A8A8CCA49F46288E",
+        "candidate_sha256": "D654293D343C2C4D8D37145D0853C8E2589D123F93A36444A8A8CCA49F46288E",
+        "identical": true
+      },
+      {
+        "id": 105,
+        "reference_bytes": 24816,
+        "candidate_bytes": 24816,
+        "reference_sha256": "79622E7665A7DA6626B7910EEB2DBFF96DC25F8749BD06C1514F8B9C5F5FF17F",
+        "candidate_sha256": "79622E7665A7DA6626B7910EEB2DBFF96DC25F8749BD06C1514F8B9C5F5FF17F",
+        "identical": true
+      },
+      {
+        "id": 106,
+        "reference_bytes": 102056,
+        "candidate_bytes": 102056,
+        "reference_sha256": "F6F31DFF8A8679A862D4005AF67543EC15688A5F46BACD65C4FB4E5E9CBFCB0A",
+        "candidate_sha256": "F6F31DFF8A8679A862D4005AF67543EC15688A5F46BACD65C4FB4E5E9CBFCB0A",
+        "identical": true
+      },
+      {
+        "id": 107,
+        "reference_bytes": 76196,
+        "candidate_bytes": 76196,
+        "reference_sha256": "45E511A0012643A241D42F501708D4EA7EBA4D0CB7C3ECE885C5BC099A5A8778",
+        "candidate_sha256": "45E511A0012643A241D42F501708D4EA7EBA4D0CB7C3ECE885C5BC099A5A8778",
+        "identical": true
+      },
+      {
+        "id": 108,
+        "reference_bytes": 100020,
+        "candidate_bytes": 100020,
+        "reference_sha256": "78777A5502B0E3B1C9BDEFB07FE3F59760543AC371F2E8C337543E0F6F0DD1C2",
+        "candidate_sha256": "78777A5502B0E3B1C9BDEFB07FE3F59760543AC371F2E8C337543E0F6F0DD1C2",
+        "identical": true
+      },
+      {
+        "id": 109,
+        "reference_bytes": 4252,
+        "candidate_bytes": 4252,
+        "reference_sha256": "7965980FA9A19E499099D3B0DF3A60713D5A2989FA857F3A8ECBD7C07F9672F5",
+        "candidate_sha256": "7965980FA9A19E499099D3B0DF3A60713D5A2989FA857F3A8ECBD7C07F9672F5",
+        "identical": true
+      },
+      {
+        "id": 110,
+        "reference_bytes": 80432,
+        "candidate_bytes": 80432,
+        "reference_sha256": "6BF2483DEE5ADB426B08CA7EA9205E58966E44E7A1618B0EA0DE731245D4A560",
+        "candidate_sha256": "6BF2483DEE5ADB426B08CA7EA9205E58966E44E7A1618B0EA0DE731245D4A560",
+        "identical": true
+      },
+      {
+        "id": 111,
+        "reference_bytes": 74456,
+        "candidate_bytes": 74456,
+        "reference_sha256": "4A5E67320CA436D1295E77763861A30A0FBFBCC051F068748B271F687C3BAC2C",
+        "candidate_sha256": "4A5E67320CA436D1295E77763861A30A0FBFBCC051F068748B271F687C3BAC2C",
+        "identical": true
+      },
+      {
+        "id": 112,
+        "reference_bytes": 11592,
+        "candidate_bytes": 11592,
+        "reference_sha256": "7B403F328901F352F4226A189ABBE92A8D258276F667D724C98046838804BADE",
+        "candidate_sha256": "7B403F328901F352F4226A189ABBE92A8D258276F667D724C98046838804BADE",
+        "identical": true
+      },
+      {
+        "id": 113,
+        "reference_bytes": 26028,
+        "candidate_bytes": 26028,
+        "reference_sha256": "AFC92E62C0A44D84D69664B38949344A7DD7582D1DC4BF170F02D0A2C4247341",
+        "candidate_sha256": "AFC92E62C0A44D84D69664B38949344A7DD7582D1DC4BF170F02D0A2C4247341",
+        "identical": true
+      },
+      {
+        "id": 114,
+        "reference_bytes": 216112,
+        "candidate_bytes": 216112,
+        "reference_sha256": "6CDDB86AD5F5518D0B16905D4DA9932D6A46BFDC3E65FB3AF1C3100A7FA93944",
+        "candidate_sha256": "6CDDB86AD5F5518D0B16905D4DA9932D6A46BFDC3E65FB3AF1C3100A7FA93944",
+        "identical": true
+      },
+      {
+        "id": 115,
+        "reference_bytes": 11868,
+        "candidate_bytes": 11868,
+        "reference_sha256": "8869DCA98CEA3AA150D643B6815265B0ED12E0F3B627BD13B90EBE1FBDD06B70",
+        "candidate_sha256": "8869DCA98CEA3AA150D643B6815265B0ED12E0F3B627BD13B90EBE1FBDD06B70",
+        "identical": true
+      },
+      {
+        "id": 116,
+        "reference_bytes": 22908,
+        "candidate_bytes": 22908,
+        "reference_sha256": "34FD2131B782F10185342FAE70CB65735834C9B4F15D382810344EE44BA44BC0",
+        "candidate_sha256": "34FD2131B782F10185342FAE70CB65735834C9B4F15D382810344EE44BA44BC0",
+        "identical": true
+      },
+      {
+        "id": 117,
+        "reference_bytes": 26028,
+        "candidate_bytes": 26028,
+        "reference_sha256": "507B59728CAA753C73F6118197CC1E974E5A495C94CFCBDAD2BD217D806B0164",
+        "candidate_sha256": "507B59728CAA753C73F6118197CC1E974E5A495C94CFCBDAD2BD217D806B0164",
+        "identical": true
+      },
+      {
+        "id": 118,
+        "reference_bytes": 1324,
+        "candidate_bytes": 1324,
+        "reference_sha256": "88D6135392587D151D06E51678A9ABD569685BD7FA19A00E3BD04ED7646A3291",
+        "candidate_sha256": "88D6135392587D151D06E51678A9ABD569685BD7FA19A00E3BD04ED7646A3291",
+        "identical": true
+      },
+      {
+        "id": 119,
+        "reference_bytes": 10664,
+        "candidate_bytes": 10664,
+        "reference_sha256": "60EC9222144AB6D16322C1FE4CB239328CD86659ED5BAB70AE9E5B89AB1D21DB",
+        "candidate_sha256": "60EC9222144AB6D16322C1FE4CB239328CD86659ED5BAB70AE9E5B89AB1D21DB",
+        "identical": true
+      }
+    ],
+    "sections": [
+      {
+        "name": ".data",
+        "reference_sha256_raw": "A663651774590C0D7A7546BBF6177DAB6AC5D3C4CA1E3765076990A71BF3E895",
+        "candidate_sha256_raw": "A663651774590C0D7A7546BBF6177DAB6AC5D3C4CA1E3765076990A71BF3E895",
+        "raw_identical": true,
+        "reference_sha256_normalized": "A663651774590C0D7A7546BBF6177DAB6AC5D3C4CA1E3765076990A71BF3E895",
+        "candidate_sha256_normalized": "A663651774590C0D7A7546BBF6177DAB6AC5D3C4CA1E3765076990A71BF3E895",
+        "identical": true
+      },
+      {
+        "name": ".rdata",
+        "reference_sha256_raw": "BDF032E948E3C14E03B6A5AE159D5F47D732787A7FCDFF3DB54E1D4A29003D7F",
+        "candidate_sha256_raw": "B156A7EF1B6465366441F590E2638B95A30AF294D52C66493384AF2FAE8DEF97",
+        "raw_identical": false,
+        "reference_sha256_normalized": "C836D672775821C9C156D23115B49A7E6CFB5B9C7DA2184D8031613A59C51C5D",
+        "candidate_sha256_normalized": "C836D672775821C9C156D23115B49A7E6CFB5B9C7DA2184D8031613A59C51C5D",
+        "identical": true
+      },
+      {
+        "name": ".reloc",
+        "reference_sha256_raw": "05C2A4AB5D925139F9A1CCEDDC63B8E75305EE8E6B9A4025C782A9974C6DD9DE",
+        "candidate_sha256_raw": "05C2A4AB5D925139F9A1CCEDDC63B8E75305EE8E6B9A4025C782A9974C6DD9DE",
+        "raw_identical": true,
+        "reference_sha256_normalized": "05C2A4AB5D925139F9A1CCEDDC63B8E75305EE8E6B9A4025C782A9974C6DD9DE",
+        "candidate_sha256_normalized": "05C2A4AB5D925139F9A1CCEDDC63B8E75305EE8E6B9A4025C782A9974C6DD9DE",
+        "identical": true
+      },
+      {
+        "name": ".text",
+        "reference_sha256_raw": "781368B749E837C4256A212739D1BD3379A3E70BD8ED91DBB91814E2FA9E3FF2",
+        "candidate_sha256_raw": "781368B749E837C4256A212739D1BD3379A3E70BD8ED91DBB91814E2FA9E3FF2",
+        "raw_identical": true,
+        "reference_sha256_normalized": "781368B749E837C4256A212739D1BD3379A3E70BD8ED91DBB91814E2FA9E3FF2",
+        "candidate_sha256_normalized": "781368B749E837C4256A212739D1BD3379A3E70BD8ED91DBB91814E2FA9E3FF2",
+        "identical": true
+      }
+    ],
+    "passed": true
+  },
+  "terrain_cpu": [
+    {
+      "seed": 88027,
+      "cases": 6308,
+      "failures": 0,
+      "exhausted": 0,
+      "max_iterations": 1809,
+      "traversal_budget": 16416,
+      "first_failures": []
+    },
+    {
+      "seed": 142,
+      "cases": 6308,
+      "failures": 0,
+      "exhausted": 0,
+      "max_iterations": 1809,
+      "traversal_budget": 16416,
+      "first_failures": []
+    },
+    {
+      "seed": 73019,
+      "cases": 6308,
+      "failures": 0,
+      "exhausted": 0,
+      "max_iterations": 1809,
+      "traversal_budget": 16416,
+      "first_failures": []
+    }
+  ],
+  "terrain_bounds": {
+    "startup_gpu_ms": 6.64255,
+    "levels": [
+      {
+        "level": 0,
+        "size": 4096,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 36.6191,
+        "maximum": 2923.74
+      },
+      {
+        "level": 1,
+        "size": 2048,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 36.7138,
+        "maximum": 2923.74
+      },
+      {
+        "level": 2,
+        "size": 1024,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 36.901,
+        "maximum": 2923.74
+      },
+      {
+        "level": 3,
+        "size": 512,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 37.2863,
+        "maximum": 2923.74
+      },
+      {
+        "level": 4,
+        "size": 256,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 38.0604,
+        "maximum": 2923.74
+      },
+      {
+        "level": 5,
+        "size": 128,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 39.6583,
+        "maximum": 2923.75
+      },
+      {
+        "level": 6,
+        "size": 64,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 44.473,
+        "maximum": 2923.75
+      },
+      {
+        "level": 7,
+        "size": 32,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 57.2349,
+        "maximum": 2923.75
+      },
+      {
+        "level": 8,
+        "size": 16,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 74.0192,
+        "maximum": 2923.75
+      },
+      {
+        "level": 9,
+        "size": 8,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 397.483,
+        "maximum": 2923.75
+      },
+      {
+        "level": 10,
+        "size": 4,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 651.171,
+        "maximum": 2923.75
+      },
+      {
+        "level": 11,
+        "size": 2,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 1662.51,
+        "maximum": 2923.75
+      },
+      {
+        "level": 12,
+        "size": 1,
+        "nonfinite": 0,
+        "nonconservative": 0,
+        "minimum": 2923.75,
+        "maximum": 2923.75
+      }
+    ]
+  },
+  "materials": {
+    "startup_gpu_ms": 40.6801,
+    "width": 1024,
+    "mips": 11,
+    "layers": [
+      {
+        "layer": 0,
+        "min_byte": 26,
+        "max_byte": 84,
+        "variance": 92.0728,
+        "invalid_normals": 0,
+        "last_mip_rgba": [
+          56,
+          55,
+          48,
+          194
+        ]
+      },
+      {
+        "layer": 1,
+        "min_byte": 4,
+        "max_byte": 55,
+        "variance": 163.662,
+        "invalid_normals": 0,
+        "last_mip_rgba": [
+          19,
+          35,
+          6,
+          147
+        ]
+      },
+      {
+        "layer": 2,
+        "min_byte": 7,
+        "max_byte": 54,
+        "variance": 120.242,
+        "invalid_normals": 0,
+        "last_mip_rgba": [
+          36,
+          22,
+          11,
+          169
+        ]
+      },
+      {
+        "layer": 3,
+        "min_byte": 112,
+        "max_byte": 180,
+        "variance": 300.124,
+        "invalid_normals": 0,
+        "last_mip_rgba": [
+          162,
+          150,
+          122,
+          151
+        ]
+      },
+      {
+        "layer": 4,
+        "min_byte": 9,
+        "max_byte": 57,
+        "variance": 140.413,
+        "invalid_normals": 0,
+        "last_mip_rgba": [
+          29,
+          31,
+          32,
+          182
+        ]
+      },
+      {
+        "layer": 5,
+        "min_byte": 32,
+        "max_byte": 78,
+        "variance": 104.818,
+        "invalid_normals": 0,
+        "last_mip_rgba": [
+          55,
+          55,
+          49,
+          169
+        ]
+      },
+      {
+        "layer": 6,
+        "min_byte": 47,
+        "max_byte": 140,
+        "variance": 1183.4,
+        "invalid_normals": 0,
+        "last_mip_rgba": [
+          129,
+          71,
+          48,
+          145
+        ]
+      },
+      {
+        "layer": 7,
+        "min_byte": 16,
+        "max_byte": 82,
+        "variance": 252.911,
+        "invalid_normals": 0,
+        "last_mip_rgba": [
+          50,
+          50,
+          40,
+          192
+        ]
+      }
+    ]
+  },
+  "cloud_volume": {
+    "startup_gpu_ms": 12.5915,
+    "size": 128,
+    "channels": [
+      {
+        "min_byte": 43,
+        "max_byte": 232,
+        "mean_byte": 151.598
+      },
+      {
+        "min_byte": 0,
+        "max_byte": 254,
+        "mean_byte": 120
+      },
+      {
+        "min_byte": 0,
+        "max_byte": 254,
+        "mean_byte": 120.036
+      },
+      {
+        "min_byte": 41,
+        "max_byte": 134,
+        "mean_byte": 84.2358
+      }
+    ]
+  },
+  "independent_physics": [
+    {
+      "passed": true,
+      "force_samples": 1000,
+      "max_normalized_lift_work": 1.56241024715E-16,
+      "max_drag_power_watts": -355.041316212,
+      "flight_coarse_position_error_m": 0.000291739278407,
+      "flight_fine_position_error_m": 5.82914413167E-05,
+      "flight_relative_energy_residual": 7.91326365295E-10,
+      "controlled_min_airspeed_mps": 30.4228211595,
+      "controlled_max_airspeed_mps": 33.5254506596,
+      "controlled_max_radial_error_m": 41.5930716164,
+      "water_steps": 1200,
+      "lake_at_rest_energy": 0,
+      "water_max_volume_error_m3": 3.52429196937E-12,
+      "water_initial_energy": 195.713128715,
+      "water_final_energy": 141.725952075,
+      "water_max_abs_eta_m": 0.119986840679
+    },
+    {
+      "gpu_cache_validation": true,
+      "samples": 15364,
+      "max_basis_error": 7.78188077089E-07,
+      "max_airspeed_error_mps": 0.000113996206725,
+      "max_acceleration_residual_mps2": 0.00211256656213,
+      "max_relative_energy_work_residual": 7.95982912526E-06
+    }
+  ],
+  "motion": [
+    {
+      "name": "portrait",
+      "start_seconds": 24,
+      "frames": 60,
+      "dt": 0.0333333,
+      "render_median_ms": 129.3370770833,
+      "render_mean_ms": 116.820579681,
+      "render_max_ms": 151.3455210833,
+      "debug_errors": 0,
+      "debug_warnings": 0,
+      "unique_frame_hashes": 60,
+      "cloud_changed_depth_pixels": 0
+    },
+    {
+      "name": "lake",
+      "start_seconds": 64,
+      "frames": 60,
+      "dt": 0.0333333,
+      "render_median_ms": 122.859641,
+      "render_mean_ms": 124.92616087627118,
+      "render_max_ms": 153.135278,
+      "debug_errors": 0,
+      "debug_warnings": 0,
+      "unique_frame_hashes": 60,
+      "cloud_changed_depth_pixels": 0
+    },
+    {
+      "name": "glider",
+      "start_seconds": 96,
+      "frames": 60,
+      "dt": 0.0333333,
+      "render_median_ms": 115.76950889999999,
+      "render_mean_ms": 115.34188165423728,
+      "render_max_ms": 160.064909,
+      "debug_errors": 0,
+      "debug_warnings": 0,
+      "unique_frame_hashes": 60,
+      "cloud_changed_depth_pixels": 0
+    }
+  ],
+  "performance_notes": "Intel Iris Xe, D3D11 debug layer,1280x720. Render timings exclude first frame and physics stage. Sustained checks vary substantially with clock/load and do not achieve30fps. Do not substitute earlier short-run45-72ms samples for these measurements.",
   "preview": {
-    "file": "preview/cinematic88-runtime-check.mp4",
-    "bytes": 5269103,
-    "seconds": 8,
+    "file": "preview/alpine-procedural-revision.mp4",
+    "bytes": 5521978,
+    "seconds": 6,
+    "fps": 30,
     "width": 1280,
     "height": 720,
-    "fps": 30,
     "audio": false,
-    "purpose": "Deterministic offscreen QA render; not measured native playback speed; never loaded by demo."
+    "purpose": "Fixed-step offline QA output of this exact EXE; not native playback speed; never an input asset."
   },
   "remaining_limits": [
-    "Photorealistic cinematic target not achieved",
-    "Synthetic faces and repeated architecture",
-    "Simplified geological geometry and indirect lighting",
-    "No6DOF, full3Dfluid solver, cloth or resident contact dynamics",
-    "Sustained rendering on Iris Xe is slower than30fps in complex scenes"
-  ]
+    "Photorealistic cinematic target is not achieved",
+    "Synthetic facial anatomy,hair and expressions",
+    "Artificial terrain escarpment and simplified geological structure",
+    "Simplified indirect lighting and foliage; no deformation motion vectors",
+    "Residents remain kinematic; no6DOF aerodynamics,full3Dfluid or cloth solver",
+    "Sustained Iris Xe rendering is slower than30fps"
+  ],
+  "native_scope_note": "135 seconds of process lifetime including startup; responsive shutdown. Playback loop timing itself was not separately instrumented.",
+  "music_arrangement_changed": false
 }

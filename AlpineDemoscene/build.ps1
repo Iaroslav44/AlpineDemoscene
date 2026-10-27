@@ -81,9 +81,15 @@ $meshPSBytecode = Join-Path $buildDir 'mesh_ps.cso'
 $shadowVSBytecode = Join-Path $buildDir 'shadow_vs.cso'
 $shadowPSBytecode = Join-Path $buildDir 'shadow_ps.cso'
 $cameraBytecode = Join-Path $buildDir 'camera_cs.cso'
+$instancesBytecode = Join-Path $buildDir 'instances_cs.cso'
 $terrainBytecode = Join-Path $buildDir 'terrain_cs.cso'
 $flightBytecode = Join-Path $buildDir 'flight_cs.cso'
 $waterBytecode = Join-Path $buildDir 'water_cs.cso'
+$materialBytecode = Join-Path $buildDir 'material_cs.cso'
+$atmosphereBytecode = Join-Path $buildDir 'atmosphere_cs.cso'
+$cloudBytecode = Join-Path $buildDir 'cloud_cs.cso'
+$boundsBytecode = Join-Path $buildDir 'terrain_bounds_cs.cso'
+$cloudCompositeBytecode = Join-Path $buildDir 'cloud_composite_ps.cso'
 $resource = Join-Path $buildDir 'shaders.res'
 $object = Join-Path $buildDir 'alpine.obj'
 $candidateDir = Join-Path $buildDir 'candidate'
@@ -108,7 +114,8 @@ foreach ($shader in @(
     @{ Entry='MeshPS'; Profile='ps_5_0'; Output=$meshPSBytecode },
     @{ Entry='ShadowVS'; Profile='vs_5_0'; Output=$shadowVSBytecode },
     @{ Entry='ShadowPS'; Profile='ps_5_0'; Output=$shadowPSBytecode },
-    @{ Entry='CameraCS'; Profile='cs_5_0'; Output=$cameraBytecode }
+    @{ Entry='CameraCS'; Profile='cs_5_0'; Output=$cameraBytecode },
+    @{ Entry='SceneInstancesCS'; Profile='cs_5_0'; Output=$instancesBytecode }
 )) {
     & $fxc /nologo /T $shader.Profile /E $shader.Entry /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $shader.Output $meshHlsl
     if ($LASTEXITCODE -ne 0) { throw "$($shader.Entry) compilation failed." }
@@ -121,6 +128,17 @@ if ($LASTEXITCODE -ne 0) { throw 'Terrain cache shader compilation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Flight physics shader compilation failed.' }
 & $fxc /nologo /T cs_5_0 /E WaterCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $waterBytecode (Join-Path $sourceDir 'physics_simulation.hlsl')
 if ($LASTEXITCODE -ne 0) { throw 'Water physics shader compilation failed.' }
+
+& $fxc /nologo /T cs_5_0 /E MaterialCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $materialBytecode (Join-Path $sourceDir 'material_compute.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Procedural material generator compilation failed.' }
+& $fxc /nologo /T cs_5_0 /E AtmosphereCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $atmosphereBytecode (Join-Path $sourceDir 'atmosphere_compute.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Atmosphere lookup generator compilation failed.' }
+& $fxc /nologo /T cs_5_0 /E CloudNoiseCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $cloudBytecode (Join-Path $sourceDir 'cloud_volume.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Cloud volume generator compilation failed.' }
+& $fxc /nologo /T cs_5_0 /E TerrainBoundsCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $boundsBytecode (Join-Path $sourceDir 'terrain_bounds.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Terrain bounds hierarchy compilation failed.' }
+& $fxc /nologo /T ps_5_0 /E CloudCompositePS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $cloudCompositeBytecode (Join-Path $sourceDir 'cloud_post.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Cloud composite shader compilation failed.' }
 
 Write-Host 'Embedding compact procedural DXBC shaders...'
 Push-Location $sourceDir
@@ -166,5 +184,5 @@ Write-Host "Size:   $($file.Length) bytes ($percent% of the strict 88,000,000-by
 Write-Host "SHA256: $hash"
 
 if (-not $KeepIntermediates) {
-    Remove-Item -LiteralPath $vsBytecode, $psBytecode, $humanBytecode, $temporalBytecode, $displayBytecode, $meshVSBytecode, $meshPSBytecode, $shadowVSBytecode, $shadowPSBytecode, $cameraBytecode, $terrainBytecode, $flightBytecode, $waterBytecode, $resource, $object -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $vsBytecode, $psBytecode, $humanBytecode, $temporalBytecode, $displayBytecode, $meshVSBytecode, $meshPSBytecode, $shadowVSBytecode, $shadowPSBytecode, $cameraBytecode, $instancesBytecode, $terrainBytecode, $flightBytecode, $waterBytecode, $materialBytecode, $atmosphereBytecode, $cloudBytecode, $boundsBytecode, $cloudCompositeBytecode, $resource, $object -Force -ErrorAction SilentlyContinue
 }

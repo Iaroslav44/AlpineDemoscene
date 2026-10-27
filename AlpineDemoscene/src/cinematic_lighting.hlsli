@@ -1,19 +1,22 @@
 #ifndef ALPINE_CINEMATIC_LIGHTING
 #define ALPINE_CINEMATIC_LIGHTING
 #include "scene_common.hlsli"
+#include "atmosphere_common.hlsli"
 
 // GPU frame contract, generated once by CameraCS. Bind the same SRVs to VS/PS.
 // 0..3 current camera origin/lens, forward, right/aspect, up/near;
 // 4..7 previous origin/lens, forward, right, up;
 // 8 sun direction/intensity; 9 shadow centre/texel size;
-// 10 shadow right/XY half extent; 11 shadow up/depth half extent.
+// 10 shadow right/XY half extent; 11 shadow up/depth half extent;
+// 12..14 distant shadow centre/texel size, right/extent, up/depth extent.
 StructuredBuffer<float4> CinematicFrame : register(t3);
 Texture2D<float> CinematicShadowMap : register(t2);
+Texture2D<float> CinematicFarShadowMap : register(t11);
 SamplerState CinematicSampler : register(s0);
 
 float3 CinematicSunDirection(float a)
 {
-    return normalize(float3(-0.55+0.18*cos(a),0.28+0.12*sin(a-0.5),0.8+0.18*sin(a)));
+    return normalize(float3(-0.68+0.10*cos(a),0.60+0.10*sin(a-0.5),-0.58+0.20*sin(a)));
 }
 float3 CinematicSunColor() { return float3(1.0,0.87,0.72); }
 float3 CinematicViewOrigin()
@@ -24,37 +27,52 @@ float3 CinematicViewOrigin()
 }
 float3 CinematicShadowPosition(float3 p)
 {
-    float3 d=p-CinematicFrame[9].xyz;
-    return float3(dot(d,CinematicFrame[10].xyz)/CinematicFrame[10].w,
-                  dot(d,CinematicFrame[11].xyz)/CinematicFrame[10].w,
-                  0.5-dot(d,CinematicFrame[8].xyz)/(2.0*CinematicFrame[11].w));
+    uint k=PassMode.z>.5?12:9;
+    float3 d=p-CinematicFrame[k].xyz;
+    return float3(dot(d,CinematicFrame[k+1].xyz)/CinematicFrame[k+1].w,
+                  dot(d,CinematicFrame[k+2].xyz)/CinematicFrame[k+1].w,
+                  0.5-dot(d,CinematicFrame[8].xyz)/(2.0*CinematicFrame[k+2].w));
 }
-float CinematicShadow(float3 p,float3 n)
+float ShadowCascade(float3 p,float3 n,bool farCascade,out float border)
 {
-    float3 q=CinematicShadowPosition(p);
+    uint k=farCascade?12:9;
+    float3 d=p-CinematicFrame[k].xyz;
+    float3 q=float3(dot(d,CinematicFrame[k+1].xyz)/CinematicFrame[k+1].w,
+                  dot(d,CinematicFrame[k+2].xyz)/CinematicFrame[k+1].w,
+                  0.5-dot(d,CinematicFrame[8].xyz)/(2.0*CinematicFrame[k+2].w));
+    border=max(abs(q.x),abs(q.y));
     if(any(abs(q.xy)>0.995)||q.z<=0.0||q.z>=1.0)return 1.0;
     float2 uv=q.xy*float2(0.5,-0.5)+0.5;
     // World-space normal/slope bias; a normal offset alone loses thin twigs.
-    float bias=(0.025+0.075*(1.0-saturate(dot(n,CinematicFrame[8].xyz))))/
-               (2.0*CinematicFrame[11].w);
+    float bias=(farCascade?.45:.025)+(farCascade?1.1:.075)*(1.0-saturate(dot(n,CinematicFrame[8].xyz)));
+    bias/=2.0*CinematicFrame[k+2].w;
     // PCF taps lie at different positions on the receiver. Comparing every tap
     // to the centre depth produces a regular acne pattern on oblique plaster.
     // Correct each tap to its receiver-plane depth instead of adding a large,
     // detached-shadow bias. A grazing guard bounds the planar approximation.
     float nd=dot(n,-CinematicFrame[8].xyz);
     nd=(nd<0.0?-1.0:1.0)*max(abs(nd),0.12);
-    float2 planeGradient=float2(-dot(n,CinematicFrame[10].xyz),dot(n,CinematicFrame[11].xyz))*
-                         (CinematicFrame[10].w/(CinematicFrame[11].w*nd));
+    float2 planeGradient=float2(-dot(n,CinematicFrame[k+1].xyz),dot(n,CinematicFrame[k+2].xyz))*
+                         (CinematicFrame[k+1].w/(CinematicFrame[k+2].w*nd));
     float visibility=0.0;
+    int resolution=farCascade?1024:2048;
     [unroll]for(int y=-1;y<=1;++y)[unroll]for(int x=-1;x<=1;++x)
     {
-        int2 pixel=clamp(int2(uv/CinematicFrame[9].w)+int2(x,y),int2(0,0),int2(2047,2047));
-        float z=CinematicShadowMap.Load(int3(pixel,0));
-        float2 deltaUV=(float2(pixel)+0.5)*CinematicFrame[9].w-uv;
+        int2 pixel=clamp(int2(uv/CinematicFrame[k].w)+int2(x,y),int2(0,0),int2(resolution-1,resolution-1));
+        float z=farCascade?CinematicFarShadowMap.Load(int3(pixel,0)):CinematicShadowMap.Load(int3(pixel,0));
+        float2 deltaUV=(float2(pixel)+0.5)*CinematicFrame[k].w-uv;
         float receiver=q.z+dot(planeGradient,deltaUV);
         visibility+=(receiver-bias<=z)?1.0:0.0;
     }
     return visibility/9.0;
+}
+float CinematicShadow(float3 p,float3 n)
+{
+    float nearBorder,farBorder;
+    float nearVisibility=ShadowCascade(p,n,false,nearBorder);
+    if(nearBorder<.75)return nearVisibility;
+    float farVisibility=ShadowCascade(p,n,true,farBorder);
+    return lerp(nearVisibility,farVisibility,smoothstep(.75,.97,nearBorder));
 }
 float3 CinematicLightingVisible(float3 n,float3 v,float3 albedo,float rough,float metal,float ao,float sunVisibility)
 {
@@ -70,8 +88,9 @@ float3 CinematicLightingVisible(float3 n,float3 v,float3 albedo,float rough,floa
     float3 direct=((1.0-F)*albedo*(1.0-metal)/PI+D*visibility*F)*nl;
     direct*=CinematicSunColor()*CinematicFrame[8].w*sunVisibility;
     float hemi=saturate(n.y*0.5+0.5);
-    float3 sky=lerp(float3(0.055,0.059,0.043),float3(0.20,0.26,0.33),hemi);
-    return direct+albedo*sky*ao;
+    float3 sky=AtmosphereDiffuse(n);
+    float3 groundBounce=float3(.022,.019,.012)*(1.0-hemi);
+    return direct+albedo*(sky+groundBounce)*ao;
 }
 float3 CinematicLightingShadow(float3 p,float3 n,float3 v,float3 albedo,float rough,float metal,float ao,float sunVisibility)
 {
@@ -84,9 +103,10 @@ float3 CinematicLighting(float3 p,float3 n,float3 v,float3 albedo,float rough,fl
 float3 CinematicFog(float3 col,float3 world)
 {
     float3 origin=CinematicViewOrigin(),delta=world-origin;
-    float d=length(delta),h=max(0.0,(world.y+origin.y)*0.5-145.0);
-    float fog=1.0-exp(-d*0.000065*exp(-h*0.0008));
-    float sun=pow(saturate(dot(normalize(delta),CinematicFrame[8].xyz)),12.0);
-    return lerp(col,float3(0.40,0.53,0.66)+sun*float3(0.22,0.15,0.07),fog);
+    float d=length(delta),h=max(0.0,(world.y+origin.y)*0.5);
+    float3 beta=float3(5.802,13.558,33.100)*1e-6*exp(-h/8000.0);
+    beta+=4.44e-6*exp(-h/1200.0)+.000018*exp(-max(h-140.0,0.0)/160.0);
+    float3 transmittance=exp(-d*beta);
+    return col*transmittance+AtmosphereEnvironment(normalize(delta))*(1.0-transmittance);
 }
 #endif

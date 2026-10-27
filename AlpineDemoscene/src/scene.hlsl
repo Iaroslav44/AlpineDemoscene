@@ -5,6 +5,7 @@
 #include "frame_vertex.hlsli"
 #include "detail_common.hlsli"
 #include "cinematic_lighting.hlsli"
+#include "material_common.hlsli"
 
 cbuffer Frame : register(b0)
 {
@@ -80,50 +81,7 @@ float2 WindField(float2 xz, float loopA)
 }
 
 
-float TraceTerrain(float3 ro, float3 rd, float maxT)
-{
-    float t = 0.05, lastT = 0.0;
-    float slopeDen = max(abs(rd.y) + 9.0 * length(rd.xz), 0.12);
-    // A height field is not an SDF. A global slope bound alone crawls at eye
-    // height and exhausts the budget before reaching distant ground. Combine
-    // safe clearance steps with bounded intervals, testing their midpoint and
-    // bisecting crossings. This is a bounded approximation, not a guaranteed
-    // intersection of every subpixel ridge in the 9 km view range.
-    [loop] for (int i = 0; i < 320; ++i)
-    {
-        if (t > maxT) break;
-        float3 p = ro + rd * t;
-        float d = p.y - Terrain(p.xz);
-        float epsilon = max(0.035, t * 0.00012);
-        if (d > 0.0 && d <= epsilon) return t;
-        if (d <= 0.0)
-        {
-            float lo = lastT, hi = t;
-            [loop] for (int j = 0; j < 10; ++j)
-            {
-                float m = 0.5 * (lo + hi);
-                float3 q = ro + rd * m;
-                if (q.y > Terrain(q.xz)) lo = m; else hi = m;
-            }
-            return hi;
-        }
-        if(t>=maxT)break;
-        float safeStep=min(d/slopeDen,240.0);
-        float interval=min(max(1.0,t*0.025),80.0);
-        float nextT=min(t+max(safeStep,interval),maxT);
-        if(interval>safeStep)
-        {
-            float mid=0.5*(t+nextT);
-            float3 mp=ro+rd*mid;
-            if(mp.y-Terrain(mp.xz)<=max(0.035,mid*0.00012))
-            {
-                lastT=t;t=mid;continue;
-            }
-        }
-        lastT=t;t=nextT;
-    }
-    return maxT + 1.0;
-}
+#include "terrain_trace.hlsli"
 
 float3 TerrainNormal(float2 xz)
 {
@@ -135,15 +93,9 @@ float3 TerrainNormal(float2 xz)
 
 float TerrainShadow(float3 p, float3 sun)
 {
-    float visibility = 1.0, t = 9.0;
-    [loop] for (int i = 0; i < 9; ++i)
-    {
-        float3 q = p + sun * t;
-        float d = q.y - Terrain(q.xz);
-        visibility = min(visibility, 7.5 * d / t);
-        t *= 1.66;
-    }
-    return saturate(0.22 + 0.78 * visibility);
+    // The same conservative hierarchy is used for sun visibility. Sparse
+    // samples leaked light through intervening mountain ridges.
+    return TraceTerrain(p,sun,MAX_DIST)<=MAX_DIST?0.0:1.0;
 }
 
 float3 SunDirection(float loopA)
@@ -153,130 +105,12 @@ float3 SunDirection(float loopA)
 
 float3 Sky(float3 rd, float3 sun)
 {
-    // Analytic single-scattering approximation: wavelength-dependent Rayleigh
-    // extinction, aerosol Mie phase and finite horizon optical air mass.
-    // It is not a pre-rendered skydome or a full multiple-scattering solver.
-    float elevation=max(rd.y,0.0);
-    float zenith=acos(clamp(elevation,0.0,1.0))*180.0/PI;
-    float airMass=1.0/(elevation+0.15*pow(max(0.1,93.885-zenith),-1.253));
-    float3 rayleigh=float3(5.802,13.558,33.100)*1e-6;
-    float3 mie=float3(3.8,3.8,3.8)*1e-6;
-    float3 extinction=exp(-(rayleigh*8000.0+mie*1200.0)*airMass);
-    float mu=clamp(dot(rd,sun),-1.0,1.0);
-    float rayleighPhase=(3.0/(16.0*PI))*(1.0+mu*mu);
-    float g=0.76;
-    float miePhase=(1.0-g*g)/(4.0*PI*pow(max(0.01,1.0+g*g-2.0*g*mu),1.5));
-    float3 scattering=(rayleigh*rayleighPhase+mie*miePhase)/(rayleigh+mie);
-    float3 col=(1.0-extinction)*scattering*10.5;
-    col+=float3(0.012,0.018,0.026)*extinction;
-    float3 sunTransmission=exp(-(rayleigh*8000.0+mie*1200.0)/max(sun.y,0.08));
-    float disc=smoothstep(cos(0.0055),cos(0.0045),mu);
-    col+=sunTransmission*disc*16.0;
-    col=lerp(col,float3(0.05,0.065,0.05),1.0-smoothstep(-0.24,-0.015,rd.y));
-    return max(col,0.0);
+    float3 sky=AtmosphereEnvironment(rd);
+    float disc=smoothstep(cos(.0055),cos(.0045),dot(rd,sun));
+    return sky+CinematicSunColor()*disc*16.0;
 }
 
-float3 ShadeTerrain(float3 p, float3 rd, float3 sun, float loopA,float footprint)
-{
-    float3 n = TerrainNormal(p.xz);
-    float slope = saturate(1.0 - n.y);
-    float fine = FBM2(p.xz * 0.016);
-    float rockColour=RockNoise(p*.018+float3(19,41,7)).x;
-    float3 grass = lerp(float3(0.045,0.063,0.026), float3(0.19,0.21,0.095), fine);
-    float3 rock = lerp(float3(0.12,0.116,0.105), float3(0.28,0.265,0.24), rockColour);
-    float snowLine=80.0*(Noise2(p.xz*0.009)-0.5)+30.0*(Noise2(p.xz*0.037)-0.5);
-    // Snow collects on sheltered shelves and in gullies, leaving exposed ribs.
-    float shelter=saturate(0.60+0.35*n.y-0.25*dot(n,float3(-.7,0,.7)));
-    float snow = smoothstep(1500.0,1900.0,p.y+snowLine)*(1.0-smoothstep(0.18,0.62,slope))*shelter;
-    float melt = 0.5 + 0.5 * sin(loopA - 0.6);
-    snow *= lerp(1.0, 0.72, melt);
-    float3 albedo = lerp(grass, rock, smoothstep(0.08, 0.43, slope));
-    albedo = lerp(albedo, float3(0.82,0.88,0.93), snow);
-    float forest = smoothstep(0.58, 0.77, Noise2(p.xz * 0.021 + 12.0));
-    forest *= (1.0-snow)*(1.0-smoothstep(0.24,0.52,slope))*(1.0-smoothstep(1050.0,1400.0,p.y));
-    float2 wind = WindField(p.xz, loopA);
-    float grassSway = 0.94 + 0.06 * sin(dot(p.xz, wind) * 0.12 + loopA * 19.0);
-    albedo = lerp(albedo * grassSway, float3(0.026,0.043,0.021), forest * 0.32);
-    float riverCenter = ValleyCenter(p.z) - 34.0;
-    float river = (1.0 - smoothstep(7.0,18.0,abs(p.x-riverCenter))) * (1.0-smoothstep(120.0,370.0,p.y));
-    albedo = lerp(albedo, float3(0.020,0.16,0.19), river * 0.88);
-    float2 tq = p.xz - TOWN_C;
-    float road = (1.0-smoothstep(2.8,3.5,abs(tq.x)))
-                 * (1.0-smoothstep(170.0,240.0,abs(tq.y)));
-    float plaza=1.0-smoothstep(6.0,10.0,length((p.xz-float2(0,1755))/float2(0.78,1.0)));
-    road=max(road,plaza);
-    albedo = lerp(albedo, float3(0.13,0.12,0.105), road);
-    float wet = exp(-pow((p.x-350.0)/36.0,2.0))*smoothstep(5000.0,5160.0,p.z)*(1.0-smoothstep(315.0,780.0,p.y));
-    wet *= 0.72 + 0.28 * sin(loopA * 7.0 + p.y * 0.08);
-    albedo = lerp(albedo, float3(0.025,0.035,0.040), wet * 0.72);
-    float rough = lerp(0.88, 0.48, saturate(slope + river + wet));
-    float fp=max(footprint,0.002)/max(abs(dot(n,-rd)),0.28);
-    float rockMask=smoothstep(0.06,0.36,slope)*(1.0-snow);
-    float3 gradient=0;
-    float grain=0;
-    // Tilted bedding planes and intersecting rock joints are world-space
-    // material relief, filtered independently of the geometric height cache.
-    // Their scale is metres to tens of metres, avoiding uniform fine speckle.
-    float3 beddingScale=float3(.018,.075,.021);
-    float4 bedding=RockNoise(p*beddingScale+float3(7,13,29));
-    float beddingBand=DetailBand(fp,.075)*rockMask;
-    gradient+=bedding.yzw*beddingScale*1.6*beddingBand;
-    albedo*=1.0-.18*beddingBand*smoothstep(.46,.65,bedding.x);
-    float4 fracture=RockNoise(p*.065+float3(11,39,7));
-    gradient+=fracture.yzw*.065*1.0*DetailBand(fp,.065)*rockMask;
-    // Metre-scale fractures down to fine grains. Subpixel bands fade to their
-    // average; the field stays fixed in world space while the camera moves.
-    [loop]for(int band=0;band<2;++band)
-    {
-        float f=0.32*exp2((float)band*2.0);
-        float visible=DetailBand(fp,f);
-        if(visible>0.001)
-        {
-            float4 sample=RockNoise(p*f+float3(9.1,17.3,band*13.7));
-            float amplitude=lerp(0.024,0.24,rockMask)*exp2(-(float)band*1.7);
-            gradient+=sample.yzw*(f*amplitude*visible);
-            grain+=(sample.x-0.5)*visible*exp2(-(float)band)*0.36;
-        }
-    }
-    albedo*=1.0+grain*lerp(0.7,1.5,rockMask);
-    rough=clamp(rough+grain*0.15,0.35,0.98);
-    // Wind combs the snow surface; the filtered normal carries small ripples.
-    float snowPhase=dot(p.xz,float2(2.8,0.85));
-    float snowBand=DetailBand(fp,0.48)*snow;
-    gradient+=float3(2.8,0,0.85)*cos(snowPhase)*0.018*snowBand;
-    // Actual grass microstructure is a surface relief approximation, not
-    // millions of disconnected hard speckles. Wind changes its lean coherently.
-    float grassBand=DetailBand(fp,5.0)*(1.0-snow)*(1.0-rockMask)*(1.0-road);
-    float3 stalkWarp=DetailNoise2(p.xz*1.7+float2(8.3,21.7));
-    float stalkPhase=dot(p.xz,float2(27.0,9.0))+stalkWarp.x*11.0+sin(loopA*19.0+p.z*0.3)*0.7;
-    float2 stalkGradient=float2(27,9)+stalkWarp.yz*18.7;
-    gradient+=float3(stalkGradient.x,0,stalkGradient.y)*cos(stalkPhase)*0.0022*grassBand;
-    albedo*=1.0-0.065*grassBand*(0.5+0.5*sin(stalkPhase));
-    // Rounded, staggered cobbles and dark recessed joints across the square.
-    if(road>0.01)
-    {
-        float2 stoneUV=p.xz/float2(0.38,0.24);
-        stoneUV.x+=0.5*fmod(floor(stoneUV.y),2.0);
-        float2 cell=floor(stoneUV),s=frac(stoneUV)-0.5;
-        float aa=max(fp/0.24,0.012),edge=max(abs(s.x),abs(s.y));
-        float joint=smoothstep(0.43-aa,0.48+aa,edge);
-        float detail=DetailBand(fp,3.0);
-        float id=Hash21(cell+31.7);
-        float3 stone=lerp(float3(0.20,0.19,0.17),float3(0.39,0.37,0.32),id);
-        stone=lerp(stone,float3(0.055,0.050,0.039),joint*0.85);
-        float3 pavement=lerp(float3(0.25,0.24,0.21),stone,detail);
-        albedo=lerp(albedo,pavement,road);
-        gradient+=float3(s.x/0.38,0,s.y/0.24)*(-0.09*detail*road*(1.0-joint));
-        rough=lerp(rough,0.78,road);
-    }
-    n=DetailNormal(n,gradient);
-    float shadow = TerrainShadow(p + n * 4.0, sun);
-    float cloudShadow = lerp(0.66, 1.0, smoothstep(0.47,0.73,
-        Noise2(p.xz*0.0012 + WindField(p.xz,loopA)*0.42)));
-    float warm = 1.0 - smoothstep(0.10, 0.45, sun.y);
-    float3 light = lerp(float3(1.0,0.95,0.82), float3(1.0,0.37,0.10), warm);
-    return CinematicLightingShadow(p,n,-rd,albedo,rough,0.0,1.0,shadow*cloudShadow);
-}
+#include "terrain_material.hlsli"
 
 bool RayBox(float3 ro, float3 rd, float3 bmin, float3 bmax, out float tNear, out float tFar)
 {
@@ -340,51 +174,7 @@ float WaterHit(float3 ro,float3 rd,float maxT,float loopA)
     return maxT+1.0;
 }
 
-float CloudDensity(float3 p,float loopA)
-{
-    float2 wind=WindField(p.xz,loopA)*0.38;
-    float deform=0.08*sin(loopA*4.0+p.y*0.009)+0.06*cos(loopA*7.0+p.x*0.003);
-    float n=FBM3(p*0.00118+float3(wind.x,deform,wind.y));
-    float vertical=smoothstep(650.0,760.0,p.y)*(1.0-smoothstep(1030.0,1190.0,p.y));
-    return smoothstep(0.54,0.77,n)*vertical;
-}
-
-float4 CloudLayer(float3 ro,float3 rd,float maxT,float3 sun,float loopA,float2 pixel)
-{
-    float tn,tf;
-    if(abs(rd.y)<0.002){if(ro.y<650.0||ro.y>1190.0)return 0.0;tn=0.0;tf=maxT;}
-    else{float a=(650.0-ro.y)/rd.y,b=(1190.0-ro.y)/rd.y;tn=max(0.0,min(a,b));tf=min(maxT,max(a,b));}
-    if(tf<=tn)return 0.0;
-    float span=tf-tn;
-    float3 accum=0.0;float trans=1.0;
-    [loop]for(int i=0;i<12;++i)
-    {
-        float t=tn+span*((i+0.5)/12.0);float3 p=ro+rd*t;float den=CloudDensity(p,loopA);
-        // Beer-Lambert optical depth integrates density times EACH step length.
-        float alpha=1.0-exp(-den*(span/12.0)*0.00105);
-        float optical=CloudDensity(p+sun*65.0,loopA)*.14+CloudDensity(p+sun*180.0,loopA)*.25;
-        float light=exp(-optical*5.0);
-        float mu=dot(rd,sun),g=.64;
-        float phase=(1.0-g*g)/pow(max(.05,1.0+g*g-2.0*g*mu),1.5);
-        float3 cc=float3(.17,.22,.29)+float3(.70,.65,.55)*light*(.55+.10*phase);
-        accum+=trans*alpha*cc;trans*=1.0-alpha;
-    }
-    return float4(accum,1.0-trans);
-}
-
-float3 SkyWithCloudReflection(float3 rd,float3 p,float3 sun,float loopA)
-{
-    float3 col=Sky(rd,sun);
-    if(rd.y>0.025)
-    {
-        float t=(900.0-p.y)/rd.y;
-        float2 wind=WindField(p.xz,loopA)*0.38;
-        float n=FBM2((p.xz+rd.xz*t)*0.0012+wind);
-        float cloud=smoothstep(0.61,0.81,n);
-        col=lerp(col,float3(0.78,0.82,0.84),cloud*0.58);
-    }
-    return col;
-}
+#include "cloud_render.hlsli"
 
 float3 WaterShadingNormal(float3 p,float3 rd,float loopA,float footprint,out float unresolved)
 {
@@ -393,7 +183,7 @@ float3 WaterShadingNormal(float3 p,float3 rd,float loopA,float footprint,out flo
     unresolved=0;
     float fp=footprint/max(abs(rd.y),0.08);
     // Sub-grid waves use the gravity/capillary dispersion relation in SI units:
-    // omega²=(g*k+surfaceTension/density*k³)*tanh(k*depth).
+    // omega?=(g*k+surfaceTension/density*k?)*tanh(k*depth).
     float localDepth=max(.1,p.y-Terrain(p.xz));
     [loop]for(int band=0;band<8;++band)
     {
@@ -424,7 +214,7 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
     float3 n=WaterShadingNormal(p,rd,loopA,footprint,unresolved);
     float fp=footprint/max(abs(rd.y),0.08);
     float3 reflectedRay=reflect(rd,n);
-    float3 reflection=SkyWithCloudReflection(reflectedRay,p,sun,loopA);
+    float3 reflection=0;
     CameraFrame camera;
     camera.origin=CinematicFrame[0].xyz;camera.lens=CinematicFrame[0].w;
     camera.forward=CinematicFrame[1].xyz;camera.right=CinematicFrame[2].xyz;camera.up=CinematicFrame[3].xyz;
@@ -446,6 +236,8 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
         float planeT=(LAKE_Y+0.03-mirrored.origin.y)/max(planarDirection.y,0.00001);
         reflectionWeight*=step(0.00001,planarDirection.y)*(1.0-smoothstep(MAX_DIST*.85,MAX_DIST,planeT));
     }
+    if(reflectionWeight<.999)
+        reflection=SkyWithCloudReflection(reflectedRay,p,sun,loopA);
     // Water must reflect actual geometry, including the surrounding mountains.
     // Restrict this extra trace to the hemisphere that can reach the horizon.
     if(reflectedRay.y<0.65&&reflectionWeight<0.999)
@@ -484,9 +276,10 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
         if(bt<220.0)
         {
             float3 bp=p+n*.04+refractedRay*bt;
-            float sediment=Noise2(bp.xz*.42)*.65+Noise2(bp.xz*1.7)*.35;
-            float3 resolvedBed=lerp(float3(.14,.16,.12),float3(.37,.39,.29),sediment);
-            resolvedBed*=.35+.85*saturate(dot(TerrainNormal(bp.xz),sun));
+            RuntimeMaterial gravel=SampleNaturalMaterial(7,bp.xz*.7);
+            float3 bn=normalize(TerrainNormal(bp.xz)+float3(gravel.normal.x,0,gravel.normal.y)*.6);
+            float3 resolvedBed=gravel.albedo*(.30+1.2*saturate(dot(bn,sun)));
+            resolvedBed*=exp(-depth*float3(.12,.047,.024)/max(sun.y,.12));
             // Fade the expensive bed trace into the deep-water approximation
             // continuously; a hard26m switch drew a ring across the lake.
             float bedWeight=1.0-smoothstep(20.0,32.0,depth);
@@ -509,7 +302,7 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
     return lerp(col,float3(0.63,0.69,0.65),foam*0.32);
 }
 
-// Ballistic jet: horizontal launch velocity15m/s and gravity9.81m/s².
+// Ballistic jet: horizontal launch velocity15m/s and gravity9.81m/s?.
 // The flow follows a trajectory through space, not the shape of the cliff.
 float3 WaterfallSource()
 {
@@ -652,14 +445,14 @@ WorldOutput P(VSOut input)
 
     // All participating media stop at the nearest procedural surface.
     float depthLimit=min(solidT,MAX_DIST);
-    float4 clouds=validTerrainRay?CloudLayer(effectsOrigin,rd,max(0.0,depthLimit-rayStart),sun,loopA,input.pos.xy):0;
-    col=clouds.rgb+col*(1.0-clouds.a);
+    // Clouds are composited after ALL opaque geometry, using its final depth.
+    // Doing this here left trees and aircraft visible in front of opaque fog.
     // The old smoke grid does not match the new geometry and is disabled.
     float4 smoke=0;
     col=smoke.rgb+col*(1.0-smoke.a);
     float4 spray=validTerrainRay?SprayLayer(effectsOrigin,rd,max(0.0,depthLimit-rayStart),loopA,input.pos.xy):0;
     col=spray.rgb+col*(1.0-spray.a);
-    reactive=max(reactive,step(0.015,max(clouds.a,max(smoke.a,spray.a))));
+    reactive=max(reactive,step(0.015,max(smoke.a,spray.a)));
 
     // Linear HDR leaves exposure, tonemapping, gamma and grain to the temporal
     // reconstruction pass. Alpha carries signed logarithmic depth; moving or

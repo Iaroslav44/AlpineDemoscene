@@ -27,6 +27,7 @@ using Microsoft::WRL::ComPtr;
 static_assert(sizeof(MMTIME)==12, "MMTIME ABI differs from MASM host");
 static_assert(sizeof(WAVEHDR)==48, "WAVEHDR ABI differs from MASM host");
 static_assert(sizeof(D3D11_TEXTURE2D_DESC)==44, "Texture descriptor ABI differs");
+static_assert(sizeof(D3D11_TEXTURE3D_DESC)==36, "Volume descriptor ABI differs");
 static_assert(sizeof(D3D11_BUFFER_DESC)==24, "Buffer descriptor ABI differs");
 static_assert(sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC)==24, "SRV descriptor ABI differs");
 static_assert(sizeof(D3D11_UNORDERED_ACCESS_VIEW_DESC)==20, "UAV descriptor ABI differs");
@@ -34,6 +35,9 @@ static_assert(sizeof(D3D11_RASTERIZER_DESC)==40, "Rasterizer descriptor ABI diff
 static_assert(sizeof(D3D11_DEPTH_STENCIL_DESC)==52, "Depth state descriptor ABI differs");
 namespace fs = std::filesystem;
 constexpr UINT TerrainSize=4096,WaterSize=256,FlightSamples=3841,FlightElements=4*FlightSamples*4;
+constexpr UINT MaterialSize=1024,MaterialLayers=8,MaterialMips=11,CameraFloats=15*4;
+constexpr UINT InstanceElements=81152,InstanceGroups=778;
+constexpr UINT CloudSize=128,BoundsMips=13;
 void check(HRESULT h, const char* context) {
     if (FAILED(h)) { std::ostringstream s; s << context << " HRESULT=0x" << std::hex << unsigned(h); throw std::runtime_error(s.str()); }
 }
@@ -100,6 +104,75 @@ struct ComputeSurface {
         c->Unmap(staging.Get(),0);return result;
     }
 };
+struct MaterialSurface {
+    ComPtr<ID3D11Texture2D> texture;
+    ComPtr<ID3D11ShaderResourceView> srv;
+    ComPtr<ID3D11UnorderedAccessView> uav;
+    MaterialSurface(ID3D11Device* d) {
+        D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=MaterialSize;desc.MipLevels=MaterialMips;desc.ArraySize=MaterialLayers;
+        desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.SampleDesc.Count=1;
+        desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET|D3D11_BIND_UNORDERED_ACCESS;
+        desc.MiscFlags=D3D11_RESOURCE_MISC_GENERATE_MIPS;
+        check(d->CreateTexture2D(&desc,nullptr,&texture),"Create procedural material array");
+        check(d->CreateShaderResourceView(texture.Get(),nullptr,&srv),"Create material SRV");
+        D3D11_UNORDERED_ACCESS_VIEW_DESC ud{};ud.Format=desc.Format;ud.ViewDimension=D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
+        ud.Texture2DArray.ArraySize=MaterialLayers;
+        check(d->CreateUnorderedAccessView(texture.Get(),&ud,&uav),"Create material mip0 UAV");
+    }
+    std::vector<uint8_t> pixels(ID3D11Device* d,ID3D11DeviceContext* c,UINT layer,UINT mip) {
+        const UINT size=std::max(1u,MaterialSize>>mip);
+        D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=size;desc.ArraySize=desc.MipLevels=1;
+        desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.SampleDesc.Count=1;desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        ComPtr<ID3D11Texture2D> staging;check(d->CreateTexture2D(&desc,nullptr,&staging),"Create material staging");
+        c->CopySubresourceRegion(staging.Get(),0,0,0,0,texture.Get(),D3D11CalcSubresource(mip,layer,MaterialMips),nullptr);
+        D3D11_MAPPED_SUBRESOURCE map{};check(c->Map(staging.Get(),0,D3D11_MAP_READ,0,&map),"Map material mip");
+        std::vector<uint8_t> out(size_t(size)*size*4);
+        for(UINT y=0;y<size;y++)memcpy(out.data()+size_t(y)*size*4,static_cast<uint8_t*>(map.pData)+size_t(y)*map.RowPitch,size*4);
+        c->Unmap(staging.Get(),0);return out;
+    }
+};
+struct CloudVolume {
+    ComPtr<ID3D11Texture3D> texture,staging;
+    ComPtr<ID3D11ShaderResourceView> srv;ComPtr<ID3D11UnorderedAccessView> uav;
+    CloudVolume(ID3D11Device* d) {
+        D3D11_TEXTURE3D_DESC desc{};desc.Width=desc.Height=desc.Depth=CloudSize;desc.MipLevels=1;desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
+        check(d->CreateTexture3D(&desc,nullptr,&texture),"Create cloud volume");
+        check(d->CreateShaderResourceView(texture.Get(),nullptr,&srv),"Create cloud SRV");check(d->CreateUnorderedAccessView(texture.Get(),nullptr,&uav),"Create cloud UAV");
+        desc.BindFlags=0;desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        check(d->CreateTexture3D(&desc,nullptr,&staging),"Create cloud staging");
+    }
+    std::vector<uint8_t> pixels(ID3D11DeviceContext* c) {
+        c->CopyResource(staging.Get(),texture.Get());D3D11_MAPPED_SUBRESOURCE map{};check(c->Map(staging.Get(),0,D3D11_MAP_READ,0,&map),"Map cloud volume");
+        std::vector<uint8_t> data(size_t(CloudSize)*CloudSize*CloudSize*4);
+        for(UINT z=0;z<CloudSize;z++)for(UINT y=0;y<CloudSize;y++)memcpy(data.data()+(size_t(z)*CloudSize+y)*CloudSize*4,static_cast<uint8_t*>(map.pData)+size_t(z)*map.DepthPitch+size_t(y)*map.RowPitch,CloudSize*4);
+        c->Unmap(staging.Get(),0);return data;
+    }
+};
+struct TerrainBoundsSurface {
+    ComPtr<ID3D11Texture2D> texture;ComPtr<ID3D11ShaderResourceView> srv;
+    std::array<ComPtr<ID3D11ShaderResourceView>,BoundsMips> levels;
+    std::array<ComPtr<ID3D11UnorderedAccessView>,BoundsMips> uavs;
+    TerrainBoundsSurface(ID3D11Device* d) {
+        D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=TerrainSize;desc.MipLevels=BoundsMips;desc.ArraySize=1;desc.Format=DXGI_FORMAT_R32_FLOAT;
+        desc.SampleDesc.Count=1;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
+        check(d->CreateTexture2D(&desc,nullptr,&texture),"Create terrain bounds");check(d->CreateShaderResourceView(texture.Get(),nullptr,&srv),"Create full bounds SRV");
+        for(UINT level=0;level<BoundsMips;level++) {
+            D3D11_SHADER_RESOURCE_VIEW_DESC sd{};sd.Format=desc.Format;sd.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2D;sd.Texture2D.MostDetailedMip=level;sd.Texture2D.MipLevels=1;
+            D3D11_UNORDERED_ACCESS_VIEW_DESC ud{};ud.Format=desc.Format;ud.ViewDimension=D3D11_UAV_DIMENSION_TEXTURE2D;ud.Texture2D.MipSlice=level;
+            check(d->CreateShaderResourceView(texture.Get(),&sd,&levels[level]),"Create single-level bounds SRV");check(d->CreateUnorderedAccessView(texture.Get(),&ud,&uavs[level]),"Create bounds mip UAV");
+        }
+    }
+    std::vector<float> values(ID3D11Device* d,ID3D11DeviceContext* c,UINT level) {
+        const UINT size=TerrainSize>>level;D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=size;desc.ArraySize=desc.MipLevels=1;
+        desc.Format=DXGI_FORMAT_R32_FLOAT;desc.SampleDesc.Count=1;desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        ComPtr<ID3D11Texture2D> staging;check(d->CreateTexture2D(&desc,nullptr,&staging),"Create bounds staging");
+        c->CopySubresourceRegion(staging.Get(),0,0,0,0,texture.Get(),level,nullptr);D3D11_MAPPED_SUBRESOURCE map{};
+        check(c->Map(staging.Get(),0,D3D11_MAP_READ,0,&map),"Map terrain bounds");std::vector<float> data(size_t(size)*size);
+        for(UINT y=0;y<size;y++)memcpy(data.data()+size_t(y)*size,static_cast<uint8_t*>(map.pData)+size_t(y)*map.RowPitch,size*4);
+        c->Unmap(staging.Get(),0);return data;
+    }
+};
 struct WaterMetrics { size_t invalid=0,foamOutOfRange=0;double volume=0,maxHeight=0,maxVelocity=0,maxFoam=0; };
 WaterMetrics waterMetrics(const std::vector<float>& v) {
     WaterMetrics m;const double area=(2200.0/256)*(1600.0/256);
@@ -154,6 +227,12 @@ Metrics measure(const std::vector<uint8_t>& p) {
     }
     m.luma/=double(n); return m;
 }
+size_t changedDepth(const std::vector<uint8_t>& a,const std::vector<uint8_t>& b) {
+    if(a.size()!=b.size())throw std::runtime_error("Depth comparison dimensions differ.");
+    const auto* av=reinterpret_cast<const uint16_t*>(a.data());const auto* bv=reinterpret_cast<const uint16_t*>(b.data());size_t changed=0;
+    for(size_t p=0;p<a.size()/8;p++)changed+=(av[p*4+3]&0x7fff)!=(bv[p*4+3]&0x7fff);
+    return changed;
+}
 std::string json(const Metrics& m) {
     std::ostringstream o; o<<"{\"nonfinite_pixels\":"<<m.invalid<<",\"zero_depth_pixels\":"<<m.zeroDepth<<",\"near_floor_pixels\":"<<m.nearDepth
         <<",\"invalid_depth_pixels\":"<<m.outOfDepthRange<<",\"reactive_pixels\":"<<m.reactive<<",\"geometry_pixels\":"<<m.geometry
@@ -178,13 +257,14 @@ template<class T> T query(ID3D11DeviceContext* c, ID3D11Query* q) {
     }
 }
 int main(int argc,char** argv) try {
-    fs::path shaderDir="build", outDir="build/probe", executable;
+    fs::path shaderDir="build", outDir="build/probe", executable,rawProbe;
     UINT w=1280,h=720,frames=3,startFrame=0;float time=8,dt=1.f/60,seed=.375f;double scale=1;bool warp=false,debug=true,diagnostic=false,loopTime=false,validateInstances=false,physicsOnly=false,dumpWorld=false,waterDiagnostic=false;
     float diagnosticStart=0,diagnosticSpan=128;
     for(int i=1;i<argc;i++) {
         std::string a=argv[i];
         auto value=[&](){if(++i>=argc)throw std::runtime_error("Missing argument after "+a);return std::string(argv[i]);};
         if(a=="--shaders")shaderDir=value();else if(a=="--out")outDir=value();else if(a=="--exe")executable=value();
+        else if(a=="--raw-probe")rawProbe=value();
         else if(a=="--width")w=std::stoul(value());else if(a=="--height")h=std::stoul(value());
         else if(a=="--scale") {
             const std::string s=value(); const auto slash=s.find('/');
@@ -207,9 +287,9 @@ int main(int argc,char** argv) try {
     const UINT lowWidth=UINT(std::lround(w*scale)),lowHeight=UINT(std::lround(h*scale));
     if(lowWidth<2||lowHeight<2||lowWidth>8192||lowHeight>8192)throw std::runtime_error("Scaled dimensions exceed probe limits.");
     fs::create_directories(outDir);
-    ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level;
-    const D3D_FEATURE_LEVEL required=D3D_FEATURE_LEVEL_11_0;
-    auto create=[&](UINT flags){return D3D11CreateDevice(nullptr,warp?D3D_DRIVER_TYPE_WARP:D3D_DRIVER_TYPE_HARDWARE,nullptr,flags,&required,1,D3D11_SDK_VERSION,&device,&level,&context);};
+    ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL featureLevel;
+    const D3D_FEATURE_LEVEL requiredFeatureLevel=D3D_FEATURE_LEVEL_11_0;
+    auto create=[&](UINT flags){return D3D11CreateDevice(nullptr,warp?D3D_DRIVER_TYPE_WARP:D3D_DRIVER_TYPE_HARDWARE,nullptr,flags,&requiredFeatureLevel,1,D3D11_SDK_VERSION,&device,&featureLevel,&context);};
     HRESULT hr=create(debug?D3D11_CREATE_DEVICE_DEBUG:0);
     if(FAILED(hr)&&debug){device.Reset();context.Reset();debug=false;hr=create(0);}
     check(hr,"D3D11CreateDevice");
@@ -241,7 +321,7 @@ int main(int argc,char** argv) try {
     for(int i=0;i<4;i++){auto data=shaderBytes(102+i,files[i]);check(device->CreatePixelShader(data.data(),data.size(),nullptr,&ps[i]),files[i]);}
     ComPtr<ID3D11VertexShader> meshVS,shadowVS;
     ComPtr<ID3D11PixelShader> meshPS,shadowPS;
-    ComPtr<ID3D11ComputeShader> cameraCS,terrainCS,flightCS,waterCS;
+    ComPtr<ID3D11ComputeShader> cameraCS,terrainCS,flightCS,waterCS,materialCS,atmosphereCS,instancesCS,cloudCS,boundsCS;
     auto meshVB=shaderBytes(106,"mesh_vs.cso");check(device->CreateVertexShader(meshVB.data(),meshVB.size(),nullptr,&meshVS),"Create mesh VS");
     auto meshPB=shaderBytes(107,"mesh_ps.cso");check(device->CreatePixelShader(meshPB.data(),meshPB.size(),nullptr,&meshPS),"Create mesh PS");
     auto shadowVB=shaderBytes(108,"shadow_vs.cso");check(device->CreateVertexShader(shadowVB.data(),shadowVB.size(),nullptr,&shadowVS),"Create shadow VS");
@@ -250,12 +330,34 @@ int main(int argc,char** argv) try {
     auto terrainCB=shaderBytes(111,"terrain_cs.cso");check(device->CreateComputeShader(terrainCB.data(),terrainCB.size(),nullptr,&terrainCS),"Create terrain CS");
     auto flightCode=shaderBytes(112,"flight_cs.cso");check(device->CreateComputeShader(flightCode.data(),flightCode.size(),nullptr,&flightCS),"Create flight physics CS");
     auto waterCode=shaderBytes(113,"water_cs.cso");check(device->CreateComputeShader(waterCode.data(),waterCode.size(),nullptr,&waterCS),"Create water physics CS");
+    auto materialCode=shaderBytes(114,"material_cs.cso");check(device->CreateComputeShader(materialCode.data(),materialCode.size(),nullptr,&materialCS),"Create material CS");
+    auto atmosphereCode=shaderBytes(115,"atmosphere_cs.cso");check(device->CreateComputeShader(atmosphereCode.data(),atmosphereCode.size(),nullptr,&atmosphereCS),"Create atmosphere CS");
+    auto instanceCode=shaderBytes(116,"instances_cs.cso");check(device->CreateComputeShader(instanceCode.data(),instanceCode.size(),nullptr,&instancesCS),"Create instance CS");
+    auto cloudCode=shaderBytes(117,"cloud_cs.cso");check(device->CreateComputeShader(cloudCode.data(),cloudCode.size(),nullptr,&cloudCS),"Create cloud CS");
+    auto boundsCode=shaderBytes(118,"terrain_bounds_cs.cso");check(device->CreateComputeShader(boundsCode.data(),boundsCode.size(),nullptr,&boundsCS),"Create bounds CS");
+    auto cloudPostCode=shaderBytes(119,"cloud_composite_ps.cso");ComPtr<ID3D11PixelShader> cloudCompositePS;check(device->CreatePixelShader(cloudPostCode.data(),cloudPostCode.size(),nullptr,&cloudCompositePS),"Create cloud composite PS");
     Surface low(device.Get(),lowWidth,lowHeight,DXGI_FORMAT_R16G16B16A16_FLOAT), humans(device.Get(),lowWidth,lowHeight,DXGI_FORMAT_R16G16B16A16_FLOAT);
+    Surface clouded(device.Get(),lowWidth,lowHeight,DXGI_FORMAT_R16G16B16A16_FLOAT);
     Surface worldSnapshot(device.Get(),lowWidth,lowHeight,DXGI_FORMAT_R16G16B16A16_FLOAT);
     Surface shadow(device.Get(),2048,2048,DXGI_FORMAT_R32_FLOAT);
+    Surface farShadow(device.Get(),1024,1024,DXGI_FORMAT_R32_FLOAT);
     DepthSurface mainDepth(device.Get(),lowWidth,lowHeight),shadowDepth(device.Get(),2048,2048);
+    DepthSurface farShadowDepth(device.Get(),1024,1024);
+    MaterialSurface materialColor(device.Get()),materialNormal(device.Get());
+    CloudVolume cloud(device.Get());TerrainBoundsSurface terrainBounds(device.Get());
+    D3D11_TEXTURE2D_DESC atmosphereDesc{};atmosphereDesc.Width=256;atmosphereDesc.Height=128;atmosphereDesc.MipLevels=atmosphereDesc.ArraySize=1;
+    atmosphereDesc.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;atmosphereDesc.SampleDesc.Count=1;
+    atmosphereDesc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
+    ComPtr<ID3D11Texture2D> atmosphereTexture,atmosphereStaging;
+    ComPtr<ID3D11ShaderResourceView> atmosphereSRV;ComPtr<ID3D11UnorderedAccessView> atmosphereUAV;
+    check(device->CreateTexture2D(&atmosphereDesc,nullptr,&atmosphereTexture),"Create atmosphere LUT");
+    check(device->CreateShaderResourceView(atmosphereTexture.Get(),nullptr,&atmosphereSRV),"Create atmosphere SRV");
+    check(device->CreateUnorderedAccessView(atmosphereTexture.Get(),nullptr,&atmosphereUAV),"Create atmosphere UAV");
+    atmosphereDesc.BindFlags=0;atmosphereDesc.Usage=D3D11_USAGE_STAGING;atmosphereDesc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+    check(device->CreateTexture2D(&atmosphereDesc,nullptr,&atmosphereStaging),"Create atmosphere staging");
     const UINT reflectionWidth=std::max(1u,lowWidth/2),reflectionHeight=std::max(1u,lowHeight/2);
     Surface reflection(device.Get(),reflectionWidth,reflectionHeight,DXGI_FORMAT_R16G16B16A16_FLOAT);
+    Surface reflectionClouded(device.Get(),reflectionWidth,reflectionHeight,DXGI_FORMAT_R16G16B16A16_FLOAT);
     DepthSurface reflectionDepth(device.Get(),reflectionWidth,reflectionHeight);
     Surface histories[]={Surface(device.Get(),w,h,DXGI_FORMAT_R16G16B16A16_FLOAT),Surface(device.Get(),w,h,DXGI_FORMAT_R16G16B16A16_FLOAT)};
     Surface output(device.Get(),w,h,DXGI_FORMAT_R8G8B8A8_UNORM);
@@ -265,15 +367,27 @@ int main(int argc,char** argv) try {
     bd.ByteWidth=16;ComPtr<ID3D11Buffer> batchCB;check(device->CreateBuffer(&bd,nullptr,&batchCB),"Create batch CB");
     ComPtr<ID3D11Buffer> passCB;check(device->CreateBuffer(&bd,nullptr,&passCB),"Create pass CB");
     ComPtr<ID3D11Buffer> physicsCB;check(device->CreateBuffer(&bd,nullptr,&physicsCB),"Create physics CB");
-    bd.ByteWidth=192;bd.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
+    bd.ByteWidth=CameraFloats*4;bd.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
     bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;bd.StructureByteStride=16;
     ComPtr<ID3D11Buffer> cameraBuffer,cameraStaging;check(device->CreateBuffer(&bd,nullptr,&cameraBuffer),"Create camera cache");
-    D3D11_SHADER_RESOURCE_VIEW_DESC csrv{};csrv.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;csrv.Buffer.NumElements=12;
+    D3D11_SHADER_RESOURCE_VIEW_DESC csrv{};csrv.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;csrv.Buffer.NumElements=CameraFloats/4;
     ComPtr<ID3D11ShaderResourceView> cameraSRV;check(device->CreateShaderResourceView(cameraBuffer.Get(),&csrv,&cameraSRV),"Create camera SRV");
-    D3D11_UNORDERED_ACCESS_VIEW_DESC cuav{};cuav.ViewDimension=D3D11_UAV_DIMENSION_BUFFER;cuav.Buffer.NumElements=12;
+    D3D11_UNORDERED_ACCESS_VIEW_DESC cuav{};cuav.ViewDimension=D3D11_UAV_DIMENSION_BUFFER;cuav.Buffer.NumElements=CameraFloats/4;
     ComPtr<ID3D11UnorderedAccessView> cameraUAV;check(device->CreateUnorderedAccessView(cameraBuffer.Get(),&cuav,&cameraUAV),"Create camera UAV");
     bd.BindFlags=0;bd.MiscFlags=0;bd.StructureByteStride=0;bd.Usage=D3D11_USAGE_STAGING;bd.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
     check(device->CreateBuffer(&bd,nullptr,&cameraStaging),"Create camera staging");
+    bd.ByteWidth=InstanceElements*16;bd.Usage=D3D11_USAGE_DEFAULT;bd.CPUAccessFlags=0;
+    bd.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;bd.StructureByteStride=16;
+    // A poison fill makes incomplete compute writes observable on the first
+    // frame; the native runtime does not upload an instance buffer.
+    std::vector<float> instancePoison(size_t(InstanceElements)*4,NAN);D3D11_SUBRESOURCE_DATA instanceInitial{instancePoison.data(),0,0};
+    ComPtr<ID3D11Buffer> instanceBuffer,instanceStaging;check(device->CreateBuffer(&bd,&instanceInitial,&instanceBuffer),"Create instance cache");
+    csrv.Buffer.NumElements=InstanceElements;cuav.Buffer.NumElements=InstanceElements;
+    ComPtr<ID3D11ShaderResourceView> instanceSRV;ComPtr<ID3D11UnorderedAccessView> instanceUAV;
+    check(device->CreateShaderResourceView(instanceBuffer.Get(),&csrv,&instanceSRV),"Create instance SRV");
+    check(device->CreateUnorderedAccessView(instanceBuffer.Get(),&cuav,&instanceUAV),"Create instance UAV");
+    bd.BindFlags=0;bd.MiscFlags=0;bd.StructureByteStride=0;bd.Usage=D3D11_USAGE_STAGING;bd.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+    check(device->CreateBuffer(&bd,nullptr,&instanceStaging),"Create instance staging");
     bd.ByteWidth=FlightElements*16;bd.Usage=D3D11_USAGE_DEFAULT;bd.CPUAccessFlags=0;
     bd.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;bd.StructureByteStride=16;
     ComPtr<ID3D11Buffer> flightBuffer,flightStaging;check(device->CreateBuffer(&bd,nullptr,&flightBuffer),"Create flight trajectory");
@@ -296,9 +410,13 @@ int main(int argc,char** argv) try {
     D3D11_DEPTH_STENCIL_DESC dd{};dd.DepthEnable=TRUE;dd.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ALL;dd.DepthFunc=D3D11_COMPARISON_LESS_EQUAL;
     dd.StencilReadMask=dd.StencilWriteMask=255;dd.FrontFace={D3D11_STENCIL_OP_KEEP,D3D11_STENCIL_OP_KEEP,D3D11_STENCIL_OP_KEEP,D3D11_COMPARISON_ALWAYS};dd.BackFace=dd.FrontFace;
     ComPtr<ID3D11DepthStencilState> worldDepth;check(device->CreateDepthStencilState(&dd,&worldDepth),"Create world depth state");
+    dd.DepthEnable=FALSE;dd.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ZERO;dd.DepthFunc=D3D11_COMPARISON_ALWAYS;
+    ComPtr<ID3D11DepthStencilState> postDepth;check(device->CreateDepthStencilState(&dd,&postDepth),"Create post depth state");
     D3D11_SAMPLER_DESC sd{};sd.Filter=D3D11_FILTER_MIN_MAG_MIP_LINEAR;sd.AddressU=sd.AddressV=sd.AddressW=D3D11_TEXTURE_ADDRESS_CLAMP;
     sd.ComparisonFunc=D3D11_COMPARISON_NEVER;sd.MaxAnisotropy=1;sd.MaxLOD=D3D11_FLOAT32_MAX;
     ComPtr<ID3D11SamplerState> sampler;check(device->CreateSamplerState(&sd,&sampler),"CreateSampler");
+    sd.Filter=D3D11_FILTER_ANISOTROPIC;sd.AddressU=sd.AddressV=sd.AddressW=D3D11_TEXTURE_ADDRESS_WRAP;sd.MaxAnisotropy=8;
+    ComPtr<ID3D11SamplerState> materialSampler;check(device->CreateSamplerState(&sd,&materialSampler),"Create material sampler");
     context->VSSetShader(vs.Get(),nullptr,0);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->VSSetConstantBuffers(0,1,cb.GetAddressOf());
     context->VSSetConstantBuffers(1,1,batchCB.GetAddressOf());
@@ -309,12 +427,41 @@ int main(int argc,char** argv) try {
     context->CSSetConstantBuffers(3,1,physicsCB.GetAddressOf());context->VSSetConstantBuffers(3,1,physicsCB.GetAddressOf());context->PSSetConstantBuffers(3,1,physicsCB.GetAddressOf());
     const float initialPhysics[4]={1.f/60,0,0,0};context->UpdateSubresource(physicsCB.Get(),0,nullptr,initialPhysics,0,0);
     context->VSSetSamplers(1,1,sampler.GetAddressOf());context->PSSetSamplers(1,1,sampler.GetAddressOf());context->CSSetSamplers(1,1,sampler.GetAddressOf());
+    context->VSSetSamplers(2,1,materialSampler.GetAddressOf());context->PSSetSamplers(2,1,materialSampler.GetAddressOf());
     const float initialConstants[]={float(lowWidth),float(lowHeight),time,0,float(w),float(h),seed,time};
     context->UpdateSubresource(cb.Get(),0,nullptr,initialConstants,0,0);
     D3D11_QUERY_DESC terrainQD{D3D11_QUERY_TIMESTAMP_DISJOINT,0};ComPtr<ID3D11Query> terrainDisjoint;
     check(device->CreateQuery(&terrainQD,&terrainDisjoint),"Create terrain disjoint");terrainQD.Query=D3D11_QUERY_TIMESTAMP;
     ComPtr<ID3D11Query> terrainStart,terrainEnd;check(device->CreateQuery(&terrainQD,&terrainStart),"Create terrain start");check(device->CreateQuery(&terrainQD,&terrainEnd),"Create terrain end");
     ID3D11UnorderedAccessView* nullUAV=nullptr;
+    ID3D11UnorderedAccessView* materialUAVs[]={materialColor.uav.Get(),materialNormal.uav.Get()},*nullUAVs[2]={};
+    context->CSSetShader(materialCS.Get(),nullptr,0);context->CSSetUnorderedAccessViews(0,2,materialUAVs,nullptr);
+    context->Begin(terrainDisjoint.Get());context->End(terrainStart.Get());context->Dispatch(MaterialSize/8,MaterialSize/8,MaterialLayers);
+    context->CSSetUnorderedAccessViews(0,2,nullUAVs,nullptr);context->GenerateMips(materialColor.srv.Get());context->GenerateMips(materialNormal.srv.Get());
+    context->End(terrainEnd.Get());context->End(terrainDisjoint.Get());
+    const auto materialTiming=query<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT>(context.Get(),terrainDisjoint.Get());
+    const UINT64 materialT0=query<UINT64>(context.Get(),terrainStart.Get()),materialT1=query<UINT64>(context.Get(),terrainEnd.Get());
+    if(materialTiming.Disjoint||!materialTiming.Frequency)throw std::runtime_error("Material startup timing is disjoint.");
+    const double materialMS=1000.0*double(materialT1-materialT0)/materialTiming.Frequency;
+    ID3D11ShaderResourceView* materialSRVs[]={materialColor.srv.Get(),materialNormal.srv.Get()};
+    context->VSSetShaderResources(8,2,materialSRVs);context->PSSetShaderResources(8,2,materialSRVs);
+    std::ofstream materialReport(outDir/"material_metrics.json");materialReport<<"{\"startup_gpu_ms\":"<<materialMS<<",\"width\":1024,\"mips\":11,\"layers\":[";
+    for(UINT layer=0;layer<MaterialLayers;layer++) {
+        auto color=materialColor.pixels(device.Get(),context.Get(),layer,0),normal=materialNormal.pixels(device.Get(),context.Get(),layer,0);
+        auto coarse=materialColor.pixels(device.Get(),context.Get(),layer,MaterialMips-1);
+        uint8_t lowByte=255,highByte=0;double sum=0,square=0;size_t invalidNormals=0;
+        for(size_t i=0;i<color.size();i+=4) {
+            for(size_t channel=0;channel<3;channel++){uint8_t value=color[i+channel];lowByte=std::min(lowByte,value);highByte=std::max(highByte,value);sum+=value;square+=double(value)*value;}
+            float x=normal[i]/127.5f-1.f,y=normal[i+1]/127.5f-1.f,z=normal[i+2]/127.5f-1.f;
+            float length=std::sqrt(x*x+y*y+z*z);invalidNormals+=length<.90f||length>1.1f;
+        }
+        double samples=double(color.size()/4)*3,variance=square/samples-std::pow(sum/samples,2);
+        if(invalidNormals||highByte==0)throw std::runtime_error("Invalid procedural material output.");
+        std::ostringstream name;name<<"material_color_"<<layer<<".bmp";bmp(outDir/name.str(),color,MaterialSize,MaterialSize);
+        materialReport<<(layer?",":"")<<"{\"layer\":"<<layer<<",\"min_byte\":"<<unsigned(lowByte)<<",\"max_byte\":"<<unsigned(highByte)<<",\"variance\":"<<variance<<",\"invalid_normals\":"<<invalidNormals
+            <<",\"last_mip_rgba\":["<<unsigned(coarse[0])<<","<<unsigned(coarse[1])<<","<<unsigned(coarse[2])<<","<<unsigned(coarse[3])<<"]}";
+    }
+    materialReport<<"]}\n";
     context->CSSetShader(terrainCS.Get(),nullptr,0);context->CSSetUnorderedAccessViews(0,1,terrainUAV.GetAddressOf(),nullptr);
     context->Begin(terrainDisjoint.Get());context->End(terrainStart.Get());context->Dispatch(TerrainSize/8,TerrainSize/8,1);context->End(terrainEnd.Get());context->End(terrainDisjoint.Get());
     context->CSSetUnorderedAccessViews(0,1,&nullUAV,nullptr);
@@ -330,6 +477,54 @@ int main(int argc,char** argv) try {
     if(terrainTiming.Disjoint||!terrainTiming.Frequency)throw std::runtime_error("Terrain startup GPU timing is disjoint.");
     const double terrainMS=1000.0*double(terrainTicks1-terrainTicks0)/terrainTiming.Frequency;
     std::ofstream(outDir/"terrain_metrics.json")<<"{\"heightfield\":"<<json(terrainMetrics)<<",\"startup_gpu_ms\":"<<terrainMS<<"}\n";
+    context->CSSetShader(boundsCS.Get(),nullptr,0);context->Begin(terrainDisjoint.Get());context->End(terrainStart.Get());
+    for(UINT level=0;level<BoundsMips;level++) {
+        const float boundsParameters[4]={0,0,float(level),0};context->UpdateSubresource(physicsCB.Get(),0,nullptr,boundsParameters,0,0);
+        ID3D11ShaderResourceView* previousLevel=level?terrainBounds.levels[level-1].Get():nullptr;
+        context->CSSetShaderResources(14,1,&previousLevel);context->CSSetUnorderedAccessViews(0,1,terrainBounds.uavs[level].GetAddressOf(),nullptr);
+        const UINT groups=((TerrainSize>>level)+7)/8;context->Dispatch(groups,groups,1);context->CSSetUnorderedAccessViews(0,1,&nullUAV,nullptr);
+    }
+    ID3D11ShaderResourceView* nullBounds=nullptr;context->CSSetShaderResources(14,1,&nullBounds);
+    context->VSSetShaderResources(14,1,terrainBounds.srv.GetAddressOf());context->PSSetShaderResources(14,1,terrainBounds.srv.GetAddressOf());
+    context->UpdateSubresource(physicsCB.Get(),0,nullptr,initialPhysics,0,0);context->End(terrainEnd.Get());context->End(terrainDisjoint.Get());
+    const auto boundsTiming=query<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT>(context.Get(),terrainDisjoint.Get());
+    const UINT64 boundsT0=query<UINT64>(context.Get(),terrainStart.Get()),boundsT1=query<UINT64>(context.Get(),terrainEnd.Get());
+    if(boundsTiming.Disjoint||!boundsTiming.Frequency)throw std::runtime_error("Terrain bounds timing is disjoint.");
+    const double boundsMS=1000.0*double(boundsT1-boundsT0)/boundsTiming.Frequency;
+    std::ofstream boundsReport(outDir/"terrain_bounds_metrics.json");boundsReport<<"{\"startup_gpu_ms\":"<<boundsMS<<",\"levels\":[";
+    std::vector<float> previousBounds;size_t boundsFailures=0;
+    for(UINT level=0;level<BoundsMips;level++) {
+        auto values=terrainBounds.values(device.Get(),context.Get(),level);const UINT size=TerrainSize>>level,sourceSize=level?size*2:TerrainSize;
+        const float* source=level?previousBounds.data():reinterpret_cast<const float*>(terrainValues.data());
+        size_t invalid=0,nonconservative=0;float minimum=INFINITY,maximum=-INFINITY;
+        for(UINT y=0;y<size;y++)for(UINT x=0;x<size;x++) {
+            const UINT px=level?x*2:x,py=level?y*2:y,qx=std::min(px+1,sourceSize-1),qy=std::min(py+1,sourceSize-1);
+            const float required=std::max(std::max(source[size_t(py)*sourceSize+px],source[size_t(py)*sourceSize+qx]),std::max(source[size_t(qy)*sourceSize+px],source[size_t(qy)*sourceSize+qx]));
+            float value=values[size_t(y)*size+x];invalid+=!std::isfinite(value);nonconservative+=value<required;
+            minimum=std::min(minimum,value);maximum=std::max(maximum,value);
+        }
+        boundsFailures+=invalid+nonconservative;
+        boundsReport<<(level?",":"")<<"{\"level\":"<<level<<",\"size\":"<<size<<",\"nonfinite\":"<<invalid<<",\"nonconservative\":"<<nonconservative<<",\"minimum\":"<<minimum<<",\"maximum\":"<<maximum<<"}";
+        previousBounds=std::move(values);
+    }
+    boundsReport<<"]}\n";if(boundsFailures||previousBounds[0]<terrainMetrics.maximum||previousBounds[0]>terrainMetrics.maximum+.1)throw std::runtime_error("Terrain hierarchy is not a conservative finite bound.");
+    context->CSSetShader(cloudCS.Get(),nullptr,0);context->CSSetUnorderedAccessViews(0,1,cloud.uav.GetAddressOf(),nullptr);
+    context->Begin(terrainDisjoint.Get());context->End(terrainStart.Get());context->Dispatch(16,16,16);
+    context->CSSetUnorderedAccessViews(0,1,&nullUAV,nullptr);context->PSSetShaderResources(13,1,cloud.srv.GetAddressOf());
+    context->End(terrainEnd.Get());context->End(terrainDisjoint.Get());
+    const auto cloudTiming=query<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT>(context.Get(),terrainDisjoint.Get());
+    const UINT64 cloudT0=query<UINT64>(context.Get(),terrainStart.Get()),cloudT1=query<UINT64>(context.Get(),terrainEnd.Get());
+    if(cloudTiming.Disjoint||!cloudTiming.Frequency)throw std::runtime_error("Cloud startup timing is disjoint.");
+    const double cloudMS=1000.0*double(cloudT1-cloudT0)/cloudTiming.Frequency;
+    auto cloudPixels=cloud.pixels(context.Get());std::ofstream cloudReport(outDir/"cloud_metrics.json");cloudReport<<"{\"startup_gpu_ms\":"<<cloudMS<<",\"size\":128,\"channels\":[";
+    for(UINT channel=0;channel<4;channel++) {
+        uint8_t minimum=255,maximum=0;double sum=0;
+        for(size_t p=channel;p<cloudPixels.size();p+=4){minimum=std::min(minimum,cloudPixels[p]);maximum=std::max(maximum,cloudPixels[p]);sum+=cloudPixels[p];}
+        if(minimum==maximum)throw std::runtime_error("Cloud volume channel is constant/uninitialized.");
+        cloudReport<<(channel?",":"")<<"{\"min_byte\":"<<unsigned(minimum)<<",\"max_byte\":"<<unsigned(maximum)<<",\"mean_byte\":"<<sum/(CloudSize*CloudSize*CloudSize)<<"}";
+    }
+    cloudReport<<"]}\n";const size_t cloudSliceBytes=CloudSize*CloudSize*4;
+    std::vector<uint8_t> cloudSlice(cloudPixels.begin()+cloudSliceBytes*(CloudSize/2),cloudPixels.begin()+cloudSliceBytes*(CloudSize/2+1));bmp(outDir/"cloud_volume_slice.bmp",cloudSlice,CloudSize,CloudSize);
     context->CSSetShader(flightCS.Get(),nullptr,0);context->CSSetUnorderedAccessViews(0,1,flightUAV.GetAddressOf(),nullptr);
     context->Begin(terrainDisjoint.Get());context->End(terrainStart.Get());context->Dispatch(1,1,1);context->End(terrainEnd.Get());context->End(terrainDisjoint.Get());
     context->CSSetUnorderedAccessViews(0,1,&nullUAV,nullptr);
@@ -417,12 +612,28 @@ int main(int argc,char** argv) try {
         context->Dispatch(1,1,1);context->CSSetUnorderedAccessViews(0,1,&nullUAV,nullptr);
         context->VSSetShaderResources(3,1,cameraSRV.GetAddressOf());context->PSSetShaderResources(3,1,cameraSRV.GetAddressOf());
     };
-    auto drawMeshes=[&](bool shadowPass){
-        constexpr UINT batches[][3]={{3600,32,0},{15624,192,1000},{18,12288,2000},{240,384,20000},{12288,4,30000},{288,6144,40000},{432,6,50000}};
+    auto updateAtmosphere=[&](){
+        ID3D11ShaderResourceView* nullView=nullptr;
+        context->PSSetShaderResources(10,1,&nullView);context->CSSetShaderResources(3,1,cameraSRV.GetAddressOf());
+        context->CSSetShader(atmosphereCS.Get(),nullptr,0);context->CSSetUnorderedAccessViews(0,1,atmosphereUAV.GetAddressOf(),nullptr);
+        context->Dispatch(32,16,1);context->CSSetUnorderedAccessViews(0,1,&nullUAV,nullptr);
+        context->CSSetShaderResources(3,1,&nullView);context->PSSetShaderResources(10,1,atmosphereSRV.GetAddressOf());
+    };
+    auto updateInstances=[&](){
+        ID3D11ShaderResourceView* nullView=nullptr;
+        context->VSSetShaderResources(12,1,&nullView);context->PSSetShaderResources(12,1,&nullView);context->CSSetShaderResources(12,1,&nullView);
+        context->CSSetShaderResources(3,1,cameraSRV.GetAddressOf());context->CSSetShader(instancesCS.Get(),nullptr,0);
+        context->CSSetUnorderedAccessViews(0,1,instanceUAV.GetAddressOf(),nullptr);context->Dispatch(InstanceGroups,1,1);
+        context->CSSetUnorderedAccessViews(0,1,&nullUAV,nullptr);context->CSSetShaderResources(3,1,&nullView);
+        context->VSSetShaderResources(12,1,instanceSRV.GetAddressOf());context->PSSetShaderResources(12,1,instanceSRV.GetAddressOf());
+    };
+    auto drawMeshes=[&](bool shadowPass,bool farPass=false){
+        constexpr UINT batches[][3]={{11520,64,0},{15624,192,1000},{48,12288,2000},{240,384,20000},{12288,4,30000},{288,6144,40000},{432,6,50000}};
         for(size_t i=0;i<(shadowPass?7u:6u);i++) {
+            if(farPass&&(i==2||i==6))continue;
             const UINT batchConstants[]={batches[i][2],0,0,0};
             context->UpdateSubresource(batchCB.Get(),0,nullptr,batchConstants,0,0);
-            context->DrawInstanced(batches[i][0],batches[i][1],0,0);
+            context->DrawInstanced(farPass&&i==1?288:batches[i][0],batches[i][1],0,0);
         }
     };
     if(validateInstances) {
@@ -432,7 +643,7 @@ int main(int argc,char** argv) try {
         check(device->CreatePixelShader(pixelCode.data(),pixelCode.size(),nullptr,&instancePS),"Create instance test PS");
         context->VSSetShader(instanceVS.Get(),nullptr,0);context->PSSetShader(instancePS.Get(),nullptr,0);
         context->PSSetConstantBuffers(1,1,batchCB.GetAddressOf());
-        constexpr UINT contracts[][2]={{0,32},{1000,192},{2000,12288},{20000,384},{30000,4},{40000,6144},{50000,6}};
+        constexpr UINT contracts[][2]={{0,64},{1000,192},{2000,12288},{20000,384},{30000,4},{40000,6144},{50000,6}};
         std::ofstream result(outDir/"instances.csv");result<<"base,count,api_start,raw_min,raw_max,effective_min,effective_max,mismatches\n";
         size_t errors=0;
         for(const auto& contract:contracts)for(UINT mode=0;mode<2;mode++) {
@@ -485,6 +696,25 @@ int main(int argc,char** argv) try {
         std::cout<<"Water normal/UV: samples="<<waterCount<<", nonfinite="<<invalid<<", unit error="<<maxUnitError<<", RMS slope="<<rmsSlope<<std::endl;
         context->ClearState();return passed?0:2;
     }
+    if(!rawProbe.empty()) {
+        auto code=read(rawProbe);ComPtr<ID3D11PixelShader> shader;check(device->CreatePixelShader(code.data(),code.size(),nullptr,&shader),"Create raw diagnostic PS");
+        Surface samples(device.Get(),w,h,DXGI_FORMAT_R32G32B32A32_FLOAT);
+        const float constants[8]={float(w),float(h),time,float(startFrame),float(w),float(h),seed,time};
+        context->UpdateSubresource(cb.Get(),0,nullptr,constants,0,0);updateCamera();
+        context->OMSetRenderTargets(1,samples.rtv.GetAddressOf(),nullptr);D3D11_VIEWPORT viewport{0,0,float(w),float(h),0,1};context->RSSetViewports(1,&viewport);
+        context->PSSetShader(shader.Get(),nullptr,0);context->Begin(terrainDisjoint.Get());context->End(terrainStart.Get());context->Draw(3,0);context->End(terrainEnd.Get());context->End(terrainDisjoint.Get());
+        auto bytes=samples.pixels(context.Get());const float* values=reinterpret_cast<const float*>(bytes.data());
+        std::ofstream binary(outDir/"raw_probe.bin",std::ios::binary);binary.write(reinterpret_cast<const char*>(bytes.data()),bytes.size());
+        std::ofstream csv(outDir/"raw_probe.csv");csv<<"x,y,r,g,b,a\n";size_t invalid=0;
+        for(UINT y=0;y<h;y++)for(UINT x=0;x<w;x++){csv<<x<<","<<y;for(UINT c=0;c<4;c++){const float value=values[(size_t(y)*w+x)*4+c];invalid+=!std::isfinite(value);csv<<","<<std::setprecision(9)<<value;}csv<<"\n";}
+        const auto timing=query<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT>(context.Get(),terrainDisjoint.Get());const UINT64 t0=query<UINT64>(context.Get(),terrainStart.Get()),t1=query<UINT64>(context.Get(),terrainEnd.Get());
+        size_t messages=0;std::ofstream diagnostics(outDir/"d3d11_messages.txt");
+        if(info)for(UINT64 i=0;i<info->GetNumStoredMessagesAllowedByRetrievalFilter();i++){SIZE_T size=0;info->GetMessage(i,nullptr,&size);std::vector<uint8_t> storage(size);auto* message=reinterpret_cast<D3D11_MESSAGE*>(storage.data());check(info->GetMessage(i,message,&size),"Read raw probe diagnostics");if(message->Severity<=D3D11_MESSAGE_SEVERITY_WARNING){messages++;diagnostics<<message->pDescription<<"\n";}}
+        const double gpuMS=timing.Disjoint||!timing.Frequency?0:1000.0*double(t1-t0)/timing.Frequency;
+        std::ofstream(outDir/"raw_probe_metrics.json")<<"{\"samples\":"<<size_t(w)*h<<",\"nonfinite\":"<<invalid<<",\"debug_warnings_errors\":"<<messages<<",\"gpu_ms\":"<<gpuMS<<"}\n";
+        std::cout<<"Raw GPU probe: samples="<<size_t(w)*h<<", nonfinite="<<invalid<<", diagnostics="<<messages<<", GPU="<<gpuMS<<"ms"<<std::endl;
+        context->ClearState();return invalid||messages||timing.Disjoint?2:0;
+    }
     if(diagnostic) {
         auto code=read(shaderDir/"camera_probe.cso");ComPtr<ID3D11PixelShader> shader;
         check(device->CreatePixelShader(code.data(),code.size(),nullptr,&shader),"Create camera probe");
@@ -514,14 +744,19 @@ int main(int argc,char** argv) try {
     ComPtr<ID3D11Query> disjoint;D3D11_QUERY_DESC qd{D3D11_QUERY_TIMESTAMP_DISJOINT,0};check(device->CreateQuery(&qd,&disjoint),"CreateDisjoint");
     // One extra timestamp brackets the QA-only world snapshot copy. It is
     // excluded from stage timings, since the shipped runtime makes no copy.
-    std::array<ComPtr<ID3D11Query>,13> timestamps;qd.Query=D3D11_QUERY_TIMESTAMP;
+    std::array<ComPtr<ID3D11Query>,18> timestamps;qd.Query=D3D11_QUERY_TIMESTAMP;
     for(auto& q:timestamps)check(device->CreateQuery(&qd,&q),"CreateTimestamp");
     std::ofstream metrics(outDir/"metrics.json");metrics<<"{\"adapter\":\""<<gpu<<"\",\"debug_layer\":"<<(debug?"true":"false")
         <<",\"width\":"<<w<<",\"height\":"<<h<<",\"low_width\":"<<lowWidth<<",\"low_height\":"<<lowHeight<<",\"scale\":"<<scale
-        <<",\"terrain_startup_gpu_ms\":"<<terrainMS<<",\"flight_startup_gpu_ms\":"<<flightMS
+        <<",\"terrain_startup_gpu_ms\":"<<terrainMS<<",\"flight_startup_gpu_ms\":"<<flightMS<<",\"material_startup_gpu_ms\":"<<materialMS<<",\"terrain_bounds_startup_gpu_ms\":"<<boundsMS<<",\"cloud_startup_gpu_ms\":"<<cloudMS
         <<",\"seed\":"<<seed<<",\"dt\":"<<dt<<",\"loop_time\":"<<(loopTime?"true":"false")
         <<",\"reflection_width\":"<<reflectionWidth<<",\"reflection_height\":"<<reflectionHeight
-        <<",\"stage_names\":[\"physics\",\"camera\",\"shadow\",\"reflection_world\",\"reflection_mesh\",\"world\",\"mesh\",\"human\",\"temporal\",\"display\"],\"frames\":[\n";
+        <<",\"stage_names\":[\"physics\",\"camera\",\"instances\",\"atmosphere\",\"far_shadow\",\"shadow\",\"reflection_world\",\"reflection_mesh\",\"reflection_clouds\",\"world\",\"mesh\",\"human\",\"cloud_composite\",\"temporal\",\"display\"],\"frames\":[\n";
+    auto compositeClouds=[&](Surface& target,ID3D11ShaderResourceView* source){
+        ID3D11ShaderResourceView* nulls[2]={};context->PSSetShaderResources(0,2,nulls);context->OMSetRenderTargets(1,target.rtv.GetAddressOf(),nullptr);context->OMSetDepthStencilState(postDepth.Get(),0);
+        D3D11_VIEWPORT viewport{0,0,float(target.width),float(target.height),0,1};context->RSSetViewports(1,&viewport);
+        context->PSSetShaderResources(0,1,&source);context->VSSetShader(vs.Get(),nullptr,0);context->PSSetShader(cloudCompositePS.Get(),nullptr,0);context->Draw(3,0);
+    };
     std::vector<uint8_t> previous; bool failed=false; float previousSeconds=time;
     for(UINT f=0;f<frames;f++) {
         float t=time+f*dt;if(loopTime)t=std::fmod(t,128.f);
@@ -534,9 +769,21 @@ int main(int argc,char** argv) try {
         UINT prev=f&1,next=prev^1;context->Begin(disjoint.Get());context->End(timestamps[11].Get());
         const UINT physicsSteps=advanceWater(t);context->End(timestamps[12].Get());context->End(timestamps[0].Get());
         updateCamera();context->End(timestamps[1].Get());
+        updateInstances();context->End(timestamps[15].Get());
+        updateAtmosphere();context->End(timestamps[13].Get());
+        const float clearShadow[4]={1,1,1,1},farPass[4]={0,0,1,0};
+        ID3D11ShaderResourceView* nullFar=nullptr;context->PSSetShaderResources(11,1,&nullFar);
+        context->UpdateSubresource(passCB.Get(),0,nullptr,farPass,0,0);
+        context->OMSetDepthStencilState(nullptr,0);
+        context->OMSetRenderTargets(1,farShadow.rtv.GetAddressOf(),farShadowDepth.dsv.Get());
+        context->ClearRenderTargetView(farShadow.rtv.Get(),clearShadow);context->ClearDepthStencilView(farShadowDepth.dsv.Get(),D3D11_CLEAR_DEPTH,1,0);
+        D3D11_VIEWPORT farViewport{0,0,1024,1024,0,1};context->RSSetViewports(1,&farViewport);
+        context->VSSetShader(shadowVS.Get(),nullptr,0);context->PSSetShader(shadowPS.Get(),nullptr,0);drawMeshes(true,true);
+        context->OMSetRenderTargets(0,nullptr,nullptr);context->PSSetShaderResources(11,1,farShadow.srv.GetAddressOf());
+        context->UpdateSubresource(passCB.Get(),0,nullptr,mainPass,0,0);context->End(timestamps[14].Get());
         context->OMSetDepthStencilState(nullptr,0);
         context->OMSetRenderTargets(1,shadow.rtv.GetAddressOf(),shadowDepth.dsv.Get());
-        const float clearShadow[4]={1,1,1,1};context->ClearRenderTargetView(shadow.rtv.Get(),clearShadow);
+        context->ClearRenderTargetView(shadow.rtv.Get(),clearShadow);
         context->ClearDepthStencilView(shadowDepth.dsv.Get(),D3D11_CLEAR_DEPTH,1,0);
         D3D11_VIEWPORT shadowViewport{0,0,2048,2048,0,1};context->RSSetViewports(1,&shadowViewport);
         context->VSSetShader(shadowVS.Get(),nullptr,0);context->PSSetShader(shadowPS.Get(),nullptr,0);drawMeshes(true);context->End(timestamps[2].Get());
@@ -550,10 +797,11 @@ int main(int argc,char** argv) try {
             context->VSSetShader(vs.Get(),nullptr,0);context->PSSetShader(ps[0].Get(),nullptr,0);context->Draw(3,0);context->End(timestamps[3].Get());
             context->OMSetDepthStencilState(nullptr,0);context->VSSetShader(meshVS.Get(),nullptr,0);context->PSSetShader(meshPS.Get(),nullptr,0);
             drawMeshes(false);context->End(timestamps[4].Get());
+            compositeClouds(reflectionClouded,reflection.srv.Get());context->End(timestamps[16].Get());
             context->UpdateSubresource(cb.Get(),0,nullptr,constants,0,0);context->UpdateSubresource(passCB.Get(),0,nullptr,mainPass,0,0);
-        } else { context->End(timestamps[3].Get());context->End(timestamps[4].Get()); }
+        } else { context->End(timestamps[3].Get());context->End(timestamps[4].Get());context->End(timestamps[16].Get()); }
         context->OMSetRenderTargets(1,low.rtv.GetAddressOf(),mainDepth.dsv.Get());
-        if(reflectionEnabled)context->PSSetShaderResources(5,1,reflection.srv.GetAddressOf());
+        if(reflectionEnabled)context->PSSetShaderResources(5,1,reflectionClouded.srv.GetAddressOf());
         context->ClearDepthStencilView(mainDepth.dsv.Get(),D3D11_CLEAR_DEPTH,1,0);context->OMSetDepthStencilState(worldDepth.Get(),0);
         context->PSSetShaderResources(2,1,shadow.srv.GetAddressOf());
         D3D11_VIEWPORT mainViewport{0,0,float(lowWidth),float(lowHeight),0,1};context->RSSetViewports(1,&mainViewport);
@@ -569,17 +817,20 @@ int main(int argc,char** argv) try {
             context->PSSetShader(ps[i].Get(),nullptr,0);context->Draw(3,0);context->End(timestamps[i+7].Get());
         };
         pass(1,humans,low.srv.Get(),nullptr);
-        pass(2,histories[next],humans.srv.Get(),histories[prev].srv.Get());pass(3,output,histories[next].srv.Get(),nullptr);
+        compositeClouds(clouded,humans.srv.Get());context->End(timestamps[17].Get());
+        pass(2,histories[next],clouded.srv.Get(),histories[prev].srv.Get());pass(3,output,histories[next].srv.Get(),nullptr);
         context->End(disjoint.Get());context->Flush();
-        auto dis=query<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT>(context.Get(),disjoint.Get());std::array<UINT64,13> ticks{};
-        for(int i=0;i<13;i++)ticks[i]=query<UINT64>(context.Get(),timestamps[i].Get());
+        auto dis=query<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT>(context.Get(),disjoint.Get());std::array<UINT64,18> ticks{};
+        for(size_t i=0;i<ticks.size();i++)ticks[i]=query<UINT64>(context.Get(),timestamps[i].Get());
         const auto waterState=waterMetrics(waters[waterIndex].values(context.Get()));
         auto worldPixels=worldSnapshot.pixels(context.Get(),false);auto wo=measure(worldPixels);auto lo=measure(low.pixels(context.Get()));
         if(dumpWorld&&f==0){std::ofstream raw(outDir/"world_rgba16f.bin",std::ios::binary);raw.write(reinterpret_cast<const char*>(worldPixels.data()),worldPixels.size());}
-        auto hu=measure(humans.pixels(context.Get()));auto hi=measure(histories[next].pixels(context.Get()));
-        Metrics re;
+        auto humanPixels=humans.pixels(context.Get()),cloudPixelsFrame=clouded.pixels(context.Get());
+        auto hu=measure(humanPixels);auto cl=measure(cloudPixelsFrame);auto hi=measure(histories[next].pixels(context.Get()));
+        const size_t cloudDepthChanged=changedDepth(humanPixels,cloudPixelsFrame);size_t reflectionDepthChanged=0;Metrics re;
         if(reflectionEnabled) {
-            auto reflectionPixels=reflection.pixels(context.Get());re=measure(reflectionPixels);
+            auto reflectionPixels=reflectionClouded.pixels(context.Get());re=measure(reflectionPixels);
+            reflectionDepthChanged=changedDepth(reflection.pixels(context.Get()),reflectionPixels);
             if(f==0) {
                 // Diagnostic only: simple ACES-style view of the linear HDR
                 // reflection target. This is never an input to the runtime.
@@ -592,11 +843,37 @@ int main(int argc,char** argv) try {
             }
         }
         const auto shadowValues=shadow.pixels(context.Get());const auto sh=scalarMetrics(shadowValues,true);
+        const auto farValues=farShadow.pixels(context.Get());const auto farSh=scalarMetrics(farValues,true);
+        context->CopyResource(atmosphereStaging.Get(),atmosphereTexture.Get());D3D11_MAPPED_SUBRESOURCE atmosphereMap{};
+        check(context->Map(atmosphereStaging.Get(),0,D3D11_MAP_READ,0,&atmosphereMap),"Map atmosphere LUT");
+        size_t atmosphereInvalid=0;float atmosphereMax=0;double atmosphereSum=0;
+        std::vector<uint8_t> atmospherePreview(256*128*4);
+        for(UINT row=0;row<128;row++)for(UINT col=0;col<256;col++) {
+            auto* values=reinterpret_cast<const uint16_t*>(static_cast<const uint8_t*>(atmosphereMap.pData)+size_t(row)*atmosphereMap.RowPitch)+col*4;
+            for(UINT channel=0;channel<4;channel++) {
+                float value=half(values[channel]);atmosphereInvalid+=!std::isfinite(value);
+                if(channel<3){atmosphereMax=std::max(atmosphereMax,value);atmosphereSum+=value;float display=value/(1.f+std::max(0.f,value));atmospherePreview[(row*256+col)*4+channel]=uint8_t(255*std::pow(std::clamp(display,0.f,1.f),1.f/2.2f));}
+            }
+            atmospherePreview[(row*256+col)*4+3]=255;
+        }
+        context->Unmap(atmosphereStaging.Get(),0);if(f==0)bmp(outDir/"atmosphere_preview.bmp",atmospherePreview,256,128);
         context->CopyResource(cameraStaging.Get(),cameraBuffer.Get());D3D11_MAPPED_SUBRESOURCE cameraMap{};
         check(context->Map(cameraStaging.Get(),0,D3D11_MAP_READ,0,&cameraMap),"Map camera cache");
-        std::vector<uint8_t> cameraValues(192);memcpy(cameraValues.data(),cameraMap.pData,192);context->Unmap(cameraStaging.Get(),0);
+        std::vector<uint8_t> cameraValues(CameraFloats*4);memcpy(cameraValues.data(),cameraMap.pData,CameraFloats*4);context->Unmap(cameraStaging.Get(),0);
         if(dumpWorld&&f==0){std::ofstream raw(outDir/"camera_float4.bin",std::ios::binary);raw.write(reinterpret_cast<const char*>(cameraValues.data()),cameraValues.size());}
         const auto ca=scalarMetrics(cameraValues,false);
+        context->CopyResource(instanceStaging.Get(),instanceBuffer.Get());D3D11_MAPPED_SUBRESOURCE instanceMap{};
+        check(context->Map(instanceStaging.Get(),0,D3D11_MAP_READ,0,&instanceMap),"Map instance cache");
+        std::vector<uint8_t> instanceValues(size_t(InstanceElements)*16);memcpy(instanceValues.data(),instanceMap.pData,instanceValues.size());context->Unmap(instanceStaging.Get(),0);
+        const auto instances=scalarMetrics(instanceValues,false);
+        const float* instanceData=reinterpret_cast<const float*>(instanceValues.data());
+        size_t activeNearTrees=0,activeFarTrees=0,activeGrass=0,invalidInstanceFlags=0;
+        for(UINT id=64;id<30976;id++) {
+            const float valid=instanceData[size_t(id)*8+(id<18688?7:6)];
+            invalidInstanceFlags+=valid!=0.f&&valid!=1.f;
+            if(valid==1.f){if(id<256)activeNearTrees++;else if(id<18688)activeFarTrees++;else activeGrass++;}
+        }
+        if(dumpWorld&&f==0){std::ofstream raw(outDir/"instances_float4.bin",std::ios::binary);raw.write(reinterpret_cast<const char*>(instanceValues.data()),instanceValues.size());}
         if(f==0) {
             std::vector<uint8_t> shadowImage(size_t(2048)*2048*4);const float* depths=reinterpret_cast<const float*>(shadowValues.data());
             for(size_t p=0;p<shadowImage.size()/4;p++) {
@@ -609,16 +886,21 @@ int main(int argc,char** argv) try {
         if(!previous.empty())difference/=double(w)*h*3;
         std::ostringstream name;name<<"frame_"<<std::setfill('0')<<std::setw(4)<<f<<".bmp";bmp(outDir/name.str(),rgba,w,h);previous=std::move(rgba);
         double total=0;metrics<<(f?",\n":"")<<"{\"frame\":"<<startFrame+f<<",\"time\":"<<t<<",\"gpu_disjoint\":"<<(dis.Disjoint?"true":"false")<<",\"gpu_ms\":[";
-        constexpr int stageStarts[]={11,0,1,2,3,4,6,7,8,9};
-        for(int i=0;i<10;i++){int j=stageStarts[i];double ms=dis.Disjoint||!dis.Frequency?0:1000.*double(ticks[j+1]-ticks[j])/dis.Frequency;total+=ms;metrics<<(i?",":"")<<ms;}
+        constexpr int stageStarts[]={11,0,1,15,13,14,2,3,4,16,6,7,8,17,9};
+        constexpr int stageEnds[]={12,1,15,13,14,2,3,4,16,5,7,8,17,9,10};
+        for(int i=0;i<15;i++){double ms=dis.Disjoint||!dis.Frequency?0:1000.*double(ticks[stageEnds[i]]-ticks[stageStarts[i]])/dis.Frequency;total+=ms;metrics<<(i?",":"")<<ms;}
         metrics<<"],\"world\":"<<json(wo)<<",\"mesh_composite\":"<<json(lo)<<",\"shadow\":"<<json(sh)<<",\"camera\":"<<json(ca)
-            <<",\"human_composite\":"<<json(hu)<<",\"resolved\":"<<json(hi)<<",\"physics_steps\":"<<physicsSteps<<",\"water_state\":"<<json(waterState)
+            <<",\"instance_cache\":"<<json(instances)
+            <<",\"instance_counts\":{\"records\":"<<InstanceElements<<",\"houses\":64,\"active_near_trees\":"<<activeNearTrees<<",\"active_far_trees\":"<<activeFarTrees<<",\"active_grass\":"<<activeGrass<<",\"rocks\":384,\"branch_responses\":18432,\"invalid_flags\":"<<invalidInstanceFlags<<"}"
+            <<",\"far_shadow\":"<<json(farSh)<<",\"atmosphere\":{\"nonfinite_values\":"<<atmosphereInvalid<<",\"max_rgb\":"<<atmosphereMax<<",\"mean_rgb\":"<<atmosphereSum/(256*128*3)<<"}"
+            <<",\"human_composite\":"<<json(hu)<<",\"cloud_composite\":"<<json(cl)<<",\"resolved\":"<<json(hi)<<",\"physics_steps\":"<<physicsSteps<<",\"water_state\":"<<json(waterState)
+            <<",\"cloud_changed_depth_pixels\":"<<cloudDepthChanged<<",\"reflection_cloud_changed_depth_pixels\":"<<reflectionDepthChanged
             <<",\"reflection_enabled\":"<<(reflectionEnabled?"true":"false")<<",\"reflection\":"<<(reflectionEnabled?json(re):"null")
             <<",\"mean_absolute_display_delta\":"<<difference<<",\"rgba_fnv1a64\":\""<<std::hex<<hash<<std::dec<<"\"}";
         // A full image at the minimum encoded depth means the camera/trace is
         // inside geometry. Numeric/API validity alone cannot detect that.
         bool collapsedDepth=lo.nearDepth>size_t(lowWidth)*lowHeight*99/100;
-        failed|=wo.invalid||lo.invalid||hu.invalid||hi.invalid||sh.invalid||ca.invalid||sh.outOfRange||wo.outOfDepthRange||lo.outOfDepthRange||hu.outOfDepthRange||hi.outOfDepthRange||dis.Disjoint||collapsedDepth||waterState.invalid||waterState.foamOutOfRange||waterState.maxHeight>1.0||(reflectionEnabled&&(re.invalid||re.outOfDepthRange));
+        failed|=wo.invalid||lo.invalid||hu.invalid||cl.invalid||hi.invalid||sh.invalid||ca.invalid||instances.invalid||invalidInstanceFlags||cloudDepthChanged||reflectionDepthChanged||sh.outOfRange||farSh.invalid||farSh.outOfRange||atmosphereInvalid||atmosphereMax<=0||wo.outOfDepthRange||lo.outOfDepthRange||hu.outOfDepthRange||cl.outOfDepthRange||hi.outOfDepthRange||dis.Disjoint||collapsedDepth||waterState.invalid||waterState.foamOutOfRange||waterState.maxHeight>1.0||(reflectionEnabled&&(re.invalid||re.outOfDepthRange));
         std::cout<<"Frame "<<f<<" t="<<t<<" GPU="<<total<<" ms; invalid="<<(wo.invalid+lo.invalid+hu.invalid+hi.invalid+sh.invalid+ca.invalid)<<"; delta="<<difference<<std::endl;
     }
     size_t debugErrors=0,debugWarnings=0;std::ofstream diagnostics(outDir/"d3d11_messages.txt");

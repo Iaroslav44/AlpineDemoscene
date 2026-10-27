@@ -61,6 +61,8 @@ SHADOW_SIZE                     EQU 2048
 FLIGHT_ELEMENTS                 EQU 61456
 FLIGHT_BYTES                    EQU 983296
 WATER_SIZE                      EQU 256
+INSTANCE_ELEMENTS               EQU 81152
+INSTANCE_BYTES                  EQU INSTANCE_ELEMENTS * 16
 
 DXGI_FORMAT_R8G8B8A8_UNORM      EQU 28
 DXGI_USAGE_RENDER_TARGET_OUTPUT EQU 20h
@@ -191,6 +193,11 @@ postSamplerDesc:
     dd 00000000h
     dd 7F7FFFFFh
 
+; Anisotropic wrap sampling for runtime-generated material arrays.
+materialSamplerDesc:
+    dd 55h, 1, 1, 1, 0, 8, D3D11_COMPARISON_NEVER
+    dd 0, 0, 0, 0, 0, 7F7FFFFFh
+
 align 8
 clearHistoryColour dd 00000000h, 00000000h, 00000000h, 00000000h
 clearShadowColour dd 3F800000h, 3F800000h, 3F800000h, 3F800000h
@@ -204,6 +211,27 @@ shadowSurfaceDesc:
     dd SHADOW_SIZE, SHADOW_SIZE, 1, 1, 41, 1, 0, 0, 28h, 0, 0 ; R32_FLOAT
 terrainSurfaceDesc:
     dd 4096, 4096, 1, 1, 41, 1, 0, 0, 88h, 0, 0 ; R32_FLOAT SRV|UAV
+materialSurfaceDesc:
+    dd 1024, 1024, 11, 8, 28, 1, 0, 0, 0A8h, 0, 1 ; RGBA8 SRV|RTV|UAV, GENERATE_MIPS
+materialUAVDesc:
+    dd 28, 5, 0, 0, 8                 ; TEXTURE2DARRAY, mip0, all8 layers
+atmosphereSurfaceDesc:
+    dd 256, 128, 1, 1, 10, 1, 0, 0, 88h, 0, 0 ; RGBA16F SRV|UAV
+cloudVolumeDesc:
+    dd 128, 128, 128, 1, 28, 0, 88h, 0, 0 ; D3D11_TEXTURE3D_DESC RGBA8
+terrainBoundsDesc:
+    dd 4096, 4096, 13, 1, 41, 1, 0, 0, 88h, 0, 0
+boundsLevelSRVDesc:
+    dd 41, 4, 0, 1, 0, 0            ; R32_FLOAT, TEXTURE2D, one mip only
+boundsLevelUAVDesc:
+    dd 41, 4, 0, 0, 0
+boundsBuildConstants dd 0, 0, 0, 0
+farShadowSurfaceDesc:
+    dd 1024, 1024, 1, 1, 41, 1, 0, 0, 28h, 0, 0
+farShadowDepthDesc:
+    dd 1024, 1024, 1, 1, 40, 1, 0, 0, 40h, 0, 0
+farShadowViewport:
+    dd 0, 0, 44800000h, 44800000h, 0, 3F800000h
 reflectionSurfaceDesc:
     dd 640, 360, 1, 1, 10, 1, 0, 0, 28h, 0, 0 ; RGBA16F
 reflectionDepthDesc:
@@ -211,6 +239,7 @@ reflectionDepthDesc:
 passMainUnavailable dd 0, 0, 0, 0
 passMainAvailable dd 0, 3F800000h, 0, 0
 passReflection dd 3F800000h, 3F800000h, 0, 0
+passFarShadow dd 0, 0, 3F800000h, 0
 reflectionBegin REAL4 40.0
 reflectionEnd REAL4 108.0
 loopSeconds REAL4 128.0
@@ -219,13 +248,19 @@ mainDepthDesc:
 shadowDepthDesc:
     dd SHADOW_SIZE, SHADOW_SIZE, 1, 1, 40, 1, 0, 0, 40h, 0, 0
 cameraBufferDesc:
-    dd 192, 0, 88h, 0, 40h, 16          ; SRV|UAV, STRUCTURED, float4 stride
+    dd 240, 0, 88h, 0, 40h, 16          ; 15 float4, including far-shadow frame
 batchBufferDesc:
     dd 16, 0, 4, 0, 0, 0               ; default constant buffer, one uint4
 cameraSRVDesc:
-    dd 0, 1, 0, 12, 0, 0               ; UNKNOWN, BUFFER, 12 elements
+    dd 0, 1, 0, 15, 0, 0               ; UNKNOWN, BUFFER, 15 elements
 cameraUAVDesc:
-    dd 0, 1, 0, 12, 0
+    dd 0, 1, 0, 15, 0
+instanceBufferDesc:
+    dd INSTANCE_BYTES, 0, 88h, 0, 40h, 16
+instanceSRVDesc:
+    dd 0, 1, 0, INSTANCE_ELEMENTS, 0, 0
+instanceUAVDesc:
+    dd 0, 1, 0, INSTANCE_ELEMENTS, 0
 flightBufferDesc:
     dd FLIGHT_BYTES, 0, 88h, 0, 40h, 16
 flightSRVDesc:
@@ -239,6 +274,10 @@ physicsDelta REAL4 0.0166666666667
 physicsConstants dd 3C888889h, 0, 0, 0 ; dt,time,mode,integer step as float
 meshRasterizerDesc:
     dd 3, 1, 0, 0, 0, 0, 1, 0, 0, 0 ; SOLID, CULL_NONE, depth clip on
+postDepthStateDesc:
+    dd 0, 0, 8, 0
+    db 0FFh, 0FFh, 0, 0
+    dd 1, 1, 1, 8, 1, 1, 1, 8
 worldDepthStateDesc:
     dd 1, 1, 4, 0                     ; enabled/write-all/LESS_EQUAL/stencil off
     db 0FFh, 0FFh, 0, 0
@@ -248,13 +287,21 @@ worldDepthStateDesc:
 ; SV_InstanceID starts at zero even with nonzero StartInstanceLocation. Supply
 ; the procedural dispatch base explicitly in b1; both API start offsets are 0.
 meshDrawBatches:
-    dd 0, 0, 0, 0, 3600, 32, 0, 0
+    dd 0, 0, 0, 0, 11520, 64, 0, 0
     dd 1000, 0, 0, 0, 15624, 192, 0, 0
-    dd 2000, 0, 0, 0, 18, 12288, 0, 0
+    dd 2000, 0, 0, 0, 48, 12288, 0, 0
     dd 20000, 0, 0, 0, 240, 384, 0, 0
     dd 30000, 0, 0, 0, 12288, 4, 0, 0
     dd 40000, 0, 0, 0, 288, 6144, 0, 0
     dd 50000, 0, 0, 0, 432, 6, 0, 0    ; shadow-only residents
+; At 3.516m/texel individual blades and residents are subpixel. Near trees use
+; their 288-vertex crown envelope only in this far shadow pass.
+farMeshDrawBatches:
+    dd 0, 0, 0, 0, 11520, 64, 0, 0
+    dd 1000, 0, 0, 0, 288, 192, 0, 0
+    dd 20000, 0, 0, 0, 240, 384, 0, 0
+    dd 30000, 0, 0, 0, 12288, 4, 0, 0
+    dd 40000, 0, 0, 0, 288, 6144, 0, 0
 
 ; WAVEFORMATEX: 44.1 kHz, stereo, signed 16-bit PCM.
 align 8
@@ -335,7 +382,45 @@ startupInfo             db 104 dup (?) ; STARTUPINFOA, native x64 layout
 terrainTexture          dq ?
 terrainSRV              dq ?
 terrainUAV              dq ?
+materialComputeShader   dq ?
+materialTextures        dq 2 dup (?)
+materialSRVs            dq 2 dup (?)
+materialUAVs            dq 2 dup (?)
+materialSampler         dq ?
+atmosphereComputeShader dq ?
+atmosphereTexture       dq ?
+atmosphereSRV           dq ?
+atmosphereUAV           dq ?
+farShadowTexture        dq ?
+farShadowSRV            dq ?
+farShadowRTV            dq ?
+farShadowDepthTexture   dq ?
+farShadowDepthView      dq ?
 cameraFrameBuffer       dq ?
+instanceComputeShader   dq ?
+instanceBuffer          dq ?
+instanceSRV             dq ?
+instanceUAV             dq ?
+cloudComputeShader      dq ?
+cloudCompositeShader    dq ?
+cloudedTexture          dq ?
+cloudedSRV              dq ?
+cloudedRTV              dq ?
+reflectionCloudTexture  dq ?
+reflectionCloudSRV      dq ?
+reflectionCloudRTV      dq ?
+cloudInputBinding       dq ?
+cloudOutputBinding      dq ?
+cloudViewportBinding    dq ?
+postDepthState          dq ?
+cloudTexture            dq ?
+cloudSRV                dq ?
+cloudUAV                dq ?
+boundsComputeShader     dq ?
+boundsTexture           dq ?
+boundsSRV               dq ?
+boundsLevelSRVs         dq 13 dup (?)
+boundsLevelUAVs         dq 13 dup (?)
 batchConstantBuffer     dq ?
 passConstantBuffer      dq ?
 reflectionTexture       dq ?
@@ -632,10 +717,16 @@ depth_surface_done:
 CreateDepthSurface ENDP
 
 DrawSceneBatches PROC
+    lea rdx, meshDrawBatches
+    jmp DrawBatchTable
+DrawSceneBatches ENDP
+
+; ecx=count, rdx=immutable table. Main and far shadow share the same ABI.
+DrawBatchTable PROC
     push rbx
     push rsi
     sub rsp, 48h
-    lea rbx, meshDrawBatches
+    mov rbx, rdx
     mov esi, ecx                      ; six main batches, seven shadow batches
 draw_batch_loop:
     mov rcx, d3dContext
@@ -661,7 +752,7 @@ draw_batch_loop:
     pop rsi
     pop rbx
     ret
-DrawSceneBatches ENDP
+DrawBatchTable ENDP
 
 ; Rewrite all eight floats: WRITE_DISCARD never preserves the other fields.
 ; ecx/edx are bit patterns for this pass's scene width/height. O.w stays the
@@ -785,6 +876,10 @@ CreateComputeSurface PROC
     mov rdx, [rsi]
     xor r8d, r8d
     mov r9, r12
+    cmp dword ptr [rbx+12], 8           ; material arrays need explicit mip0 UAV
+    jne compute_default_uav
+    lea r8, materialUAVDesc
+compute_default_uav:
     call qword ptr [rax+64]
 compute_surface_done:
     add rsp, 28h
@@ -982,6 +1077,510 @@ water_sim_cancel:
     pop rbx
     ret
 AdvanceWaterSimulation ENDP
+
+; rcx=input HDR SRV, rdx=separate HDR RTV, r8=viewport. All opaque geometry,
+; including characters, must be present before clouds integrate to its depth.
+CompositeClouds PROC
+    sub rsp, 28h
+    mov cloudInputBinding, rcx
+    mov cloudOutputBinding, rdx
+    mov cloudViewportBinding, r8
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 2
+    lea r9, nullShaderResources
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    lea r8, cloudOutputBinding
+    xor r9d, r9d
+    call qword ptr [rax+264]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, postDepthState
+    xor r8d, r8d
+    call qword ptr [rax+288]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    mov r8, cloudViewportBinding
+    call qword ptr [rax+352]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, cloudInputBinding
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, vertexShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+88]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, cloudCompositeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+72]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    xor r8d, r8d
+    call qword ptr [rax+104]
+    add rsp, 28h
+    ret
+CompositeClouds ENDP
+
+CreateGeneratedVolumes PROC
+    push rbx
+    sub rsp, 20h
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, cloudVolumeDesc
+    xor r8d, r8d
+    lea r9, cloudTexture
+    call qword ptr [rax+48]            ; CreateTexture3D
+    test eax, eax
+    js generated_volumes_done
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, cloudTexture
+    xor r8d, r8d
+    lea r9, cloudSRV
+    call qword ptr [rax+56]
+    test eax, eax
+    js generated_volumes_done
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, cloudTexture
+    xor r8d, r8d
+    lea r9, cloudUAV
+    call qword ptr [rax+64]
+    test eax, eax
+    js generated_volumes_done
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, terrainBoundsDesc
+    xor r8d, r8d
+    lea r9, boundsTexture
+    call qword ptr [rax+40]
+    test eax, eax
+    js generated_volumes_done
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, boundsTexture
+    xor r8d, r8d
+    lea r9, boundsSRV
+    call qword ptr [rax+56]
+    test eax, eax
+    js generated_volumes_done
+    xor ebx, ebx
+create_bounds_view_loop:
+    mov dword ptr boundsLevelSRVDesc[8], ebx
+    mov dword ptr boundsLevelUAVDesc[8], ebx
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, boundsTexture
+    lea r8, boundsLevelSRVDesc
+    lea r9, boundsLevelSRVs[rbx*8]
+    call qword ptr [rax+56]
+    test eax, eax
+    js generated_volumes_done
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, boundsTexture
+    lea r8, boundsLevelUAVDesc
+    lea r9, boundsLevelUAVs[rbx*8]
+    call qword ptr [rax+64]
+    test eax, eax
+    js generated_volumes_done
+    inc ebx
+    cmp ebx, 13
+    jb create_bounds_view_loop
+generated_volumes_done:
+    add rsp, 20h
+    pop rbx
+    ret
+CreateGeneratedVolumes ENDP
+
+GenerateCloudVolume PROC
+    sub rsp, 28h
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, cloudComputeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+552]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, cloudUAV
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 16
+    mov r8d, 16
+    mov r9d, 16
+    call qword ptr [rax+328]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 13
+    mov r8d, 1
+    lea r9, cloudSRV
+    call qword ptr [rax+64]
+    add rsp, 28h
+    ret
+GenerateCloudVolume ENDP
+
+GenerateTerrainBounds PROC
+    push rbx
+    push rsi
+    sub rsp, 38h
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, physicsConstantBuffer
+    call qword ptr [rax+568]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, boundsComputeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+552]
+    xor ebx, ebx
+generate_bounds_level:
+    cvtsi2ss xmm0, ebx
+    movss boundsBuildConstants[8], xmm0
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, physicsConstantBuffer
+    xor r8d, r8d
+    xor r9d, r9d
+    lea r10, boundsBuildConstants
+    mov qword ptr [rsp+20h], r10
+    mov dword ptr [rsp+28h], 0
+    mov dword ptr [rsp+30h], 0
+    call qword ptr [rax+384]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 14
+    mov r8d, 1
+    lea r9, nullShaderResources
+    test ebx, ebx
+    jz bounds_previous_ready
+    lea r9, boundsLevelSRVs[rbx*8-8]
+bounds_previous_ready:
+    call qword ptr [rax+536]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, boundsLevelUAVs[rbx*8]
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov ecx, ebx
+    mov esi, 4096
+    shr esi, cl
+    add esi, 7
+    shr esi, 3
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, esi
+    mov r8d, esi
+    mov r9d, 1
+    call qword ptr [rax+328]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    call PumpInitializationMessages
+    test eax, eax
+    jnz generate_bounds_done
+    inc ebx
+    cmp ebx, 13
+    jb generate_bounds_level
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 14
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+536]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 14
+    mov r8d, 1
+    lea r9, boundsSRV
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 14
+    mov r8d, 1
+    lea r9, boundsSRV
+    call qword ptr [rax+200]
+    xor eax, eax
+generate_bounds_done:
+    add rsp, 38h
+    pop rsi
+    pop rbx
+    ret
+GenerateTerrainBounds ENDP
+
+ReleaseGeneratedVolumes PROC
+    push rbx
+    sub rsp, 20h
+    xor ebx, ebx
+release_bounds_views:
+    mov rcx, boundsLevelSRVs[rbx*8]
+    call ReleaseObject
+    mov rcx, boundsLevelUAVs[rbx*8]
+    call ReleaseObject
+    inc ebx
+    cmp ebx, 13
+    jb release_bounds_views
+    mov rcx, boundsSRV
+    call ReleaseObject
+    mov rcx, boundsTexture
+    call ReleaseObject
+    mov rcx, boundsComputeShader
+    call ReleaseObject
+    mov rcx, cloudUAV
+    call ReleaseObject
+    mov rcx, cloudSRV
+    call ReleaseObject
+    mov rcx, cloudTexture
+    call ReleaseObject
+    mov rcx, cloudComputeShader
+    call ReleaseObject
+    add rsp, 20h
+    pop rbx
+    ret
+ReleaseGeneratedVolumes ENDP
+
+; Cache per-object placement and branch beam response once per frame instead
+; of repeating terrain and wind evaluation for every vertex in every pass.
+UpdateSceneInstances PROC
+    sub rsp, 28h
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 12
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 12
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+200]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 12
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+536]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, cameraFrameSRV
+    call qword ptr [rax+536]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, instanceComputeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+552]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, instanceUAV
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 778
+    mov r8d, 1
+    mov r9d, 1
+    call qword ptr [rax+328]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+536]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 12
+    mov r8d, 1
+    lea r9, instanceSRV
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 12
+    mov r8d, 1
+    lea r9, instanceSRV
+    call qword ptr [rax+200]
+    add rsp, 28h
+    ret
+UpdateSceneInstances ENDP
+
+; A camera-dependent atmosphere cache is rebuilt every frame. Only the LUT
+; generator is embedded; the texture never comes from a file or reference.
+UpdateAtmosphere PROC
+    sub rsp, 28h
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 10
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, cameraFrameSRV
+    call qword ptr [rax+536]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, atmosphereComputeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+552]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, atmosphereUAV
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 32
+    mov r8d, 16
+    mov r9d, 1
+    call qword ptr [rax+328]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 3
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+536]            ; avoid SRV/UAV hazard next CameraCS
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 10
+    mov r8d, 1
+    lea r9, atmosphereSRV
+    call qword ptr [rax+64]
+    add rsp, 28h
+    ret
+UpdateAtmosphere ENDP
+
+RenderFarShadow PROC
+    sub rsp, 28h
+    lea rcx, passFarShadow
+    call UpdatePassConstants
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 11
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    xor r8d, r8d
+    call qword ptr [rax+288]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    lea r8, farShadowRTV
+    mov r9, farShadowDepthView
+    call qword ptr [rax+264]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, farShadowRTV
+    lea r8, clearShadowColour
+    call qword ptr [rax+400]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, farShadowDepthView
+    mov r8d, 1
+    movss xmm3, clearShadowColour
+    mov dword ptr [rsp+20h], 0
+    call qword ptr [rax+424]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    lea r8, farShadowViewport
+    call qword ptr [rax+352]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, shadowVertexShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+88]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, shadowPixelShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+72]
+    mov ecx, 5
+    lea rdx, farMeshDrawBatches
+    call DrawBatchTable
+    ; Detach the RTV before exposing its SRV to lighting.
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+264]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 11
+    mov r8d, 1
+    lea r9, farShadowSRV
+    call qword ptr [rax+64]
+    lea rcx, passMainUnavailable
+    cmp reflectionEnabled, 0
+    je far_shadow_restore_pass
+    lea rcx, passMainAvailable
+far_shadow_restore_pass:
+    call UpdatePassConstants
+    add rsp, 28h
+    ret
+RenderFarShadow ENDP
 
 
 GenerateSineTable PROC
@@ -1907,6 +2506,42 @@ d3d_created:
     test eax, eax
     js init_failed
 
+    mov ecx, 114
+    lea rdx, materialComputeShader
+    call LoadEmbeddedComputeShader
+    test eax, eax
+    js init_failed
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
+    mov ecx, 115
+    lea rdx, atmosphereComputeShader
+    call LoadEmbeddedComputeShader
+    test eax, eax
+    js init_failed
+
+    mov ecx, 116
+    lea rdx, instanceComputeShader
+    call LoadEmbeddedComputeShader
+    test eax, eax
+    js init_failed
+
+    mov ecx, 117
+    lea rdx, cloudComputeShader
+    call LoadEmbeddedComputeShader
+    test eax, eax
+    js init_failed
+    mov ecx, 118
+    lea rdx, boundsComputeShader
+    call LoadEmbeddedComputeShader
+    test eax, eax
+    js init_failed
+    mov ecx, 119
+    lea rdx, cloudCompositeShader
+    call LoadEmbeddedPixelShader
+    test eax, eax
+    js init_failed
+
     ; IDXGISwapChain::GetBuffer(0, IID_ID3D11Texture2D, ...)
     mov rcx, swapChain
     mov rax, [rcx]
@@ -1945,6 +2580,20 @@ d3d_created:
     lea rdx, lowBTexture
     lea r8, lowBSRV
     lea r9, lowBRTV
+    call CreateRenderSurface
+    test eax, eax
+    js init_failed
+    lea rcx, lowSurfaceDesc
+    lea rdx, cloudedTexture
+    lea r8, cloudedSRV
+    lea r9, cloudedRTV
+    call CreateRenderSurface
+    test eax, eax
+    js init_failed
+    lea rcx, reflectionSurfaceDesc
+    lea rdx, reflectionCloudTexture
+    lea r8, reflectionCloudSRV
+    lea r9, reflectionCloudRTV
     call CreateRenderSurface
     test eax, eax
     js init_failed
@@ -2002,6 +2651,43 @@ d3d_created:
     call CreateDepthSurface
     test eax, eax
     js init_failed
+    lea rcx, materialSurfaceDesc
+    lea rdx, materialTextures
+    lea r8, materialSRVs
+    lea r9, materialUAVs
+    call CreateComputeSurface
+    test eax, eax
+    js init_failed
+    lea rcx, materialSurfaceDesc
+    lea rdx, materialTextures[8]
+    lea r8, materialSRVs[8]
+    lea r9, materialUAVs[8]
+    call CreateComputeSurface
+    test eax, eax
+    js init_failed
+    lea rcx, atmosphereSurfaceDesc
+    lea rdx, atmosphereTexture
+    lea r8, atmosphereSRV
+    lea r9, atmosphereUAV
+    call CreateComputeSurface
+    test eax, eax
+    js init_failed
+    call CreateGeneratedVolumes
+    test eax, eax
+    js init_failed
+    lea rcx, farShadowSurfaceDesc
+    lea rdx, farShadowTexture
+    lea r8, farShadowSRV
+    lea r9, farShadowRTV
+    call CreateRenderSurface
+    test eax, eax
+    js init_failed
+    lea rcx, farShadowDepthDesc
+    lea rdx, farShadowDepthTexture
+    lea r8, farShadowDepthView
+    call CreateDepthSurface
+    test eax, eax
+    js init_failed
     lea rcx, reflectionSurfaceDesc
     lea rdx, reflectionTexture
     lea r8, reflectionSRV
@@ -2036,6 +2722,30 @@ d3d_created:
     xor r8d, r8d
     lea r9, flightBuffer
     call qword ptr [rax+24]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, instanceBufferDesc
+    xor r8d, r8d
+    lea r9, instanceBuffer
+    call qword ptr [rax+24]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, instanceBuffer
+    lea r8, instanceSRVDesc
+    lea r9, instanceSRV
+    call qword ptr [rax+56]
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    mov rdx, instanceBuffer
+    lea r8, instanceUAVDesc
+    lea r9, instanceUAV
+    call qword ptr [rax+64]
     test eax, eax
     js init_failed
     mov rcx, d3dDevice
@@ -2122,12 +2832,26 @@ d3d_created:
     call qword ptr [rax+168]
     test eax, eax
     js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, postDepthStateDesc
+    lea r8, postDepthState
+    call qword ptr [rax+168]
+    test eax, eax
+    js init_failed
 
     mov rcx, d3dDevice
     mov rax, [rcx]
     lea rdx, postSamplerDesc
     lea r8, postSampler
     call qword ptr [rax+184]             ; CreateSamplerState
+    test eax, eax
+    js init_failed
+    mov rcx, d3dDevice
+    mov rax, [rcx]
+    lea rdx, materialSamplerDesc
+    lea r8, materialSampler
+    call qword ptr [rax+184]
     test eax, eax
     js init_failed
 
@@ -2293,6 +3017,78 @@ d3d_created:
     mov r8d, 1
     lea r9, postSampler
     call qword ptr [rax+560]            ; CS sampler s1
+
+    call GenerateTerrainBounds
+    test eax, eax
+    jnz clean_exit
+    call GenerateCloudVolume
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
+
+    ; Eight physical material recipes produce color/height and normal/roughness
+    ; arrays. Autogenerated mip chains keep distant detail properly filtered.
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, materialComputeShader
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [rax+552]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 2
+    lea r9, materialUAVs
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 128
+    mov r8d, 128
+    mov r9d, 8
+    call qword ptr [rax+328]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 2
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, materialSRVs[0]
+    call qword ptr [rax+432]            ; GenerateMips
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov rdx, materialSRVs[8]
+    call qword ptr [rax+432]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 8
+    mov r8d, 2
+    lea r9, materialSRVs
+    call qword ptr [rax+64]             ; PS material t8/t9
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 8
+    mov r8d, 2
+    lea r9, materialSRVs
+    call qword ptr [rax+200]            ; VS material t8/t9
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 2
+    mov r8d, 1
+    lea r9, materialSampler
+    call qword ptr [rax+80]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 2
+    mov r8d, 1
+    lea r9, materialSampler
+    call qword ptr [rax+208]
+    call PumpInitializationMessages
+    test eax, eax
+    jnz clean_exit
 
     mov rcx, d3dContext
     mov rax, [rcx]
@@ -2609,7 +3405,11 @@ pass_mode_ready:
     lea r9, cameraFrameSRV
     call qword ptr [rax+64]
 
-    ; Rasterize moving scene geometry into a real shadow/depth map.
+    call UpdateSceneInstances
+    call UpdateAtmosphere
+    call RenderFarShadow
+
+    ; Rasterize moving scene geometry into the near shadow/depth map.
     mov rcx, d3dContext
     mov rax, [rcx]
     xor edx, edx
@@ -2727,6 +3527,10 @@ pass_mode_ready:
     call qword ptr [rax+72]
     mov ecx, 6
     call DrawSceneBatches
+    mov rcx, reflectionSRV
+    mov rdx, reflectionCloudRTV
+    lea r8, reflectionViewport
+    call CompositeClouds
     lea rcx, passMainAvailable
     call UpdatePassConstants
     mov ecx, 44A00000h
@@ -2750,7 +3554,7 @@ reflection_complete:
     mov rax, [rcx]
     mov edx, 5
     mov r8d, 1
-    lea r9, reflectionSRV
+    lea r9, reflectionCloudSRV
     call qword ptr [rax+64]             ; reflection RTV has been detached
 main_reflection_bound:
     mov rcx, d3dContext
@@ -2864,11 +3668,16 @@ main_reflection_bound:
     xor r8d, r8d
     call rax
 
+    mov rcx, lowBSRV
+    mov rdx, cloudedRTV
+    lea r8, lowViewport
+    call CompositeClouds
+
     ; Select Hprev/Hnext without copying. historyIndex names the valid previous
     ; surface; the opposite surface becomes this frame's temporal RTV.
     cmp historyIndex, 0
     jne temporal_previous_one
-    mov rax, lowBSRV
+    mov rax, cloudedSRV
     mov temporalBindings[0], rax
     mov rax, historySRV0
     mov temporalBindings[8], rax
@@ -2878,7 +3687,7 @@ main_reflection_bound:
     mov displayBinding, rax
     jmp temporal_targets_ready
 temporal_previous_one:
-    mov rax, lowBSRV
+    mov rax, cloudedSRV
     mov temporalBindings[0], rax
     mov rax, historySRV1
     mov temporalBindings[8], rax
@@ -3020,6 +3829,40 @@ release_graphics:
     mov rax, [rcx]
     call qword ptr [rax+880]            ; ID3D11DeviceContext::ClearState
 release_graphics_objects:
+    mov rcx, materialComputeShader
+    call ReleaseObject
+    mov rcx, materialUAVs[0]
+    call ReleaseObject
+    mov rcx, materialUAVs[8]
+    call ReleaseObject
+    mov rcx, materialSRVs[0]
+    call ReleaseObject
+    mov rcx, materialSRVs[8]
+    call ReleaseObject
+    mov rcx, materialTextures[0]
+    call ReleaseObject
+    mov rcx, materialTextures[8]
+    call ReleaseObject
+    mov rcx, materialSampler
+    call ReleaseObject
+    mov rcx, atmosphereComputeShader
+    call ReleaseObject
+    mov rcx, atmosphereUAV
+    call ReleaseObject
+    mov rcx, atmosphereSRV
+    call ReleaseObject
+    mov rcx, atmosphereTexture
+    call ReleaseObject
+    mov rcx, farShadowRTV
+    call ReleaseObject
+    mov rcx, farShadowSRV
+    call ReleaseObject
+    mov rcx, farShadowTexture
+    call ReleaseObject
+    mov rcx, farShadowDepthView
+    call ReleaseObject
+    mov rcx, farShadowDepthTexture
+    call ReleaseObject
     mov rcx, physicsConstantBuffer
     call ReleaseObject
     mov rcx, flightComputeShader
@@ -3065,6 +3908,31 @@ release_graphics_objects:
     mov rcx, terrainComputeShader
     call ReleaseObject
     mov rcx, cameraFrameUAV
+    call ReleaseObject
+    mov rcx, instanceUAV
+    call ReleaseObject
+    mov rcx, instanceSRV
+    call ReleaseObject
+    mov rcx, instanceBuffer
+    call ReleaseObject
+    mov rcx, instanceComputeShader
+    call ReleaseObject
+    call ReleaseGeneratedVolumes
+    mov rcx, cloudCompositeShader
+    call ReleaseObject
+    mov rcx, cloudedRTV
+    call ReleaseObject
+    mov rcx, cloudedSRV
+    call ReleaseObject
+    mov rcx, cloudedTexture
+    call ReleaseObject
+    mov rcx, reflectionCloudRTV
+    call ReleaseObject
+    mov rcx, reflectionCloudSRV
+    call ReleaseObject
+    mov rcx, reflectionCloudTexture
+    call ReleaseObject
+    mov rcx, postDepthState
     call ReleaseObject
     mov rcx, cameraFrameSRV
     call ReleaseObject

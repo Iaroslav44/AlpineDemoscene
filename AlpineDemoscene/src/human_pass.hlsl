@@ -74,32 +74,63 @@ float3 HPPBR(float3 albedo,float3 n,float3 v,float3 l,float rough,float3 light)
          +(albedo*(1.0-F)/HP_PI+spec)*light*nl*(3.2*daylight);
 }
 
-float3 HPShade(HumanSurface hs,float3 p,float3 rd,float3 sun)
+float3 HPShade(HumanSurface hs,float3 p,float3 rd,float3 sun,float localVisibility)
 {
     float3 v=-rd;
     float nl=saturate(dot(hs.normal,sun));
     float nv=saturate(dot(hs.normal,v));
-    float visibility=CinematicShadow(p,hs.normal);
+    float visibility=CinematicShadow(p,hs.normal)*localVisibility;
     float roughness=abs(hs.material-HUM_MAT_EYE)<0.5?0.09:hs.roughness;
     float3 col=CinematicLightingVisible(hs.normal,v,hs.albedo,roughness,0.0,hs.occlusion,visibility);
     if(abs(hs.material-HUM_MAT_SKIN)<0.5)
     {
         // Diffusion is approximated with a broad red-biased irradiance lobe;
         // thin ears transmit light while opaque cheeks do not glow through.
-        float wrap=saturate((dot(hs.normal,sun)+0.38)/1.38);
+        float mu=dot(hs.normal,sun);
+        float3 diffusion=saturate((mu+float3(.35,.18,.08))/float3(1.35,1.18,1.08));
         float back=pow(saturate(dot(-sun,v)),3.0)*hs.thinSkin;
-        col+=CinematicSunColor()*hs.albedo*float3(1.0,0.43,0.25)
-             *(0.14*max(0.0,wrap-nl)*hs.occlusion+0.20*back)*visibility;
+        col+=CinematicSunColor()*hs.albedo*(diffusion-nl)*(.28*CinematicFrame[8].w/PI)*hs.occlusion*visibility;
+        col+=CinematicSunColor()*hs.albedo*float3(1.0,.27,.12)*(.22*back)*visibility;
     }
     else if(abs(hs.material-HUM_MAT_EYE)<0.5)
     {
-        col+=pow(saturate(dot(reflect(-sun,hs.normal),v)),500.0)*CinematicSunColor()*0.20*visibility;
+        col+=AtmosphereEnvironment(reflect(-v,hs.normal))*(.018+.12*pow(1.0-nv,5.0));
     }
     else if(abs(hs.material-HUM_MAT_LIP)<0.5)
         col+=pow(saturate(dot(reflect(-sun,hs.normal),v)),130.0)*CinematicSunColor()*(0.045*visibility);
     else if(abs(hs.material-HUM_MAT_HAIR)<0.5)
-        col+=pow(1.0-nv,3.2)*nl*CinematicSunColor()*float3(0.035,0.025,0.018)*visibility;
+    {
+        float3 tangent=cross(hs.normal,cross(float3(0,1,0),hs.normal));
+        tangent*=rsqrt(max(dot(tangent,tangent),1e-6));
+        float3 halfVector=normalize(sun+v);
+        float along=dot(tangent,halfVector);
+        float fibre=pow(sqrt(saturate(1.0-along*along)),45.0);
+        col+=fibre*nl*CinematicSunColor()*float3(.025,.019,.014)*visibility;
+    }
     return col;
+}
+
+float HPNoseVisibility(float3 p,float3 normal,float3 sun,HumanPrepared context)
+{
+    float3 local=HumanPreparedLocal(p+normal*.0012,context);
+    if(local.y<1.57||local.y>1.69)return 1.0;
+    float bob=.012*(1.0-cos(context.pose.gait*2.0))*context.pose.walking+.004*context.pose.breath;
+    float sway=.012*sin(context.pose.gait)*context.pose.walking;
+    float3 hp=HumRotateHead(local-float3(sway,1.485+bob,0),context.pose.headYaw,context.pose.headPitch)+float3(0,1.485,0);
+    if(hp.z<.04||abs(hp.x)>.07)return 1.0;
+    float3 direction=float3(dot(sun,context.right),sun.y,dot(sun,context.front));
+    direction=HumRotateHead(direction,context.pose.headYaw,context.pose.headPitch);
+    float visibility=1.0,t=.003;
+    [loop]for(int i=0;i<7;++i)
+    {
+        float d=HumNoseDistance(hp+direction*t);
+        visibility=min(visibility,saturate(d*22.0/t));
+        t+=max(.003,min(d,.014));
+    }
+    // The compact visibility test resolves only the nose, and otherwise misses
+    // cheek-to-nose diffuse transport. Retain that broad local contribution so
+    // a seven-step binary occluder cannot paint the whole nasal base black.
+    return lerp(.32,1.0,visibility);
 }
 
 float HPDecodeDepth(float a)
@@ -172,7 +203,8 @@ float4 H(VSOut input):SV_Target
     if(selected<0||bestT>=sceneT)return background;
     float3 p=ro+rd*bestT;
     HumanSurface hs=HumanSurfacePrepared(p,bestContext,bestId,bestT/(G.y*lens));
-    float3 color=HPShade(hs,p,rd,CinematicFrame[8].xyz);
+    float localVisibility=abs(hs.material-HUM_MAT_SKIN)<.5?HPNoseVisibility(p,hs.normal,CinematicFrame[8].xyz,bestContext):1.0;
+    float3 color=HPShade(hs,p,rd,CinematicFrame[8].xyz,localVisibility);
     color=CinematicFog(color,p);
     return float4(max(color,0.0),-HPEncodeDepth(bestT));
 }
