@@ -18,4 +18,3 @@ if($LASTEXITCODE -ne 0){throw 'Audio MASM compilation failed.'}
 if($LASTEXITCODE -ne 0){throw 'Audio probe link failed.'}
 & (Join-Path $build 'audio_probe.exe') (Join-Path $root $Out)
 if($LASTEXITCODE -ne 0){throw 'Audio probe failed.'}
-
