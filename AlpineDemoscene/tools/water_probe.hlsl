@@ -12,7 +12,9 @@ float4 WaterProbe(VSOut input):SV_Target
     // exp overflow; the test must inspect normals before saturate/max masks it.
     float3 deepNormal=WaterShadingNormal(float3(LAKE_C.x+uv.x*100.0,10000.0,LAKE_C.y+uv.y*100.0),
         normalize(float3(.3,-.08,1)),a,.001,unresolved);
-    float invalid=all(isfinite(deepNormal))?0.0:1.0;
+    float dielectric=WaterFresnel(uv.x);
+    float invalid=(all(isfinite(deepNormal))&&isfinite(unresolved)&&unresolved>=0.0
+        &&isfinite(dielectric)&&dielectric>=.02036&&dielectric<=1.00001)?0.0:1.0;
     float error=invalid?0.0:abs(length(deepNormal)-1.0);
     CameraFrame camera=GetCameraFrame(G.z);
     float3 rd=CameraRay(camera,uv,16.0/9.0);

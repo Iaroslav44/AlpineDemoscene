@@ -114,7 +114,9 @@ float4 CloudLayer(float3 ro,float3 rd,float maxT,float3 sun,float loopA,float2 p
 #ifndef ALPINE_CLOUD_NO_REFLECTION
 float3 SkyWithCloudReflection(float3 rd,float3 p,float3 sun,float loopA)
 {
-    float3 background=Sky(rd,sun);
+    // Solar surface reflection comes from WaterSunReflection's GGX lobe;
+    // including the sky disc here would count that same light a second time.
+    float3 background=AtmosphereEnvironment(rd);
     // Reflections use the same3D density and optical model at a reduced LOD.
     // The main/reflected-world pass retains32 view and6 self-shadow samples.
     float4 clouds=TraceCloudVolume(p+rd*.2,rd,6500.0,sun,loopA,p.xz*.2,12,3);

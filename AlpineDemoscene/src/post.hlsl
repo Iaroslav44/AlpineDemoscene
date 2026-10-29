@@ -23,6 +23,40 @@ float3 YCoCgToRGB(float3 c)
     return float3(c.x+c.y-c.z,c.x+c.z,c.x-c.y-c.z);
 }
 
+float3 CompressRadiance(float3 c)
+{
+    c=max(c,0.0);
+    return c/(1.0+dot(c,float3(.2126,.7152,.0722)));
+}
+float3 ExpandRadiance(float3 c)
+{
+    c=max(c,0.0);
+    return c/max(.0001,1.0-dot(c,float3(.2126,.7152,.0722)));
+}
+
+float3 HistoryCubic(float2 uv)
+{
+    // Separable Catmull-Rom: combine the two positive middle weights into one
+    // bilinear lookup, leaving 3x3 taps. A second bilinear reconstruction on
+    // every frame used to progressively smear stone/roof details in motion.
+    float2 position=uv*O.xy-.5,base=floor(position),f=position-base;
+    float2 w0=f*(-.5+f*(1.0-.5*f));
+    float2 w1=1.0+f*f*(-2.5+1.5*f);
+    float2 w2=f*(.5+f*(2.0-1.5*f));
+    float2 w3=f*f*(-.5+.5*f),w12=w1+w2;
+    float2 middle=base+w2/w12;
+    float3 result=0;
+    [unroll]for(int y=0;y<3;++y)[unroll]for(int x=0;x<3;++x)
+    {
+        float px=x==0?base.x-1.0:(x==1?middle.x:base.x+2.0);
+        float py=y==0?base.y-1.0:(y==1?middle.y:base.y+2.0);
+        float wx=x==0?w0.x:(x==1?w12.x:w3.x);
+        float wy=y==0?w0.y:(y==1?w12.y:w3.y);
+        result+=Input1.SampleLevel(LinearClamp,(float2(px,py)+.5)/O.xy,0).rgb*(wx*wy);
+    }
+    return max(result,0.0);
+}
+
 float4 Temporal(VSOut input) : SV_Target
 {
     float2 uv=input.uv;
@@ -43,8 +77,11 @@ float4 Temporal(VSOut input) : SV_Target
             float4 tap=LoadLow(base+int2(x,y));
             float2 delta=float2(x,y)-sub;
             float w=exp2(-2.0*dot(delta,delta)-96.0*abs(abs(tap.a)-centreDepth));
-            sum+=tap.rgb*w; weightSum+=w;
-            float3 yc=RGBToYCoCg(tap.rgb);
+            // Resolve/covariance in reversible luminance-compressed HDR space.
+            // One solar glint must not pull an entire 3x3 neighborhood white.
+            float3 compressed=CompressRadiance(tap.rgb);
+            sum+=compressed*w; weightSum+=w;
+            float3 yc=RGBToYCoCg(compressed);
             mean+=yc; secondMoment+=yc*yc;
             localMin=min(localMin,yc);localMax=max(localMax,yc);
             reactive=max(reactive,tap.a<0?1.0:0.0);
@@ -67,7 +104,7 @@ float4 Temporal(VSOut input) : SV_Target
     float viewZ;
     float2 historyUV=ProjectCamera(prev,world,G.x/G.y,viewZ)+(uv-sampleUV);
     bool inside=all(historyUV>0)&&all(historyUV<1)&&viewZ>0;
-    float4 history=Input1.SampleLevel(LinearClamp,historyUV,0);
+    float3 history=HistoryCubic(historyUV);
     int2 hp=clamp(int2(historyUV*O.xy),int2(0,0),int2(O.xy)-1);
     // Never interpolate the sign of a reactive flag or depth at an edge.
     float historyAlpha=Input1.Load(int3(hp,0)).a;
@@ -78,16 +115,29 @@ float4 Temporal(VSOut input) : SV_Target
     if(sky)depthConfidence=abs(historyAlpha)>.9995?1.0:0.0;
     float dt=G.z-O.w;
     bool reset=G.w<1||dt<0||dt>.25||abs(historyAlpha)<1e-5;
-    float3 historyYC=RGBToYCoCg(history.rgb);
-    float3 clipped=YCoCgToRGB(clamp(historyYC,lo,hi));
+    float3 historyYC=RGBToYCoCg(CompressRadiance(history));
+    float3 currentYC=RGBToYCoCg(current);
+    // Clip along the current->history segment, not independently per channel.
+    // Both endpoints are valid compressed radiance; the segment stays inside
+    // that convex domain. A component-wise YCoCg box clamp can combine colors
+    // from different samples into luminance >=1 and explode during expansion.
+    lo=min(lo,currentYC);hi=max(hi,currentYC);
+    float3 difference=historyYC-currentYC;
+    float3 room=lerp(currentYC-lo,hi-currentYC,step(0.0,difference));
+    // An axis with zero travel does not constrain the segment (e.g. both
+    // chroma axes of neutral grey). Treat it as fully accepted, even when
+    // the variance box has zero width on that axis.
+    float3 ratio=lerp(1.0,room/max(abs(difference),1e-6),step(1e-6,abs(difference)));
+    float amount=saturate(min(1.0,min(ratio.x,min(ratio.y,ratio.z))));
+    float3 clipped=YCoCgToRGB(lerp(currentYC,historyYC,amount));
     float motion=length((historyUV-uv)*O.xy);
-    float lumaDelta=abs(historyYC.x-RGBToYCoCg(current).x);
+    float lumaDelta=abs(historyYC.x-currentYC.x);
     float historyWeight=pow(.86,max(dt*60.0,1.0));
     historyWeight*=exp2(-.018*motion-3.0*lumaDelta)*depthConfidence;
     // Animated objects have no deformation motion vectors: use current frame.
     historyWeight*=reactive>.5||historyAlpha<0?0.0:1.0;
     if(reset||!inside)historyWeight=0;
-    float3 resolved=max(0.0,lerp(current,clipped,saturate(historyWeight)));
+    float3 resolved=ExpandRadiance(lerp(current,clipped,saturate(historyWeight)));
     return float4(resolved,reactive>.5?-max(centreDepth,1e-4):max(centreDepth,1e-4));
 }
 
@@ -135,8 +185,13 @@ float3 DepthAwareDOF(float2 uv,CameraFrame camera,out float encodedDepth)
         /(aperture*viewDepth*max(focusDepth-focalLength,.01));
     float cocPixels=min(8.0,.5*circle/.024*O.y);
 
+    // Landscapes at f/8 normally have a subpixel CoC; the 16 texture taps
+    // cannot change their resolved image meaningfully. Keep the physical
+    // near-field blur while avoiding that work over the whole mountain view.
     float3 sum = centre.rgb;
     float weightSum = 1.0;
+    [branch]if(cocPixels>=.35)
+    {
     [unroll]
     for (int i = 0; i < 16; ++i)
     {
@@ -151,6 +206,7 @@ float3 DepthAwareDOF(float2 uv,CameraFrame camera,out float encodedDepth)
         float w = exp2(-18.0 * depthDelta);
         sum += tap.rgb * w;
         weightSum += w;
+    }
     }
     return sum / weightSum;
 }
@@ -203,7 +259,9 @@ float4 Display(VSOut input) : SV_Target
     colour *= saturate(1.0 - 0.055 * dot(v * v, float2(0.72, 0.46)));
     float noise = Hash12(input.pos.xy + float2(G.w * 17.0, G.w * 43.0)) - 0.5;
     float dither = (frac(dot(input.pos.xy, float2(0.754877666, 0.569840296)) + G.w * 0.618) - 0.5);
-    colour = pow(saturate(colour), 1.0 / 2.2);
+    // Exact sRGB output transfer, including its linear toe (the swapchain is
+    // UNORM, not an automatic sRGB render target).
+    colour = lerp(12.92*colour,1.055*pow(max(colour,0.0),1.0/2.4)-.055,step(.0031308,colour));
     colour = saturate(colour + (noise * 0.70 + dither * 0.30) / 255.0);
     // A physical trajectory is not forced to close by injecting energy.
     // Editorial fades cover the explicit reset of the128s demonstration.

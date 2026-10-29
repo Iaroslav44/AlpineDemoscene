@@ -1,0 +1,176 @@
+{
+  "quality_claim": "Modal instrument approximation; listening realism is not established by these numerical checks.",
+  "files": {
+    "orchestral_house_full.wav": {
+      "seconds": 128.0,
+      "channels": 2,
+      "sample_peak_dbfs": -2.0749214310749458,
+      "rms_dbfs": -19.910881654298805,
+      "dc": [
+        -3.1641551426478796e-07,
+        -3.1401510952281303e-07
+      ],
+      "fullscale_samples": 0,
+      "sha256": "3ae1f145f6f0f814186b674f2f4ea262090a061bd7dc1f8f88de94ab16b68eb1",
+      "stereo_correlation": 0.9422676047522158,
+      "side_mid_db": -15.25166714222445,
+      "boundary_first_last": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "max_sample_step": 0.3736572265625
+    },
+    "violin_C4.wav": {
+      "seconds": 3.0,
+      "channels": 1,
+      "sample_peak_dbfs": -1.7242919066612568,
+      "rms_dbfs": -14.74652648144394,
+      "dc": [
+        -7.819696889172336e-07
+      ],
+      "fullscale_samples": 0,
+      "sha256": "249d135981a868ef1eb8c13906403e4b4810c7b241300ed328c058e2fa5b3c2a",
+      "fundamental_hz": 261.51065826416016,
+      "expected_hz": 261.625565,
+      "pitch_error_cents": -0.7605302324927447,
+      "spectral_centroid_hz": 1335.8669175715063
+    },
+    "double_bass_A1.wav": {
+      "seconds": 2.0,
+      "channels": 1,
+      "sample_peak_dbfs": -1.7242919066612568,
+      "rms_dbfs": -12.753981664647627,
+      "dc": [
+        -0.00037813528324741357
+      ],
+      "fullscale_samples": 0,
+      "sha256": "4ae91e17abb3a83fb01bae549f457465b8e7d1053077ee9cfc193480943678de",
+      "fundamental_hz": 55.01060485839844,
+      "expected_hz": 55.0,
+      "pitch_error_cents": 0.33377676680195606,
+      "spectral_centroid_hz": 73.37339804165052
+    },
+    "trumpet_A4.wav": {
+      "seconds": 3.0,
+      "channels": 1,
+      "sample_peak_dbfs": -1.7242919066612568,
+      "rms_dbfs": -12.697191875905878,
+      "dc": [
+        -7.681295174319728e-08
+      ],
+      "fullscale_samples": 0,
+      "sha256": "3a4ca1906886c02ce4af30e56080a181d986ff2edde984abe61c0592931382d8",
+      "fundamental_hz": 439.91661071777344,
+      "expected_hz": 440.0,
+      "pitch_error_cents": -0.3281364697327655,
+      "spectral_centroid_hz": 1378.8765214089026
+    }
+  },
+  "generation": {
+    "seed": 1243184189,
+    "seconds": 1.940508,
+    "bank_nonfinite": 0,
+    "bank_peak": 0.819999993,
+    "mix_peak_before_master_gain": 0.508102179,
+    "master_gain": 1.55,
+    "bank_bytes": 14288400,
+    "frames": 5644800,
+    "sample_rate": 44100
+  },
+  "loudness_summary": "Summary:\n\n  Integrated loudness:\n    I:         -18.5 LUFS\n    Threshold: -28.6 LUFS\n\n  Loudness range:\n    LRA:         5.9 LU\n    Threshold: -38.5 LUFS\n    LRA low:   -22.9 LUFS\n    LRA high:  -17.0 LUFS\n\n  True peak:\n    Peak:       -2.0 dBFS",
+  "errors": [],
+  "passed": true,
+  "source_sha256": {
+    "src\\orchestra.inc": "036ef0943d831271c98b0cccec6c789c20e0b195fd0111ab9878bf728902c20a",
+    "tools\\audio_probe.cpp": "be753f6a0df0243056049795e945978b081c34e41457478fbcf4ac871c05cfdd",
+    "tools\\verify_audio.py": "bb27f225d899dc34e38ec17a4b73e4a7d7cae8b1f6aa2af4567f96a804c1045c"
+  },
+  "additional_seed_checks": [
+    {
+      "generation": {
+        "seed": 1,
+        "seconds": 1.706187,
+        "bank_nonfinite": 0,
+        "bank_peak": 0.820000052,
+        "mix_peak_before_master_gain": 0.500214696,
+        "master_gain": 1.55,
+        "bank_bytes": 14288400,
+        "frames": 5644800,
+        "sample_rate": 44100
+      },
+      "score": {
+        "seconds": 128.0,
+        "channels": 2,
+        "sample_peak_dbfs": -2.210614714268069,
+        "rms_dbfs": -19.918032751722684,
+        "dc": [
+          -3.082519756152787e-07,
+          -2.6936433753188776e-07
+        ],
+        "fullscale_samples": 0,
+        "sha256": "5997d292abdf840e115a4cef7314f49d08a49c169ea6a3d6872d243360b4d884",
+        "stereo_correlation": 0.9421957916388614,
+        "side_mid_db": -15.247068398260968,
+        "boundary_first_last": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ],
+        "max_sample_step": 0.2982177734375
+      },
+      "passed": true,
+      "errors": []
+    },
+    {
+      "generation": {
+        "seed": 4294967295,
+        "seconds": 1.835852,
+        "bank_nonfinite": 0,
+        "bank_peak": 0.819999993,
+        "mix_peak_before_master_gain": 0.511565447,
+        "master_gain": 1.55,
+        "bank_bytes": 14288400,
+        "frames": 5644800,
+        "sample_rate": 44100
+      },
+      "score": {
+        "seconds": 128.0,
+        "channels": 2,
+        "sample_peak_dbfs": -2.015881441033183,
+        "rms_dbfs": -19.907446632911405,
+        "dc": [
+          -2.3142821123810853e-07,
+          -2.4378164555210107e-07
+        ],
+        "fullscale_samples": 0,
+        "sha256": "3b91dad93a11922f3d85bddb5c589f30d6a017b05bc713a2a47705998d5a50b5",
+        "stereo_correlation": 0.9424992578321895,
+        "side_mid_db": -15.271251935851698,
+        "boundary_first_last": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ],
+        "max_sample_step": 0.310089111328125
+      },
+      "passed": true,
+      "errors": []
+    }
+  ]
+}

@@ -60,18 +60,47 @@ float3 HPSun(float loopA)
 
 float3 HPFresnel(float c,float3 f0){return f0+(1.0-f0)*pow(1.0-saturate(c),5.0);}
 
-float3 HPPBR(float3 albedo,float3 n,float3 v,float3 l,float rough,float3 light)
+float3 HPSkinLighting(HumanSurface hs,float3 v,float3 l,float visibility)
 {
+    float3 n=hs.normal,macroNormal=hs.geometricNormal;
     float3 hv=v+l;float3 h=hv*rsqrt(max(dot(hv,hv),1e-8));
     float nl=saturate(dot(n,l)),nv=max(saturate(dot(n,v)),1e-4);
-    float nh=saturate(dot(n,h)),vh=saturate(dot(v,h));float a=max(0.045,rough*rough),a2=a*a;
-    float den=nh*nh*(a2-1.0)+1.0,D=a2/max(HP_PI*den*den,1e-7);
-    float gv=nl*sqrt(nv*nv*(1.0-a2)+a2),gl=nv*sqrt(nl*nl*(1.0-a2)+a2);
-    float visibility=0.5/max(gv+gl,1e-5);
-    float3 F=HPFresnel(vh,0.04);float3 spec=D*visibility*F;
-    float daylight=smoothstep(-0.06,0.16,l.y);
-    return albedo*(0.13+0.20*saturate(n.y*0.5+0.5))*lerp(0.10,1.0,daylight)
-         +(albedo*(1.0-F)/HP_PI+spec)*light*nl*(3.2*daylight);
+    float nh=saturate(dot(n,h)),vh=saturate(dot(v,h));
+    float f0=.028; // dielectric interface close to IOR 1.4
+    float3 F=HPFresnel(vh,f0),specular=0,environmentWeight=0;
+    // Two normalized GGX lobes approximate rough epidermis + the narrower
+    // sebum reflection. Convex weights preserve energy; no painted white glint.
+    [unroll]for(int i=0;i<2;++i)
+    {
+        float weight=i==0?.86:.14;
+        float rough=i==0?hs.roughness:max(.40,hs.roughness*.76);
+        float a=max(.025,rough*rough),a2=a*a;
+        float den=nh*nh*(a2-1.0)+1.0,D=a2/max(PI*den*den,1e-7);
+        float gv=nl*sqrt(nv*nv*(1.0-a2)+a2),gl=nv*sqrt(nl*nl*(1.0-a2)+a2);
+        specular+=weight*D*(.5/max(gv+gl,1e-5))*F*nl;
+        float4 fit=rough*float4(-1,-.0275,-.572,.022)+float4(1,.0425,1.04,-.04);
+        float a004=min(fit.x*fit.x,exp2(-9.28*nv))*fit.x+fit.y;
+        float2 dfg=float2(-1.04,1.04)*a004+fit.zw;
+        environmentWeight+=weight*(f0*dfg.x+dfg.y);
+    }
+    // Wavelength-dependent wrapped irradiance is a local diffusion
+    // approximation, not BSSRDF transport. Squared normalization keeps each
+    // lobe's spherical integral equal to the original Lambert lobe's PI.
+    // Pores affect interface reflections, not millimetre-scale diffusion.
+    float mu=dot(macroNormal,l);
+    float3 width=float3(.36,.19,.085);
+    float3 diffused=max(mu+width,0.0)/((1.0+width)*(1.0+width));
+    float3 diffuse=lerp(saturate(mu),diffused,.72)*hs.albedo*((1.0-f0)/PI);
+    float3 light=CinematicSunColor()*CinematicFrame[8].w*visibility;
+    float3 result=(diffuse+specular)*light;
+    float3 ambient=AtmosphereDiffuse(macroNormal);
+    result+=hs.albedo*(1.0-f0)*ambient*sqrt(hs.occlusion);
+    float3 reflection=normalize(lerp(reflect(-v,n),macroNormal,hs.roughness*hs.roughness*.4));
+    float3 environment=lerp(AtmosphereEnvironment(reflection),ambient,hs.roughness*hs.roughness);
+    result+=environment*environmentWeight*hs.occlusion;
+    float back=saturate(-mu)*(.45+.55*pow(saturate(dot(-l,v)),3.0))*hs.thinSkin;
+    result+=light*hs.albedo*float3(.16,.042,.014)*back;
+    return max(result,0);
 }
 
 float3 HPShade(HumanSurface hs,float3 p,float3 rd,float3 sun,float localVisibility)
@@ -81,24 +110,15 @@ float3 HPShade(HumanSurface hs,float3 p,float3 rd,float3 sun,float localVisibili
     float nv=saturate(dot(hs.normal,v));
     float visibility=CinematicShadow(p,hs.normal)*localVisibility;
     float roughness=abs(hs.material-HUM_MAT_EYE)<0.5?0.09:hs.roughness;
-    float3 col=CinematicLightingVisible(hs.normal,v,hs.albedo,roughness,0.0,hs.occlusion,visibility);
+    float3 col=0;
     if(abs(hs.material-HUM_MAT_SKIN)<0.5)
     {
-        // Diffusion is approximated with a broad red-biased irradiance lobe;
-        // thin ears transmit light while opaque cheeks do not glow through.
-        float mu=dot(hs.normal,sun);
-        float3 diffusion=saturate((mu+float3(.35,.18,.08))/float3(1.35,1.18,1.08));
-        float back=pow(saturate(dot(-sun,v)),3.0)*hs.thinSkin;
-        col+=CinematicSunColor()*hs.albedo*(diffusion-nl)*(.28*CinematicFrame[8].w/PI)*hs.occlusion*visibility;
-        col+=CinematicSunColor()*hs.albedo*float3(1.0,.27,.12)*(.22*back)*visibility;
+        col=HPSkinLighting(hs,v,sun,visibility);
     }
-    else if(abs(hs.material-HUM_MAT_EYE)<0.5)
-    {
-        col+=AtmosphereEnvironment(reflect(-v,hs.normal))*(.018+.12*pow(1.0-nv,5.0));
-    }
-    else if(abs(hs.material-HUM_MAT_LIP)<0.5)
-        col+=pow(saturate(dot(reflect(-sun,hs.normal),v)),130.0)*CinematicSunColor()*(0.045*visibility);
-    else if(abs(hs.material-HUM_MAT_HAIR)<0.5)
+    else col=CinematicLightingVisible(hs.normal,v,hs.albedo,roughness,0.0,hs.occlusion,visibility);
+    // The shared interface now includes the sky specular lobe. Adding a
+    // second corneal reflection or painted lip glint would count it twice.
+    if(abs(hs.material-HUM_MAT_HAIR)<0.5)
     {
         float3 tangent=cross(hs.normal,cross(float3(0,1,0),hs.normal));
         tangent*=rsqrt(max(dot(tangent,tangent),1e-6));

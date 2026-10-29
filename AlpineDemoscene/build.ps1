@@ -150,8 +150,8 @@ finally {
     Pop-Location
 }
 
-Write-Host 'Assembling the no-CRT x64 host and FM synthesizer...'
-& $ml64 /nologo /c "/Fo$object" (Join-Path $sourceDir 'alpine.asm')
+Write-Host 'Assembling the no-CRT x64 host and procedural instrument synthesizer...'
+& $ml64 /nologo /c "/I$sourceDir" "/Fo$object" (Join-Path $sourceDir 'alpine.asm')
 if ($LASTEXITCODE -ne 0) { throw 'MASM compilation failed.' }
 
 Write-Host 'Linking compact Windows PE...'

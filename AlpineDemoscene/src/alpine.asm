@@ -327,22 +327,6 @@ noteIncrements dd 6370030,6748811,7150117,7575285,8025735,8502970,9008582,954426
                dd 101920476,107980983,114401866,121204555,128411753,136047513,144137319,152708170
                dd 161788671,171409126,181601643,192400238,203840952
 
-; Eight-bar modal deep-house loop: Am9 - G6/9 - Fmaj9 - Em7(add11), two
-; bars per chord.  Smooth rootless voicings descend while the sub supplies
-; each missing root, avoiding both a pop cadence and a lead-like top line.
-bassRoots   db 45,43,41,40                 ; A2, G2, F2, E2 (rendered one octave down)
-chordVoice1 db 60,59,57,55                 ; C4, B3, A3, G3
-chordVoice2 db 64,64,64,62                 ; E4, E4, E4, D4
-chordVoice3 db 71,69,67,69                 ; B4, A4, G4, A4
-
-; Eighth-note bass rhythm.  Even positions are deliberate kick gaps;
-; odd positions use root, fifth or octave, with rests preventing nursery-rhyme
-; regularity.  Values are semitone offsets; 127 is a rest.
-bassPattern db 127,0,127,7, 127,127,127,0
-            db 127,0,127,127, 127,7,127,0
-            db 127,0,127,0, 127,127,127,7
-            db 127,0,127,7, 127,0,127,127
-
 .data?
 align 16
 hInstance               dq ?
@@ -492,27 +476,12 @@ audioStepPos            dd ?
 noiseState              dd ?
 noiseFast               dd ?
 noiseSlow               dd ?
-bassPhase               dd ?
-bassModPhase            dd ?
-stabPhase1               dd ?
-stabPhase2               dd ?
-stabPhase3               dd ?
 kickPhase               dd ?
-bassIncrement           dd ?
-bassModIncrement        dd ?
-stabIncrement1          dd ?
-stabIncrement2          dd ?
-stabIncrement3          dd ?
 kickIncrement           dd ?
-bassActive              dd ?
-stabActive              dd ?
 synthTempIndex          dd ?
 
 align 16
 sineTable               dw SINE_SIZE dup (?)
-align 16
-delayLeft               dw 65536 dup (?)
-delayRight              dw 65536 dup (?)
 
 .code
 
@@ -1583,6 +1552,12 @@ far_shadow_restore_pass:
 RenderFarShadow ENDP
 
 
+include orchestra.inc
+
+IFDEF QA_AUDIO_EXPORT
+PUBLIC GenerateSineTable, GenerateAudio, audioBuffer, noiseState, orchBank, orchGenerated, orchPeak
+ENDIF
+
 GenerateSineTable PROC
     xor ecx, ecx
 sine_loop:
@@ -1599,10 +1574,9 @@ sine_loop:
 GenerateSineTable ENDP
 
 ; -----------------------------------------------------------------------------
-; 128-second 120 BPM deep-house arrangement, rendered entirely in integer DSP.
-; There is deliberately no lead melody: close-voiced chord stabs, a syncopated
-; sub and the rhythm section carry the piece.  The six acts begin on bar lines
-; at eighth-note steps 0/80/160/240/336/416/512.
+; 128-second 120 BPM score: a restrained integer-DSP rhythm section followed
+; by runtime modal violin-section, double-bass and trumpet sample synthesis.
+; Long bowed phrases and sparse brass answers replace the former sine stabs.
 ; -----------------------------------------------------------------------------
 GenerateAudio PROC
     push rbx
@@ -1635,95 +1609,6 @@ audio_frame_loop:
     mov audioStep, eax
     mov esi, eax
 
-    ; Advance the deterministic noise source once at every sequencer edge.
-    mov eax, noiseState
-    mov edx, eax
-    shl edx, 13
-    xor eax, edx
-    mov edx, eax
-    shr edx, 17
-    xor eax, edx
-    mov edx, eax
-    shl edx, 5
-    xor eax, edx
-    mov noiseState, eax
-
-    ; Two bars per chord, eight bars per modal harmonic cycle.
-    mov ecx, esi
-    shr ecx, 4
-    and ecx, 3
-    mov r12d, ecx
-
-    ; Bass is silent in the dawn, lake breakdown and final four-bar outro.
-    ; Its notes live only in the off-kick gaps defined by bassPattern.
-    mov bassActive, 0
-    cmp esi, 80
-    jb bass_note_ready
-    cmp esi, 240
-    jb bass_arrangement_on
-    cmp esi, 336
-    jb bass_note_ready
-    cmp esi, 480
-    jae bass_note_ready
-bass_arrangement_on:
-    mov ecx, esi
-    and ecx, 31
-    movzx edx, byte ptr bassPattern[rcx]
-    cmp edx, 127
-    je bass_note_ready
-    movzx ecx, byte ptr bassRoots[r12]
-    add ecx, edx
-    sub ecx, 36
-    mov eax, dword ptr noteIncrements[rcx*4]
-    shr eax, 1                          ; A1/F1/C2/G1 sub register
-    mov bassIncrement, eax
-    add eax, eax
-    mov bassModIncrement, eax           ; very low-index 2:1 FM
-    mov bassActive, 1
-bass_note_ready:
-
-    ; Load the current rootless Am9/G6/9/Fmaj9/Em7(add11) voicing.
-    movzx ecx, byte ptr chordVoice1[r12]
-    sub ecx, 36
-    mov eax, dword ptr noteIncrements[rcx*4]
-    mov stabIncrement1, eax
-    movzx ecx, byte ptr chordVoice2[r12]
-    sub ecx, 36
-    mov eax, dword ptr noteIncrements[rcx*4]
-    mov stabIncrement2, eax
-    movzx ecx, byte ptr chordVoice3[r12]
-    sub ecx, 36
-    mov eax, dword ptr noteIncrements[rcx*4]
-    mov stabIncrement3, eax
-
-    ; Offbeat stabs.  Intro/break/outro use half density; drops use all four.
-    mov stabActive, 0
-    test esi, 1
-    jz stab_note_ready
-    cmp esi, 32
-    jb stab_note_ready
-    cmp esi, 80
-    jb stab_half_density
-    cmp esi, 240
-    jb stab_note_on
-    cmp esi, 304
-    jb stab_half_density
-    cmp esi, 480
-    jb stab_note_on
-    cmp esi, 496
-    jae stab_note_ready
-stab_half_density:
-    mov eax, esi
-    and eax, 3
-    cmp eax, 3
-    jne stab_note_ready
-stab_note_on:
-    mov stabActive, 1
-    mov stabPhase1, 0
-    mov stabPhase2, 0
-    mov stabPhase3, 0
-stab_note_ready:
-
     ; Reset the four-to-the-floor kick oscillator on quarter-note edges.
     test esi, 1
     jnz notes_updated
@@ -1735,166 +1620,10 @@ notes_updated:
 store_step_position:
     mov audioStepPos, eax
 synth_sample:
-    xor r8d, r8d                        ; harmonic mono body
-    xor r9d, r9d                        ; harmonic stereo difference
-
-    ; Rounded sine-sub with just enough low-index FM to remain audible on small
-    ; speakers.  The attack and decay both reach zero, so rests stay click-free.
-    cmp bassActive, 0
-    je bass_done
-    mov eax, bassModPhase
-    add eax, bassModIncrement
-    mov bassModPhase, eax
-    mov ecx, eax
-    shr ecx, 21
-    movsx edx, word ptr sineTable[rcx*2]
-    sar edx, 10
-    mov eax, bassPhase
-    add eax, bassIncrement
-    mov bassPhase, eax
-    mov ecx, eax
-    shr ecx, 21
-    add ecx, edx
-    and ecx, SINE_SIZE-1
-    movsx eax, word ptr sineTable[rcx*2]
-    mov ebx, audioStepPos
-    imul ebx, 96
-    cmp ebx, 22000
-    jbe bass_attack_ready
-    mov ebx, 22000
-bass_attack_ready:
-    mov edx, audioStepPos
-    lea edx, [rdx+rdx*2]
-    neg edx
-    add edx, 26000
-    jns bass_decay_ready
-    xor edx, edx
-bass_decay_ready:
-    cmp ebx, edx
-    jbe bass_env_ready
-    mov ebx, edx
-bass_env_ready:
-    imul eax, ebx
-    sar eax, 18
-    add r8d, eax
-bass_done:
-
-    ; Three short sine stabs.  A -24 dB second harmonic supplies a soft analog
-    ; edge without the glassy 14:1 operator that previously dominated the mix.
-    cmp stabActive, 0
-    je stabs_done
-    mov ebx, audioStepPos
-    imul ebx, 128
-    cmp ebx, 24000
-    jbe stab_attack_ready
-    mov ebx, 24000
-stab_attack_ready:
-    mov edx, audioStepPos
-    lea edx, [rdx+rdx*2]
-    neg edx
-    add edx, 28000
-    jns stab_decay_ready
-    xor edx, edx
-stab_decay_ready:
-    cmp ebx, edx
-    jbe stab_env_ready
-    mov ebx, edx
-stab_env_ready:
-    mov eax, stabPhase1
-    add eax, stabIncrement1
-    mov stabPhase1, eax
-    mov ecx, eax
-    shr ecx, 21
-    movsx eax, word ptr sineTable[rcx*2]
-    mov edx, ecx
-    add edx, edx
-    and edx, SINE_SIZE-1
-    movsx edx, word ptr sineTable[rdx*2]
-    sar edx, 4
-    add eax, edx
-    imul eax, ebx
-    sar eax, 19
-    add r8d, eax
-    mov edx, eax
-    sar edx, 1
-    add r9d, edx                        ; lower voice leans left
-
-    mov eax, stabPhase2
-    add eax, stabIncrement2
-    mov stabPhase2, eax
-    mov ecx, eax
-    shr ecx, 21
-    movsx eax, word ptr sineTable[rcx*2]
-    mov edx, ecx
-    add edx, edx
-    and edx, SINE_SIZE-1
-    movsx edx, word ptr sineTable[rdx*2]
-    sar edx, 4
-    add eax, edx
-    imul eax, ebx
-    sar eax, 19
-    add r8d, eax                        ; middle voice remains centred
-
-    mov eax, stabPhase3
-    add eax, stabIncrement3
-    mov stabPhase3, eax
-    mov ecx, eax
-    shr ecx, 21
-    movsx eax, word ptr sineTable[rcx*2]
-    mov edx, ecx
-    add edx, edx
-    and edx, SINE_SIZE-1
-    movsx edx, word ptr sineTable[rdx*2]
-    sar edx, 4
-    add eax, edx
-    imul eax, ebx
-    sar eax, 19
-    add r8d, eax
-    mov edx, eax
-    sar edx, 1
-    sub r9d, edx                        ; upper voice leans right
-stabs_done:
-
-    ; Harmonic-only ping-pong delay: drums never enter the feedback loop.  The
-    ; 3/16 and 1/4-note taps turn short stabs into space without smearing kick.
-    mov r10d, r8d
-    add r10d, r9d
-    mov r11d, r8d
-    sub r11d, r9d
-    mov ecx, r15d
-    sub ecx, 16538
-    and ecx, 65535
-    movsx eax, word ptr delayRight[rcx*2]
-    sar eax, 3
-    add r10d, eax
-    mov ecx, r15d
-    sub ecx, 22050
-    and ecx, 65535
-    movsx eax, word ptr delayLeft[rcx*2]
-    sar eax, 3
-    add r11d, eax
-
-    ; Classic house pump: roughly -21 dB at the kick edge, recovering over
-    ; 112 ms.  It affects sub, stabs and their delay, never the drum transients.
-    mov ebx, 32767
-    mov eax, audioStep
-    test eax, 1
-    jnz sidechain_ready
-    mov ebx, audioStepPos
-    imul ebx, 6
-    add ebx, 3000
-    cmp ebx, 32767
-    jbe sidechain_ready
-    mov ebx, 32767
-sidechain_ready:
-    imul r10d, ebx
-    sar r10d, 15
-    imul r11d, ebx
-    sar r11d, 15
-    mov eax, r10d
-    mov word ptr delayLeft[r15*2], ax
-    mov eax, r11d
-    mov word ptr delayRight[r15*2], ax
+    ; Tonal instruments are synthesized into runtime sample banks and mixed
+    ; by GenerateOrchestra after this restrained rhythm section.
+    xor r10d, r10d
+    xor r11d, r11d
 
     ; Per-sample xorshift, followed by two one-pole stages.  No percussion path
     ; ever receives raw white noise: clap uses the band, hats use filtered air.
@@ -2201,6 +1930,10 @@ clip_right_done:
     and r15d, 65535
     dec r14d
     jnz audio_frame_loop
+
+    sub rsp, 20h
+    call GenerateOrchestra
+    add rsp, 20h
 
     pop r15
     pop r14

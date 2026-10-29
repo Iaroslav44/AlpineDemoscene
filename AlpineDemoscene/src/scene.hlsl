@@ -107,7 +107,9 @@ float3 Sky(float3 rd, float3 sun)
 {
     float3 sky=AtmosphereEnvironment(rd);
     float disc=smoothstep(cos(.0055),cos(.0045),dot(rd,sun));
-    return sky+CinematicSunColor()*disc*16.0;
+    // The direct water GGX lobe integrates the solar source separately.
+    // Keep the visible disc in the main sky, but out of its reflection cache.
+    return sky+CinematicSunColor()*disc*(PassMode.x>.5?0.0:16.0);
 }
 
 #include "terrain_material.hlsli"
@@ -202,10 +204,46 @@ float3 WaterShadingNormal(float3 p,float3 rd,float loopA,float footprint,out flo
         // instead of reflecting sharp ridges through an undersampled grating.
         float visible=DetailBand(fp,k*3.5/TAU);
         rippleGradient+=phaseGradient*(amplitude*cos(phase)*visible);
-        unresolved+=amplitude*k*(1.0-visible);
+        // Unresolved slopes contribute VARIANCE, not linearly accumulated
+        // amplitude. Filtering must broaden the microfacet lobe while retaining
+        // its integrated energy instead of making distant water perfectly flat.
+        unresolved+=.5*amplitude*amplitude*k*k*(1.0-visible*visible);
     }
     float3 n=normalize(float3(-w.y-rippleGradient.x,1.0,-w.z-rippleGradient.y));
     return n;
+}
+
+float WaterFresnel(float cosine)
+{
+    // Unpolarized air/water dielectric Fresnel, n=1.333. Schlick noticeably
+    // overestimated reflection in the middle angles used by the lake camera.
+    float c=saturate(cosine),eta=1.333;
+    float ct=sqrt(max(0.0,1.0-(1.0-c*c)/(eta*eta)));
+    float rs=(c-eta*ct)/max(c+eta*ct,1e-6);
+    float rp=(eta*c-ct)/max(eta*c+ct,1e-6);
+    return .5*(rs*rs+rp*rp);
+}
+
+float3 WaterSunReflection(float3 p,float3 n,float3 v,float3 sun,float slopeVariance)
+{
+    float3 halfVector=sun+v;
+    halfVector*=rsqrt(max(dot(halfVector,halfVector),1e-8));
+    float nl=saturate(dot(n,sun)),nv=max(.001,saturate(dot(n,v)));
+    float nh=saturate(dot(n,halfVector)),vh=saturate(dot(v,halfVector));
+    // Beckmann-like slope variance is mapped to a GGX lobe. A finite solar
+    // disc and analytic pixel-footprint variance bound the sharp lobe. Avoid
+    // ddx/ddy inside the water-only branch: non-water quad neighbours at a
+    // shoreline do not define the same normal and make derivatives undefined.
+    float alpha2=clamp(.00008+slopeVariance,.00008,.12);
+    float denominator=nh*nh*(alpha2-1.0)+1.0;
+    float distribution=alpha2/(PI*denominator*denominator);
+    float visibility=.5/max(nl*sqrt(nv*nv*(1.0-alpha2)+alpha2)
+                         +nv*sqrt(nl*nl*(1.0-alpha2)+alpha2),1e-5);
+    float spec=distribution*visibility*WaterFresnel(vh)*nl;
+    float shadow=1.0;
+    [branch]if(spec>.004)
+        shadow=TerrainShadow(p+float3(0,.12,0),sun)*CinematicShadow(p,n);
+    return CinematicSunColor()*(CinematicFrame[8].w*spec*shadow);
 }
 
 float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
@@ -255,16 +293,19 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
             ra=lerp(ra,float3(0.82,0.88,0.93),snow);
             float3 reflectedTerrain=ra*(0.22+2.4*saturate(dot(rn,sun))*smoothstep(-0.06,0.16,sun.y));
             float aerial=1.0-exp(-rt*0.00018);
-            reflection=lerp(reflectedTerrain,Sky(reflectedRay,sun),aerial);
+            reflection=lerp(reflectedTerrain,AtmosphereEnvironment(reflectedRay),aerial);
         }
     }
     if(reflectionWeight>0.001)
     {
         uint rw,rh;PlanarReflection.GetDimensions(rw,rh);
-        float2 texel=0.45/float2(rw,rh);
-        float3 planar=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV+texel,0).rgb;
-        planar+=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV-texel,0).rgb;
-        reflection=lerp(reflection,planar*0.5,reflectionWeight);
+        float2 texel=(.45+min(1.25,12.0*sqrt(unresolved)))/float2(rw,rh);
+        float3 planar=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV,0).rgb*.4;
+        planar+=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV+float2(texel.x,0),0).rgb*.15;
+        planar+=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV-float2(texel.x,0),0).rgb*.15;
+        planar+=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV+float2(0,texel.y),0).rgb*.15;
+        planar+=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV-float2(0,texel.y),0).rgb*.15;
+        reflection=lerp(reflection,planar,reflectionWeight);
     }
     float depth=max(0.0,p.y-Terrain(p.xz));float shallow=exp(-depth*0.055);
     float3 refractedRay=refract(rd,n,1.0/1.333);
@@ -289,11 +330,9 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
     }
     float3 transmission=exp(-opticalDepth*float3(.12,.047,.024));
     float3 refraction=bed*transmission+float3(.008,.067,.073)*(1.0-transmission);
-    float fresnel=0.02037+0.97963*pow(1.0-saturate(dot(n,-rd)),5.0);
+    float fresnel=WaterFresnel(dot(n,-rd));
     float3 col=lerp(refraction,reflection,fresnel);
-    float specPower=lerp(220.0,90.0,saturate(unresolved*7.0));
-    float spec=pow(saturate(dot(reflect(-sun,n),-rd)),specPower);
-    col+=spec*float3(4.0,3.2,2.1)*smoothstep(-0.06,0.16,sun.y);
+    col+=WaterSunReflection(p,n,-rd,sun,unresolved);
     float shoreNoise=Noise2(p.xz*0.18+WindField(p.xz,loopA)*0.5);
     float foam=(1.0-smoothstep(0.18,1.1,depth))*smoothstep(0.61,0.80,shoreNoise);
     float streakPhase=dot(p.xz,float2(0.91,0.38))+loopA*29.0;

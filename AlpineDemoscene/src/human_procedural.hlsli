@@ -31,6 +31,7 @@ struct HumanSurface
     float distance;
     float material;
     float3 normal;
+    float3 geometricNormal;
     float3 albedo;
     float roughness;
     float occlusion;
@@ -612,8 +613,8 @@ void HumanMaterialLocal(float3 p, HumanPose pose, float personId,
 {
     float seed2 = HumHash11(personId * 5.31 + 11.0);
     float skinTone = saturate(0.12 + 0.78 * pose.seed);
-    float3 skinDark = float3(0.11, 0.058, 0.038);
-    float3 skinLight = float3(0.55, 0.32, 0.23);
+    float3 skinDark = float3(0.11, 0.061, 0.043);
+    float3 skinLight = float3(0.55, 0.35, 0.275);
     float bob=0.012*(1.0-cos(pose.gait*2.0))*pose.walking+0.004*pose.breath;
     float sway=0.012*sin(pose.gait)*pose.walking;
     float3 hp=HumRotateHead(p-float3(sway,1.485+bob,0),pose.headYaw,pose.headPitch)+float3(0,1.485,0);
@@ -626,7 +627,7 @@ void HumanMaterialLocal(float3 p, HumanPose pose, float personId,
     float pigment=HumNoise2(surfaceP.xy*71.0+pose.seed*37.0).x-.5;
     albedo = lerp(skinDark, skinLight, skinTone) * (1.0 + pores * 0.045);
     albedo*=float3(1.0+.055*pigment,1.0+.11*pigment,1.0+.13*pigment);
-    roughness = 0.52 + pores * 0.035 + .035*pigment;
+    roughness = 0.58 + pores * 0.020 + .035*pigment;
 
     // Broad chromatic zones survive low resolution; pores are never substituted
     // for face structure. All features remain attached to the articulated head.
@@ -643,7 +644,7 @@ void HumanMaterialLocal(float3 p, HumanPose pose, float personId,
     albedo*=1.0-beardMask*stubble;
     roughness=lerp(roughness,0.54,beardMask*0.7);
     float noseOil=faceMask*exp2(-hp.x*hp.x*3300.0-pow((hp.y-1.64)*24.0,2.0));
-    roughness=lerp(roughness,0.46,noseOil*0.65);
+    roughness=lerp(roughness,0.47,noseOil*0.65);
     // Eyebrows are a filtered hair coverage band on the brow ridge, not dark
     // solid cylinders hovering over the eyelids. Individual fibres vanish
     // below a pixel while the soft coverage stays stable.
@@ -798,6 +799,7 @@ HumanSurface HumanSurfacePrepared(float3 p,HumanPrepared context,float personId,
     HumanHit hit=HumanMapPrepared(p,context);
     surface.distance=hit.distance;surface.material=hit.material;
     surface.normal=HumanNormalPrepared(p,context,clamp(footprint*0.4,0.0004,0.002));
+    surface.geometricNormal=surface.normal;
     HumanMaterialLocal(HumanPreparedLocal(p,context),context.pose,personId,hit.material,
                        footprint/context.scale,surface.albedo,surface.roughness);
     float3 local=HumanPreparedLocal(p,context);
@@ -830,8 +832,11 @@ HumanSurface HumanSurfacePrepared(float3 p,HumanPrepared context,float personId,
         float4 pigment=ProceduralMaterialColor.SampleLevel(MaterialSampler,float3(uv,6),lod);
         float4 pore=ProceduralMaterialNormal.SampleLevel(MaterialSampler,float3(uv,6),lod);
         surface.albedo*=clamp(pigment.rgb/float3(.52,.285,.19),.72,1.25);
-        surface.roughness=clamp(surface.roughness*(.55+.9*pore.w),.32,.72);
-        float3 gradient=float3(pore.xy*2.0-1.0,0)*3.0;
+        float3 poreNormal=pore.xyz*2.0-1.0;
+        float filteredRough=surface.roughness*(.55+.9*pore.w);
+        surface.roughness=clamp(sqrt(filteredRough*filteredRough
+            +max(0.0,1.0-length(poreNormal))*.18),.30,.72);
+        float3 gradient=float3(poreNormal.xy,0)*3.5;
         if(onHead)
         {
             float forehead=exp2(-pow((headLocal.y-1.702)/.017,2.0))*smoothstep(.025,.06,headLocal.z);
@@ -862,6 +867,7 @@ HumanSurface HumanEvaluateSurface(float3 worldPosition, float time, float3 camer
     s.distance = h.distance;
     s.material = h.material;
     s.normal = HumanNormal(worldPosition, time, cameraPosition, root, forward, scale, personId, phase);
+    s.geometricNormal=s.normal;
     HumanMaterial(worldPosition, time, cameraPosition, root, forward, scale,
                   personId, phase, h.material, s.albedo, s.roughness);
     s.occlusion=1.0;s.thinSkin=0.0;

@@ -322,7 +322,7 @@ void ForestPlacementRaw(uint id,out float3 center,out float height,out float see
 {
     seed=Hash21(float2(id,317));
     float2 xz;
-    if(id<12288)
+    if(id<8192)
     {
         float a=id*2.39996323;
         float2 direction=float2(cos(a),sin(a));
@@ -340,9 +340,9 @@ void ForestPlacementRaw(uint id,out float3 center,out float height,out float see
         }
         xz=LAKE_C+direction*float2(900.0,610.0)*r;
     }
-    else
+    else if(id<12288)
     {
-        uint k=id-12288;float z=1750.0+Hash21(float2(k,322))*2400.0;
+        uint k=id-8192;float z=1750.0+Hash21(float2(k,322))*2400.0;
         float edge=205.0+28.0*sin(z*.006)+(Noise2(float2(z*.004,11.0))-.5)*65.0;
         float width=130.0+45.0*sin(z*.004+1.3),offset=edge+seed*width;
         float fringe=Hash21(float2(k,343));
@@ -352,7 +352,34 @@ void ForestPlacementRaw(uint id,out float3 center,out float height,out float see
         float x=ValleyCenter(z)+(k%2==0?-1.0:1.0)*offset;
         xz=float2(x,z);
     }
-    height=16.0+seed*15.0;ground=Terrain(xz);center=float3(xz.x,ground-0.05,xz.y);
+    else
+    {
+        // Colonies on the lower mountain shoulders break the former uniform
+        // ring of trees. Stratified trees form irregular overlapping groves,
+        // with open gullies and a continuous thinning at the alpine treeline.
+        uint k=id-12288,colony=k/48,member=k%48;
+        float ca=TAU*Hash21(float2(colony,411));
+        float2 colonyCentre;
+        if(colony<72)
+        {
+            float radius=1.15+1.22*Hash21(float2(colony,413));
+            colonyCentre=LAKE_C+float2(cos(ca)*930.0,sin(ca)*660.0)*radius;
+        }
+        else
+        {
+            float z=3020.0+Hash21(float2(colony,417))*3650.0;
+            float offset=510.0+Hash21(float2(colony,419))*1350.0;
+            colonyCentre=float2(ValleyCenter(z)+(colony%2==0?-offset:offset),z);
+        }
+        float radius=65.0+Hash21(float2(colony,421))*105.0;
+        float angle=member*2.39996323+ca;
+        float r=sqrt((member+.2+.6*seed)/48.0)*radius;
+        xz=colonyCentre+float2(cos(angle),sin(angle))*r;
+        xz+=float2(Hash21(float2(k,423)),Hash21(float2(k,427)))*8.0-4.0;
+    }
+    ground=Terrain(xz);
+    height=(16.0+seed*15.0)*lerp(1.0,.47,smoothstep(1350.0,1900.0,ground));
+    center=float3(xz.x,ground-0.05,xz.y);
 }
 void ForestPlacement(uint id,out float3 center,out float height,out float seed,out float ground)
 {
@@ -394,7 +421,8 @@ void SceneInstancesCS(uint3 thread:SV_DispatchThreadID)
             ForestPlacementRaw(id-256,center,height,seed,ground);
             float2 xz=center.xz;
             float slope=length(float2(Terrain(xz+float2(3,0))-Terrain(xz-float2(3,0)),Terrain(xz+float2(0,3))-Terrain(xz-float2(0,3))))/6.0;
-            if(ground<150.0||ground>1350.0||slope>1.15||
+            float treeline=1.0-smoothstep(1400.0,1830.0,ground+(Noise2(xz*.004)-.5)*180.0);
+            if(ground<150.0||slope>1.25||Hash21(float2(id,431))>treeline||
                 (ground<LAKE_Y+1.0&&length((xz-LAKE_C)/float2(970,690))<1.08))valid=0;
         }
         float2 wind=PlantDeflection(center,.20*height*height,2.6*20.0/height,.22,.7*height);
