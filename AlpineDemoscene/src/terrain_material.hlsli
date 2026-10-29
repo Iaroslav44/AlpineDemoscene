@@ -1,35 +1,22 @@
 // Runtime-generated mipmapped material layers replace per-pixel synthetic grain.
 // This file is included after TerrainNormal/TerrainShadow and the sky helpers.
+#include "geomorph_common.hlsli"
 float TerrainCavity(float3 p,float3 n,out float3 bentNormal,out float deposition)
 {
-    float occlusion=0,curvature=0;float3 blocked=0;
-    [unroll]for(int i=0;i<4;++i)
-    {
-        float angle=(i+.37)*TAU/4.0;float2 d=float2(cos(angle),sin(angle));float horizon=0;
-        [unroll]for(int j=0;j<3;++j)
-        {
-            float distance=12.0*exp2(j*2.0);float2 q=p.xz+d*distance;
-            float3 delta=float3(q.x,Terrain(q)+.15,q.y)-p;
-            horizon=max(horizon,saturate(dot(n,normalize(delta))));
-            // Opposing directions cancel the planar slope. Reuse the 48/192 m
-            // horizon samples to identify broad concave deposition areas.
-            if(j>0)curvature+=delta.y/distance;
-        }
-        float weight=horizon*horizon;occlusion+=weight;
-        blocked+=float3(d.x,0,d.y)*weight;
-    }
-    bentNormal=normalize(n-blocked*.30);
-    deposition=smoothstep(.012,.16,curvature*.125);
-    return 1.0-min(.68,occlusion*.23);
+    // Eight horizon directions at four radii are computed once after erosion.
+    // This replaces twelve redundant terrain reads for every shaded pixel.
+    float4 ecology=WorldEcology(p.xz);
+    bentNormal=n;deposition=ecology.y;return ecology.w;
 }
 float3 ShadeTerrain(float3 p,float3 rd,float3 sun,float loopA,float footprint)
 {
     float3 baseNormal=TerrainNormal(p.xz);float slope=1.0-baseNormal.y;
     float3 bentNormal;float deposition;
     float cavity=TerrainCavity(p,baseNormal,bentNormal,deposition);
+    float4 ecology=WorldEcology(p.xz);
     float macro=GeologicalNoise(p.xz*.0017+17.0);
     float field=GeologicalNoise(p.xz*.0083+float2(13.5,7.1));
-    float rockWeight=smoothstep(.12,.35,slope+(field-.5)*.055);
+    float rockWeight=smoothstep(.12,.35,slope+(field-.5)*.055+(0.45-deposition)*.10);
     RuntimeMaterial rock=TriplanarRuntimeMaterial(0,p,baseNormal,.20,.68);
     RuntimeMaterial meadow=SampleNaturalMaterial(1,p.xz*.32);
     float3 grassNormal=normalize(baseNormal+float3(meadow.normal.x,0,meadow.normal.y)*.24);
@@ -57,6 +44,7 @@ float3 ShadeTerrain(float3 p,float3 rd,float3 sun,float loopA,float footprint)
     grass=lerp(grass,float3(.126,.109,.061)*(.82+.28*macro),fallow*.72);
     grass=lerp(grass,float3(.032,.058,.025)*(.85+.25*field),dampMeadow*.75);
     grass*=lerp(.82,1.12,smoothstep(.27,.73,pasture));
+    grass=lerp(grass,grass*float3(.62,.90,.60),saturate(ecology.x-.35)*.8);
     float mineralField=RockNoise(p*.0073+float3(9.2,17.1,3.8)).x;
     float weathering=RockNoise(p*.0026+float3(3.1,11.7,23.9)).x;
     float3 mineral=lerp(float3(.83,.88,.91),float3(1.06,1.01,.90),mineralField);
@@ -123,6 +111,17 @@ float3 ShadeTerrain(float3 p,float3 rd,float3 sun,float loopA,float footprint)
     // Preserve the material normal's local detail but steer diffuse sky toward
     // the unoccluded hemisphere. This is local horizon visibility, not GI.
     bentNormal=normalize(bentNormal+n-baseNormal);
-    return CinematicLightingVisibleBent(n,bentNormal,-rd,albedo,rough,0,cavity,
-        CinematicShadow(p,n)*shadow*cloudShadow);
+    // The real-photo generator's seed 42 describes a glossy aggregate, not
+    // bare Alpine limestone. Cover it with an explicitly authored opaque
+    // weathering layer. Mix evaluated BRDF radiance, not F0/roughness: a thin
+    // clear coat would leave the highly reflective substrate visible.
+    // Soil, scree, snow and road cover all suppress the exposed substrate.
+    float rockExposure=rockWeight*(1-scree)*(1-snow)*(1-road);
+    float weatherCoverage=clamp(.90+.08*saturate(deposition*.65+ecology.x*.25+weathering*.30),.90,.98);
+    float bareFraction=rockExposure*(1-weatherCoverage);
+    float weatherRough=lerp(rough,lerp(.82,.30,damp),rockExposure);
+    float visibility=CinematicShadow(p,baseNormal)*shadow*cloudShadow;
+    float3 weathered=CinematicLightingVisibleBentF0(n,bentNormal,-rd,albedo,weatherRough,0,cavity,visibility,.04);
+    float3 substrate=CinematicLightingVisibleBentF0(n,bentNormal,-rd,albedo,rock.roughness,0,cavity,visibility,rock.specular);
+    return lerp(weathered,substrate,bareFraction);
 }

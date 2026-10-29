@@ -16,6 +16,8 @@ EXTERN  LoadResource:PROC
 EXTERN  LockResource:PROC
 EXTERN  SizeofResource:PROC
 EXTERN  NeuralAvatarCreate:PROC
+EXTERN  NeuralMaterialCreate:PROC
+EXTERN  WorldGenerate:PROC
 EXTERN  NeuralAudioInit:PROC
 EXTERN  NeuralAudioMakeSample:PROC
 
@@ -65,7 +67,7 @@ SHADOW_SIZE                     EQU 2048
 FLIGHT_ELEMENTS                 EQU 61456
 FLIGHT_BYTES                    EQU 983296
 WATER_SIZE                      EQU 256
-INSTANCE_ELEMENTS               EQU 81152
+INSTANCE_ELEMENTS               EQU 118592
 INSTANCE_BYTES                  EQU INSTANCE_ELEMENTS * 16
 
 DXGI_FORMAT_R8G8B8A8_UNORM      EQU 28
@@ -224,6 +226,8 @@ materialUAVDesc:
     dd 28, 5, 0, 0, 8                 ; TEXTURE2DARRAY, mip0, all8 layers
 atmosphereSurfaceDesc:
     dd 256, 128, 1, 1, 10, 1, 0, 0, 88h, 0, 0 ; RGBA16F SRV|UAV
+irradianceSurfaceDesc:
+    dd 9, 1, 1, 1, 2, 1, 0, 0, 88h, 0, 0 ; nine signed RGBA32F SH coefficients
 cloudVolumeDesc:
     dd 128, 128, 128, 1, 28, 0, 88h, 0, 0 ; D3D11_TEXTURE3D_DESC RGBA8
 terrainBoundsDesc:
@@ -372,8 +376,12 @@ startupCancelled        dd ?
 startupHidden           dd ?
 runtimeExitCode         dd ?
 align 8
-neuralAvatarResult      db 96 dup (?)   ; NeuralAvatarResult ABI; generated GPU geometry only
-neuralHeadResult        db 96 dup (?)
+neuralAvatarResult      db 112 dup (?)  ; neural geometry + generated bind landmarks
+neuralHeadResult        db 112 dup (?)
+neuralMaterialResult    db 64 dup (?)
+neuralWoodResult        db 64 dup (?)
+neuralMaterialViews     dq 6 dup (?)
+worldGenerationResult   db 32 dup (?)
 neuralModelPtr          dq ?
 neuralModelBytes        dd ?
 neuralShaderPtr         dq ?
@@ -392,6 +400,9 @@ atmosphereComputeShader dq ?
 atmosphereTexture       dq ?
 atmosphereSRV           dq ?
 atmosphereUAV           dq ?
+irradianceTexture       dq ?
+irradianceSRV           dq ?
+irradianceUAV           dq ?
 farShadowTexture        dq ?
 farShadowSRV            dq ?
 farShadowRTV            dq ?
@@ -832,6 +843,60 @@ ENDIF
     mov dword ptr meshDrawBatches[7*32+8], eax
     mov eax, dword ptr neuralHeadResult[88]
     mov dword ptr meshDrawBatches[7*32+12], eax
+    mov ecx, 203
+    call LoadEmbeddedBlob
+    test rax, rax
+    jz neural_models_failed
+    mov neuralModelPtr, rax
+    mov neuralModelBytes, edx
+    mov ecx, 121
+    call LoadEmbeddedBlob
+    test rax, rax
+    jz neural_models_failed
+    mov qword ptr [rsp+20h], rax
+    mov dword ptr [rsp+28h], edx
+    mov neuralShaderPtr, rax
+    mov neuralShaderBytes, edx
+    mov dword ptr [rsp+30h], 42        ; stable art-directed material latent
+    lea rax, neuralMaterialResult
+    mov qword ptr [rsp+38h], rax
+    lea rax, NeuralPump
+    mov qword ptr [rsp+40h], rax
+    mov rcx, d3dDevice
+    mov rdx, d3dContext
+    mov r8, neuralModelPtr
+    mov r9d, neuralModelBytes
+    call NeuralMaterialCreate
+    test eax, eax
+    jz neural_models_failed
+    mov rax, qword ptr neuralMaterialResult[8]
+    mov neuralMaterialViews[0], rax
+    mov rax, qword ptr neuralMaterialResult[24]
+    mov neuralMaterialViews[8], rax
+    mov rax, qword ptr neuralMaterialResult[40]
+    mov neuralMaterialViews[16], rax
+    mov rax, neuralShaderPtr
+    mov qword ptr [rsp+20h], rax
+    mov eax, neuralShaderBytes
+    mov dword ptr [rsp+28h], eax
+    mov dword ptr [rsp+30h], 43
+    lea rax, neuralWoodResult
+    mov qword ptr [rsp+38h], rax
+    lea rax, NeuralPump
+    mov qword ptr [rsp+40h], rax
+    mov rcx, d3dDevice
+    mov rdx, d3dContext
+    mov r8, neuralModelPtr
+    mov r9d, neuralModelBytes
+    call NeuralMaterialCreate
+    test eax, eax
+    jz neural_models_failed
+    mov rax, qword ptr neuralWoodResult[8]
+    mov neuralMaterialViews[24], rax
+    mov rax, qword ptr neuralWoodResult[24]
+    mov neuralMaterialViews[32], rax
+    mov rax, qword ptr neuralWoodResult[40]
+    mov neuralMaterialViews[40], rax
     mov eax, 1
     jmp neural_models_done
 neural_models_failed:
@@ -840,6 +905,65 @@ neural_models_done:
     add rsp, 68h
     ret
 InitializeNeuralModels ENDP
+
+GenerateLivingWorld PROC
+    sub rsp, 48h
+    mov ecx, 122
+    call LoadEmbeddedBlob
+    test rax, rax
+    jz living_world_failed
+    mov qword ptr [rsp+20h], rax
+    mov dword ptr [rsp+28h], edx
+    lea rax, worldGenerationResult
+    mov qword ptr [rsp+30h], rax
+    lea rax, NeuralPump
+    mov qword ptr [rsp+38h], rax
+    mov rcx, d3dDevice
+    mov rdx, d3dContext
+    mov r8, terrainSRV
+    mov r9, terrainUAV
+    call WorldGenerate
+    test eax, eax
+    jz living_world_failed
+    ; Restore b0/s0 after the helper's temporary compute bindings.
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, constantBuffer
+    call qword ptr [rax+568]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    xor edx, edx
+    mov r8d, 1
+    lea r9, postSampler
+    call qword ptr [rax+560]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 19
+    mov r8d, 1
+    lea r9, worldGenerationResult[8]
+    call qword ptr [rax+200]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 19
+    mov r8d, 1
+    lea r9, worldGenerationResult[8]
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 19
+    mov r8d, 1
+    lea r9, worldGenerationResult[8]
+    call qword ptr [rax+536]
+    mov eax, 1
+    jmp living_world_done
+living_world_failed:
+    xor eax, eax
+living_world_done:
+    add rsp, 48h
+    ret
+GenerateLivingWorld ENDP
 
 ; rcx = depth texture descriptor, rdx = texture slot, r8 = DSV slot.
 CreateDepthSurface PROC
@@ -1571,7 +1695,7 @@ UpdateSceneInstances PROC
     call qword ptr [rax+544]
     mov rcx, d3dContext
     mov rax, [rcx]
-    mov edx, 778
+    mov edx, 779
     mov r8d, 1
     mov r9d, 1
     call qword ptr [rax+328]
@@ -1610,6 +1734,12 @@ UpdateAtmosphere PROC
     sub rsp, 28h
     mov rcx, d3dContext
     mov rax, [rcx]
+    mov edx, 26
+    mov r8d, 1
+    lea r9, nullShaderResources
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
     mov edx, 10
     mov r8d, 1
     lea r9, nullShaderResources
@@ -1631,6 +1761,13 @@ UpdateAtmosphere PROC
     xor edx, edx
     mov r8d, 1
     lea r9, atmosphereUAV
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    mov r8d, 1
+    lea r9, irradianceUAV
     mov qword ptr [rsp+20h], 0
     call qword ptr [rax+544]
     mov rcx, d3dContext
@@ -1657,6 +1794,19 @@ UpdateAtmosphere PROC
     mov edx, 10
     mov r8d, 1
     lea r9, atmosphereSRV
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 1
+    mov r8d, 1
+    lea r9, nullShaderResources
+    mov qword ptr [rsp+20h], 0
+    call qword ptr [rax+544]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 26
+    mov r8d, 1
+    lea r9, irradianceSRV
     call qword ptr [rax+64]
     add rsp, 28h
     ret
@@ -2614,6 +2764,13 @@ d3d_created:
     call CreateComputeSurface
     test eax, eax
     js init_failed
+    lea rcx, irradianceSurfaceDesc
+    lea rdx, irradianceTexture
+    lea r8, irradianceSRV
+    lea r9, irradianceUAV
+    call CreateComputeSurface
+    test eax, eax
+    js init_failed
     call CreateGeneratedVolumes
     test eax, eax
     js init_failed
@@ -2829,6 +2986,18 @@ d3d_created:
     mov r8d, 1
     lea r9, neuralHeadResult[72]
     call qword ptr [rax+200]             ; numeric expression controls, VS t18
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 20
+    mov r8d, 6
+    lea r9, neuralMaterialViews
+    call qword ptr [rax+64]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 23
+    mov r8d, 1
+    lea r9, neuralAvatarResult[104]
+    call qword ptr [rax+536]
 
     ; ID3D11Device::CreateBuffer for Frame constants.
     mov rcx, d3dDevice
@@ -2942,6 +3111,13 @@ d3d_created:
     lea r9, nullShaderResources
     mov qword ptr [rsp+20h], 0
     call qword ptr [rax+544]
+    call GenerateLivingWorld
+    test eax, eax
+    jnz living_world_ready
+    cmp startupCancelled, 0
+    jne clean_exit
+    jmp init_failed
+living_world_ready:
     mov rcx, d3dContext
     mov rax, [rcx]
     mov edx, 4
@@ -3798,6 +3974,42 @@ release_graphics:
     mov rax, [rcx]
     call qword ptr [rax+880]            ; ID3D11DeviceContext::ClearState
 release_graphics_objects:
+    mov rcx, qword ptr neuralAvatarResult[104]
+    call ReleaseObject
+    mov rcx, qword ptr neuralAvatarResult[96]
+    call ReleaseObject
+    mov rcx, qword ptr neuralHeadResult[104]
+    call ReleaseObject
+    mov rcx, qword ptr neuralHeadResult[96]
+    call ReleaseObject
+    mov rcx, qword ptr neuralWoodResult[40]
+    call ReleaseObject
+    mov rcx, qword ptr neuralWoodResult[32]
+    call ReleaseObject
+    mov rcx, qword ptr neuralWoodResult[24]
+    call ReleaseObject
+    mov rcx, qword ptr neuralWoodResult[16]
+    call ReleaseObject
+    mov rcx, qword ptr neuralWoodResult[8]
+    call ReleaseObject
+    mov rcx, qword ptr neuralWoodResult[0]
+    call ReleaseObject
+    mov rcx, qword ptr worldGenerationResult[8]
+    call ReleaseObject
+    mov rcx, qword ptr worldGenerationResult[0]
+    call ReleaseObject
+    mov rcx, qword ptr neuralMaterialResult[40]
+    call ReleaseObject
+    mov rcx, qword ptr neuralMaterialResult[32]
+    call ReleaseObject
+    mov rcx, qword ptr neuralMaterialResult[24]
+    call ReleaseObject
+    mov rcx, qword ptr neuralMaterialResult[16]
+    call ReleaseObject
+    mov rcx, qword ptr neuralMaterialResult[8]
+    call ReleaseObject
+    mov rcx, qword ptr neuralMaterialResult[0]
+    call ReleaseObject
     mov rcx, qword ptr neuralHeadResult[72]
     call ReleaseObject
     mov rcx, qword ptr neuralHeadResult[64]
@@ -3837,6 +4049,12 @@ release_graphics_objects:
     mov rcx, atmosphereSRV
     call ReleaseObject
     mov rcx, atmosphereTexture
+    call ReleaseObject
+    mov rcx, irradianceUAV
+    call ReleaseObject
+    mov rcx, irradianceSRV
+    call ReleaseObject
+    mov rcx, irradianceTexture
     call ReleaseObject
     mov rcx, farShadowRTV
     call ReleaseObject

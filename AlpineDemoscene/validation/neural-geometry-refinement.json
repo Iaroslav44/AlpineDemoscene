@@ -1,0 +1,241 @@
+{
+  "schema": 2,
+  "scope": "Current-candidate neural GPU outputs reconstructed by the exact native CPU geometry postprocess; seed42",
+  "baseline_commit": "8d5e6e6e",
+  "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+  "body": {
+    "schema": 1,
+    "native": {
+      "cpu_only": true,
+      "kind": "body",
+      "unique_vertices": 25146,
+      "triangle_vertices": 150876,
+      "baseline_correspondence_max": 0,
+      "scale": 1.045889258,
+      "cancellation_passed": true,
+      "refined_position_runtime_max_error": 0,
+      "attributes_resampled_at_new_positions": true,
+      "note": "QA cache only. Fresh dumps use attributes inferred at refined coordinates; legacy dumps retain original attributes to isolate postprocessing."
+    },
+    "before": {
+      "finite": true,
+      "surface_area": 2.160435914993286,
+      "signed_volume": 0.10573270171880722,
+      "degenerate_triangles": 0,
+      "bounds_min": [
+        -0.8235136270523071,
+        -1.0618256330490112,
+        -0.1483275443315506
+      ],
+      "bounds_max": [
+        0.8444592952728271,
+        0.611445963382721,
+        0.18381957709789276
+      ],
+      "edge_length_median": 0.010992957279086113,
+      "laplacian_length_mean": 0.004393124021589756,
+      "laplacian_length_p95": 0.009795905090868473,
+      "laplacian_length_p99": 0.01350881066173315,
+      "neighbour_normal_angle_degrees_mean": 11.784835815429688,
+      "neighbour_normal_angle_degrees_p95": 37.62910461425781,
+      "neighbour_weight_l1_mean": 0.049364082515239716,
+      "neighbour_weight_l1_p95": 0.18778565526008606,
+      "weight_sum_max_error": 2.384185791015625e-07
+    },
+    "after": {
+      "finite": true,
+      "surface_area": 2.134139060974121,
+      "signed_volume": 0.10566785931587219,
+      "degenerate_triangles": 0,
+      "bounds_min": [
+        -0.823904275894165,
+        -1.0617438554763794,
+        -0.1485549658536911
+      ],
+      "bounds_max": [
+        0.8443949222564697,
+        0.6114733815193176,
+        0.18364647030830383
+      ],
+      "edge_length_median": 0.010391244664788246,
+      "laplacian_length_mean": 0.003230090020224452,
+      "laplacian_length_p95": 0.007806477136909962,
+      "laplacian_length_p99": 0.011171412654221058,
+      "neighbour_normal_angle_degrees_mean": 6.855604648590088,
+      "neighbour_normal_angle_degrees_p95": 18.90126609802246,
+      "neighbour_weight_l1_mean": 0.04898348078131676,
+      "neighbour_weight_l1_p95": 0.18124446272850037,
+      "weight_sum_max_error": 1.7881393432617188e-07
+    },
+    "displacement_metres": {
+      "mean": 0.0012314231134951115,
+      "p95": 0.0026639439165592194,
+      "maximum": 0.013727294281125069
+    },
+    "relative_signed_volume_change": -0.0006132672473221357,
+    "flipped_original_triangle_normals": 0,
+    "source_sha256": {
+      "src/neural_avatar_runtime.cpp": "9d33a881de5b62d2d60de161754ffc7aa04f2b454a94258ca539cdcff4d34c57",
+      "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
+      "tools/neural_geometry_probe.cpp": "c8121a94778a17c7eac9dd15ccf92e3de9be3ddbacb89b3d166852fa7e22bdba",
+      "tools/neural_geometry_metrics.py": "2acb2e78e56347a68dc39b81da80c96186c390281b5e352fc02c0d92827f9593"
+    },
+    "data_sha256": {
+      "after.attributes.f32": "9dc1bd3341a3c71ddff735589a2e533342df1e5b7385b471b3cb46effb4c5672",
+      "after.geometric_normals.f32": "07b52cf49577d36009d62f2e27b5b7adef056d434b7b781d8e38c97ac526b592",
+      "after.positions.f32": "69077976147c7203c3333bb90abba1789f14a90fe5eb741d06434ea4dae7a9b6",
+      "before.attributes.f32": "d33a16230abecd2c4d30f784d50334db1c0d3b2dacd81142e76c2f8bf70d6616",
+      "before.positions.f32": "0da1377cc1e4512960505c4b62e42979c3e60a0124668fac06a05db5e4ceebe8"
+    },
+    "limitations": [
+      "One seed; numerical smoothness is not anatomy or photorealism.",
+      "Attributes were inferred at refined coordinates.",
+      "No new fingers, eyes or teeth are invented."
+    ]
+  },
+  "head": {
+    "schema": 1,
+    "native": {
+      "cpu_only": true,
+      "kind": "head",
+      "unique_vertices": 66672,
+      "triangle_vertices": 400056,
+      "baseline_correspondence_max": 0,
+      "scale": 0.1818505228,
+      "cancellation_passed": true,
+      "refined_position_runtime_max_error": 0,
+      "attributes_resampled_at_new_positions": true,
+      "note": "QA cache only. Fresh dumps use attributes inferred at refined coordinates; legacy dumps retain original attributes to isolate postprocessing."
+    },
+    "before": {
+      "finite": true,
+      "surface_area": 8.444344520568848,
+      "signed_volume": 1.3070849180221558,
+      "degenerate_triangles": 6,
+      "bounds_min": [
+        -0.8872573971748352,
+        -0.9812520742416382,
+        -0.7479118704795837
+      ],
+      "bounds_max": [
+        0.9043278694152832,
+        0.8334320187568665,
+        0.6296589374542236
+      ],
+      "edge_length_median": 0.013570712879300117,
+      "laplacian_length_mean": 0.005048359744250774,
+      "laplacian_length_p95": 0.010863902978599072,
+      "laplacian_length_p99": 0.013984426856040955,
+      "neighbour_normal_angle_degrees_mean": 5.4508137702941895,
+      "neighbour_normal_angle_degrees_p95": 19.92253875732422,
+      "neighbour_weight_l1_mean": 0.009182319045066833,
+      "neighbour_weight_l1_p95": 0.04080856218934059,
+      "weight_sum_max_error": 2.384185791015625e-07
+    },
+    "after": {
+      "finite": true,
+      "surface_area": 8.370555877685547,
+      "signed_volume": 1.306250810623169,
+      "degenerate_triangles": 0,
+      "bounds_min": [
+        -0.8839268088340759,
+        -0.9812314510345459,
+        -0.7480111122131348
+      ],
+      "bounds_max": [
+        0.9044079184532166,
+        0.8334457278251648,
+        0.6297616958618164
+      ],
+      "edge_length_median": 0.01313113048672676,
+      "laplacian_length_mean": 0.00410666037350893,
+      "laplacian_length_p95": 0.00917112361639738,
+      "laplacian_length_p99": 0.012385181151330471,
+      "neighbour_normal_angle_degrees_mean": 5.381174564361572,
+      "neighbour_normal_angle_degrees_p95": 18.558958053588867,
+      "neighbour_weight_l1_mean": 0.009040715172886848,
+      "neighbour_weight_l1_p95": 0.03966323658823967,
+      "weight_sum_max_error": 1.7881393432617188e-07
+    },
+    "displacement_metres": {
+      "mean": 0.00016108050476759672,
+      "p95": 0.0003358426329214126,
+      "maximum": 0.001212338567711413
+    },
+    "relative_signed_volume_change": -0.000638143235750066,
+    "flipped_original_triangle_normals": 0,
+    "source_sha256": {
+      "src/neural_avatar_runtime.cpp": "9d33a881de5b62d2d60de161754ffc7aa04f2b454a94258ca539cdcff4d34c57",
+      "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
+      "tools/neural_geometry_probe.cpp": "c8121a94778a17c7eac9dd15ccf92e3de9be3ddbacb89b3d166852fa7e22bdba",
+      "tools/neural_geometry_metrics.py": "2acb2e78e56347a68dc39b81da80c96186c390281b5e352fc02c0d92827f9593"
+    },
+    "data_sha256": {
+      "after.attributes.f32": "f33fc3bbac3b92d6be5b0397ad52263c1cf3d12f46eeb15c9f223768c8b01692",
+      "after.geometric_normals.f32": "5ff6f2b2e2cc8194638a45ad47c6898fb0c73b31acfb5d1d7a4fdc13875d380a",
+      "after.positions.f32": "8ab0f5105ef0249c7d638b5514bd38827e6f1ba5902257c346d50864a73b1883",
+      "before.attributes.f32": "2f1ccf5a3911be41e7a77f4fc54db55970fcc581c33ff44875accf3facec3a44",
+      "before.positions.f32": "e7c551745dd07b5612e40b364488fcef100b9060c7ed1652f96166164679b4e4"
+    },
+    "limitations": [
+      "One seed; numerical smoothness is not anatomy or photorealism.",
+      "Attributes were inferred at refined coordinates.",
+      "No new fingers, eyes or teeth are invented."
+    ]
+  },
+  "geodesic_normal_equivalence": {
+    "diagnostic_only": true,
+    "normal_override": "Area-weighted compact kernel over shortest mesh-edge paths; clothing only",
+    "radius_metres": 0.025,
+    "filtered_unique_vertices": 20646,
+    "neighbourhood_median": 20.0,
+    "adjacent_normal_degrees_p95_before": 21.700674057006836,
+    "adjacent_normal_degrees_p95_after": 19.92295265197754,
+    "wall_seconds": 2.7357864999212325,
+    "geometry_unchanged": true,
+    "learned_residual_included": false,
+    "native_comparison": {
+      "eligible_vertex_instances": 123890,
+      "normal_max_abs_error": 1.7881393432617188e-07,
+      "normal_rms_error": 3.7114396889137424e-08,
+      "positions_unchanged": true,
+      "weights_and_ids_unchanged": true,
+      "native_vertex_sha256": "04220047d064f25a0d37cc267ff8011b18149ec35ad08aae0451285536908aed"
+    },
+    "passed": true,
+    "source_sha256": {
+      "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
+      "tools/neural_normal_bandwidth.py": "436af756f51fa927a1cb64a134b5a51c40642d957e50f277e3c165c2753bf7f7"
+    }
+  },
+  "runtime_equivalence": {
+    "body": {
+      "gpu_readback_path": "build/neural_generative_final_cache/200.vertices",
+      "cpu_reconstruction_path": "build/neural_final_body_cpu/200.vertices",
+      "gpu_vertex_sha256": "04220047d064f25a0d37cc267ff8011b18149ec35ad08aae0451285536908aed",
+      "cpu_vertex_sha256": "04220047d064f25a0d37cc267ff8011b18149ec35ad08aae0451285536908aed",
+      "vertices_byte_identical": true,
+      "attributes_resampled_at_refined_coordinates": true,
+      "rig_sha256": "6000040c114e32788b65dbd6c2084be681944f327183f661f3cfd04c64ac8e14",
+      "rig_byte_identical": true
+    },
+    "head": {
+      "gpu_readback_path": "build/neural_generative_final_cache/202.vertices",
+      "cpu_reconstruction_path": "build/neural_final_head_cpu/202.vertices",
+      "gpu_vertex_sha256": "3570e9cfd621ba88fc9f56535ad8ee33b839625c2b400e44a2e880af9aa6e085",
+      "cpu_vertex_sha256": "3570e9cfd621ba88fc9f56535ad8ee33b839625c2b400e44a2e880af9aa6e085",
+      "vertices_byte_identical": true,
+      "attributes_resampled_at_refined_coordinates": true
+    }
+  },
+  "passed": true,
+  "source_sha256": {
+    "src/neural_avatar_runtime.cpp": "9d33a881de5b62d2d60de161754ffc7aa04f2b454a94258ca539cdcff4d34c57",
+    "src/neural_avatar_runtime.h": "6a68a727c49fa855c81488549eb6f834e6824f142c24c2175266fdf76eee924c",
+    "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
+    "tools/neural_geometry_probe.cpp": "c8121a94778a17c7eac9dd15ccf92e3de9be3ddbacb89b3d166852fa7e22bdba",
+    "tools/neural_geometry_metrics.py": "2acb2e78e56347a68dc39b81da80c96186c390281b5e352fc02c0d92827f9593",
+    "tools/neural_normal_bandwidth.py": "436af756f51fa927a1cb64a134b5a51c40642d957e50f277e3c165c2753bf7f7"
+  },
+  "comparison_note": "Geometry statistics compare extracted versus refined coordinates; attribute statistics compare raw neural predictions evaluated at refined coordinates with the final filtered attributes. Both final vertex streams match actual runtime readback byte for byte."
+}

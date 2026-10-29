@@ -1,0 +1,4 @@
+PhotoMat: A Material Generator Learned from Single Flash Photos, SIGGRAPH 2023.
+Xilong Zhou, Milos Hasan, Valentin Deschaintre, Paul Guerrero, Yannick Hold-Geoffroy, Kalyan Sunkavalli, Nima Khademi Kalantari.
+Official pretrained weights; float32 tensor subset and native inference implementation for local noncommercial research/evaluation.
+See LICENSE-PhotoMat.txt and LICENSE-StyleGAN.txt. No recorded material images are packaged.

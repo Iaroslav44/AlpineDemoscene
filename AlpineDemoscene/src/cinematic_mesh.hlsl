@@ -6,6 +6,7 @@
 #include "physics_common.hlsli"
 #include "people_motion.hlsli"
 #include "material_common.hlsli"
+#include "geomorph_common.hlsli"
 cbuffer Frame : register(b0) { float4 G; float4 G2; };
 // SM5 SV_InstanceID starts at zero for each draw. StartInstanceLocation only
 // offsets instance-buffer fetches; it DOES NOT offset this system value.
@@ -14,8 +15,8 @@ RWStructuredBuffer<float4> FrameOutput : register(u0);
 // SceneInstancesCS writes this table once after CameraCS; draw passes only read it.
 // 31,360 objects have two float4 records each: house0, near tree64,
 // far tree256, grass18688, rock30976. Record62720 begins96 branch wind
-// records for each of192 near trees. Total81,152 float4 =1,298,432bytes.
-// Dispatch778 groups of64 (49,792 threads). Unbindt12 before its UAV is bound.
+// records for each of192 near trees. Tree records end at118016;576 resident-rig records follow.
+// Dispatch779 groups of64 (49,856 threads). Unbindt12 before its UAV is bound.
 StructuredBuffer<float4> SceneInstanceData : register(t12);
 float LoopAngle(){return fmod(G.z,128.0)*(TAU/128.0);}
 
@@ -38,6 +39,8 @@ float2 PlantDeflection(float3 root,float mass,float omega0,float dampingRatio,fl
     }
     return displacement;
 }
+
+#include "ecology_generation.hlsli"
 
 [numthreads(1,1,1)]
 void CameraCS(uint3 id:SV_DispatchThreadID)
@@ -124,7 +127,9 @@ void Gable(uint v,float width,float rise,float depth,float base,inout Geometry g
     g.p=k==0?a:(k==1?b:c);float3 n=cross(b-a,c-a);g.n=n*rsqrt(max(dot(n,n),1e-8));g.uv=g.p.xy;
 }
 #include "settlement_geometry.hlsli"
-void TreePlacementRaw(uint id,out float3 center,out float height,out float seed)
+#include "neural_resident.hlsli"
+#include "ecology_geometry.hlsli"
+void TreePlacementRaw(uint id,out float3 center,out float height,out float seed,out float survival)
 {
     seed=Hash21(float2(id,111));float2 xz;
     if(id<16)xz=float2((id%2==0?-1:1)*(8.2+seed*.8),1668.0+floor(id/2.0)*39.0+Hash21(float2(id,119))*7.0);
@@ -136,6 +141,9 @@ void TreePlacementRaw(uint id,out float3 center,out float height,out float seed)
     }
     center=float3(xz.x,Terrain(xz)-0.08,xz.y);
     height=id<16?8.0+Hash21(float2(id,117))*5.0:12.0+Hash21(float2(id,117))*15.0;
+    float2 gradient=float2(Terrain(xz+float2(3,0))-Terrain(xz-float2(3,0)),Terrain(xz+float2(0,3))-Terrain(xz-float2(0,3)))/6;
+    EcologyAdjustPlacement(id,center,gradient,WorldEcology(xz),height,seed,survival);
+    if(id<16)survival=1;
 }
 void TreePlacement(uint id,out float3 center,out float height,out float seed)
 {
@@ -152,39 +160,7 @@ void NearTreeBranch(uint segment,uint id,float height,float seed,out float3 star
 }
 Geometry TreeGeometry(uint v,uint id)
 {
-    Geometry g=(Geometry)0;float3 center;float height,seed;
-    TreePlacement(id,center,height,seed);g.seed=seed;g.moving=1;g.material=20;
-    if(v<72)Cylinder(v,12,0,float3(0,height,0),0.20+height*0.008,g);
-    else
-    {
-        uint segment=(v-72)/162,part=(v-72)%162;
-        float tier=segment/95.0,branchSeed;float3 start,end;
-        NearTreeBranch(segment,id,height,seed,start,end,branchSeed);
-        float2 wind=SceneInstanceData[62720+id*96+segment].xy;
-        float3 branchAxis=normalize(end-start),load=float3(wind.x,0,wind.y);
-        end+=load-branchAxis*dot(load,branchAxis);
-        if(part<18)Cylinder(part,3,start,end,0.038*(1.0-tier*0.72),g);
-        else
-        {
-            uint card=(part-18)/6,clump=card/2;float2 uv=Corner(part-18);
-            float t=0.12+clump*0.077,cardAngle=(card%2)*PI*0.5+branchSeed;
-            float3 axis=normalize(end-start),side=normalize(cross(axis,float3(0,1,0))),up=cross(axis,side);
-            float twigSide=clump%2==0?-1.0:1.0;
-            float3 twigAxis=normalize(axis*0.68+side*twigSide*0.66+up*(0.15+branchSeed*0.15));
-            float3 twigRight=normalize(cross(twigAxis,up)),twigUp=cross(twigAxis,twigRight);
-            float3 radial=twigRight*cos(cardAngle)+twigUp*sin(cardAngle);
-            float span=0.42+branchSeed*0.28,width=0.09+branchSeed*0.04;
-            g.p=lerp(start,end,t)+twigAxis*(uv.x*span)+radial*((uv.y-0.5)*width*2.0);
-            g.n=normalize(cross(twigAxis,radial));g.uv=uv;g.material=21;g.seed=branchSeed;
-        }
-    }
-    float bend=pow(saturate(g.p.y/height),2.0);
-    float2 trunk=SceneInstanceData[(64+id)*2+1].yz;
-    g.p.xz+=bend*trunk;
-    g.n.y-=dot(g.n.xz,trunk)*(2.0*saturate(g.p.y/height)/height);g.n=normalize(g.n);
-    g.local=g.p;g.p+=center;
-    if(SceneInstanceData[(64+id)*2+1].w<.5)g.p=center;
-    return g;
+    return EcologyNearTreeGeometry(v,id);
 }
 void GrassPlacementRaw(uint id,out float3 center,out float seed,out float valid)
 {
@@ -221,18 +197,14 @@ void RockPlacementRaw(uint id,out float3 center,out float size,out float seed)
         float a=id*2.39996323,r=0.87+seed*0.22;
         xz=LAKE_C+float2(cos(a)*930,sin(a)*650)*r;
     }
-    size=0.24+pow(seed,3.0)*2.8;center=float3(xz.x,Terrain(xz)-size*0.24,xz.y);
+    size=0.24+pow(seed,3.0)*2.8;
+    float2 gradient=float2(Terrain(xz+float2(3,0))-Terrain(xz-float2(3,0)),Terrain(xz+float2(0,3))-Terrain(xz-float2(0,3)))/6;
+    float burial;EcologyAdjustRock(WorldEcology(xz),gradient,size,burial);
+    center=float3(xz.x,Terrain(xz)-size*burial,xz.y);
 }
 Geometry RockGeometry(uint v,uint id)
 {
-    float4 placement=SceneInstanceData[(30976+id)*2],shape=SceneInstanceData[(30976+id)*2+1];
-    Geometry g=(Geometry)0;g.material=23;float seed=shape.w;g.seed=seed;
-    float3 center=placement.xyz;float size=placement.w;
-    uint quad=v/6;float2 uv=Corner(v);float a=(quad%10+uv.x)*TAU/10.0,b=(quad/10+uv.y)*PI/4.0;
-    float3 s=float3(cos(a)*sin(b),cos(b),sin(a)*sin(b));
-    float irregular=0.76+0.31*Hash21(floor(s.xz*19+s.y*11)+id);
-    float3 scale=shape.xyz;
-    g.p=center+s*scale*irregular;g.n=normalize(s/scale);g.uv=uv;g.local=g.p-center;return g;
+    return EcologyRockGeometry(v,id);
 }
 float2 SurfaceGrid(uint v,uint columns,uint rows)
 {
@@ -319,7 +291,7 @@ Geometry GliderGeometry(uint v,uint id)
     }
     g.local=g.p;g.p=center+rr*g.p.x+uu*g.p.y+forward*g.p.z;g.n=normalize(rr*g.n.x+uu*g.n.y+forward*g.n.z);return g;
 }
-void ForestPlacementRaw(uint id,out float3 center,out float height,out float seed,out float ground)
+void ForestPlacementRaw(uint id,out float3 center,out float height,out float seed,out float ground,out float survival)
 {
     seed=Hash21(float2(id,317));
     float2 xz;
@@ -381,6 +353,8 @@ void ForestPlacementRaw(uint id,out float3 center,out float height,out float see
     ground=Terrain(xz);
     height=(16.0+seed*15.0)*lerp(1.0,.47,smoothstep(1350.0,1900.0,ground));
     center=float3(xz.x,ground-0.05,xz.y);
+    float2 gradient=float2(Terrain(xz+float2(3,0))-Terrain(xz-float2(3,0)),Terrain(xz+float2(0,3))-Terrain(xz-float2(0,3)))/6;
+    EcologyAdjustPlacement(id+192,center,gradient,WorldEcology(xz),height,seed,survival);
 }
 void ForestPlacement(uint id,out float3 center,out float height,out float seed,out float ground)
 {
@@ -391,17 +365,15 @@ void ForestPlacement(uint id,out float3 center,out float height,out float seed,o
 void SceneInstancesCS(uint3 thread:SV_DispatchThreadID)
 {
     uint id=thread.x;float4 a=0,b=0;
+    if(id>=49792){if(id<49798)NeuralWriteResidentRig(id-49792,G.z);return;}
     // Never call the cached wrappers here: t12 is unbound while u0 writes it.
     if(id>=31360)
     {
         uint k=id-31360,tree=k/96,segment=k%96;
         if(tree>=192)return;
-        float3 center,start,end;float height,seed,branchSeed;
-        TreePlacementRaw(tree,center,height,seed);
-        NearTreeBranch(segment,tree,height,seed,start,end,branchSeed);
-        float len=length((end-start).xz);
-        float2 wind=PlantDeflection(center+start,max(.04,.6*len*len),4.0*sqrt(3.0/max(len,.15)),.28,.2*len);
-        FrameOutput[62720+k]=float4(wind,0,0);return;
+        float3 center;float height,seed,survival;
+        TreePlacementRaw(tree,center,height,seed,survival);
+        EcologyStoreBranch(tree,segment,center,height,seed);return;
     }
     if(id<64)
     {
@@ -414,12 +386,12 @@ void SceneInstancesCS(uint3 thread:SV_DispatchThreadID)
         float3 center;float height,seed,ground,valid=1.0;
         if(id<256)
         {
-            TreePlacementRaw(id-64,center,height,seed);ground=center.y;
+            TreePlacementRaw(id-64,center,height,seed,valid);ground=center.y;
             if(ground>930.0||(ground<LAKE_Y+.7&&length((center.xz-LAKE_C)/float2(970,690))<1.08))valid=0;
         }
         else
         {
-            ForestPlacementRaw(id-256,center,height,seed,ground);
+            ForestPlacementRaw(id-256,center,height,seed,ground,valid);
             float2 xz=center.xz;
             float slope=length(float2(Terrain(xz+float2(3,0))-Terrain(xz-float2(3,0)),Terrain(xz+float2(0,3))-Terrain(xz-float2(0,3))))/6.0;
             float treeline=1.0-smoothstep(1400.0,1830.0,ground+(Noise2(xz*.004)-.5)*180.0);
@@ -445,62 +417,11 @@ void SceneInstancesCS(uint3 thread:SV_DispatchThreadID)
 }
 Geometry ForestGeometry(uint v,uint id)
 {
-    // Three coarse conifers per288-vertex instance. Seven crossed crown layers
-    // preserve solid stands at distance while the192 near trees retain twigs.
-    id=id*3+v/96;v%=96;
-    Geometry g=(Geometry)0;float3 center;float height,seed,ground;
-    ForestPlacement(id,center,height,seed,ground);
-    g.seed=seed;g.moving=1;g.material=20;
-    float2 xz=center.xz;
-    if(v<12)
-    {
-        float2 uv=Corner(v);float angle=seed*TAU+(v/6)*PI*.5;
-        float3 r=float3(cos(angle),0,sin(angle));
-        g.p=r*((uv.x-.5)*.52*(1.0-.94*uv.y))+float3(0,height*.97*uv.y,0);
-        g.n=float3(-r.z,0,r.x);g.uv=uv;
-    }
-    else
-    {
-        uint card=(v-12)/6,layer=card/2;float2 uv=Corner(v-12);
-        float y=height*(.14+layer*.105),angle=layer*2.39996323+seed*TAU+(card%2)*PI*.5;
-        float branchSeed=Hash21(float2(layer,id));
-        float spread=pow(saturate(1.0-y/height),.73)*(4.8+seed*2.2)*(.85+branchSeed*.20);
-        float3 r=float3(cos(angle),0,sin(angle));
-        g.p=float3(0,y+uv.y*height*.27,0)+r*((uv.x-.5)*spread*2.0);
-        g.n=float3(-r.z,.24,r.x);g.uv=uv;g.material=24;
-    }
-    float2 trunk=SceneInstanceData[(256+id)*2+1].yz;
-    g.p.xz+=pow(saturate(g.p.y/height),2.0)*trunk;
-    g.n.y-=dot(g.n.xz,trunk)*(2.0*saturate(g.p.y/height)/height);g.n=normalize(g.n);
-    g.local=g.p;g.p+=center;
-    if(SceneInstanceData[(256+id)*2+1].w<.5)g.p=center;
-    return g;
+    return EcologyForestGeometry(v,id);
 }
 Geometry CoarseNearTreeGeometry(uint v,uint id)
 {
-    Geometry g=(Geometry)0;float3 center;float height,seed;
-    TreePlacement(id,center,height,seed);g.seed=seed;g.moving=1;g.material=20;
-    if(v<12)
-    {
-        float2 uv=Corner(v);float angle=seed*TAU+(v/6)*PI*.5;
-        float3 r=float3(cos(angle),0,sin(angle));
-        g.p=r*((uv.x-.5)*.52*(1.0-.94*uv.y))+float3(0,height*.97*uv.y,0);
-        g.n=float3(-r.z,0,r.x);g.uv=uv;
-    }
-    else
-    {
-        uint card=(v-12)/6,layer=card/2;float2 uv=Corner(v-12);
-        float y=height*(.16+layer*.033),angle=layer*2.39996323+seed*TAU+(card%2)*PI*.5;
-        float branchSeed=Hash21(float2(layer,id));
-        float spread=pow(saturate(1.0-y/height),.72)*(3.0+height*.10)*(.80+branchSeed*.22);
-        float3 r=float3(cos(angle),0,sin(angle));
-        g.p=float3(0,y+uv.y*height*.13,0)+r*((uv.x-.5)*spread*2.0);
-        g.n=float3(-r.z,.24,r.x);g.uv=uv;g.material=24;
-    }
-    float2 trunk=SceneInstanceData[(64+id)*2+1].yz;
-    g.p.xz+=pow(saturate(g.p.y/height),2.0)*trunk;
-    g.n.y-=dot(g.n.xz,trunk)*(2.0*saturate(g.p.y/height)/height);g.n=normalize(g.n);
-    g.local=g.p;g.p+=center;return g;
+    return EcologyCoarseNearTreeGeometry(v,id);
 }
 Geometry PersonShadowGeometry(uint v,uint id)
 {
@@ -524,7 +445,6 @@ Geometry PersonShadowGeometry(uint v,uint id)
     g.local=g.p;g.p=PeopleRoot(id,G.z)+(right*g.p.x+float3(0,g.p.y,0)+forward*g.p.z)*PeopleScale(id);
     g.n=right*g.n.x+float3(0,g.n.y,0)+forward*g.n.z;return g;
 }
-#include "neural_resident.hlsli"
 Geometry BuildGeometry(uint vertex,uint instance)
 {
     Geometry g=(Geometry)0;
@@ -591,7 +511,7 @@ bool CullMeshGroup(uint vertex,uint instance,bool shadowPass)
         float ground;
         ForestPlacement((instance-40000)*3+vertex/96,center,height,seed,ground);
         if(SceneInstanceData[(256+(instance-40000)*3+vertex/96)*2+1].w<.5)return true;
-        return OutsideMeshBounds(center+float3(0,height*.5,0),height*.6+3.0,shadowPass);
+        return OutsideMeshBounds(center+float3(0,height*.5,0),EcologyBoundsRadius(height,seed,SceneInstanceData[(256+(instance-40000)*3+vertex/96)*2+1].yz),shadowPass);
     }
     if(instance>=20000)return false;
     if(instance>=2000)
@@ -608,7 +528,7 @@ bool CullMeshGroup(uint vertex,uint instance,bool shadowPass)
     {
         TreePlacement(instance-1000,center,height,seed);
         if(SceneInstanceData[(64+instance-1000)*2+1].w<.5)return true;
-        return OutsideMeshBounds(center+float3(0,height*.5,0),height*.6+3.0,shadowPass);
+        return OutsideMeshBounds(center+float3(0,height*.5,0),EcologyBoundsRadius(height,seed,SceneInstanceData[(64+instance-1000)*2+1].yz),shadowPass);
     }
     float3 size;float angle;
     HousePlacement(instance,center,size,angle,seed);
@@ -645,6 +565,8 @@ MeshOut ShadowVS(uint vertex:SV_VertexID,uint instance:SV_InstanceID)
 void FoliageCoverage(MeshOut i)
 {
     if(i.tag.x==50)clip(1.44-i.local.y); // separate pretrained head replaces the body's coarse head
+    if(i.tag.x==51)clip(NeuralHeadCropCoverage(i.local));
+    if(i.tag.x==27)clip(EcologyCrownOccupancy(i.local,i.uv,i.tag.y));
     if(i.tag.x==21)
     {
         float2 uv=i.uv;float seed=i.tag.y;
@@ -736,7 +658,8 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         }
     }
     if(mat==21||mat==22||mat==24)n=dot(n,view)>=0.0?n:-n;
-    float3 color=float3(0.65,0.61,0.51);float rough=0.78,metal=0,ao=1;
+    float3 color=float3(0.65,0.61,0.51),dielectricF0=.04;float rough=0.78,metal=0,ao=1;
+    float neuralBareCoverage=0,neuralBareRough=.5;float3 neuralBareF0=.04;
     float mottling=Noise2(i.world.xz*0.57+i.world.y*0.37);
     if(mat==1)
     {
@@ -749,19 +672,23 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
     else if(mat==2||mat==23)
     {
         RuntimeMaterial stone=TriplanarRuntimeMaterial(0,i.world,n,.48,.58);
+        float3 geometricNormal=n;
         color=stone.albedo*lerp(.77,1.05,mottling);n=stone.normal;
+        float4 habitat=WorldEcology(i.world.xz);
+        // Opaque weathering deposits over the glossy learned aggregate.
+        // .04 is the authored dielectric F0 (IOR 1.5), not a rescaling of
+        // PhotoMat's correctly linear learned specular output.
+        neuralBareCoverage=1-clamp(.90+.08*saturate(habitat.y*.65+habitat.x*.25+mottling*.30),.90,.98);
+        neuralBareF0=stone.specular;neuralBareRough=stone.roughness;
         if(mat==2)
         {
             float horizontal=abs(n.x)>abs(n.z)?i.local.z:i.local.x;
             float mortar=max(FilteredLines(i.local.y*3.0,0.045),FilteredLines(horizontal*1.8+floor(i.local.y*3.0)*0.5,0.045));
             color=lerp(color,float3(0.16,0.17,0.16),mortar*0.60);
+            neuralBareCoverage*=1-mortar;
+            n=normalize(lerp(n,geometricNormal,mortar));
         }
-        else
-        {
-            n=normalize(cross(ddy(i.world),ddx(i.world)));
-            n=dot(n,view)>=0.0?n:-n;
-        }
-        rough=0.91;
+        rough=.82;
     }
     else if(mat==3||mat==6||mat==7||mat==35)
     {
@@ -777,7 +704,7 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         float board=FilteredLines(boardCoordinate,.021);
         float endGrain=FilteredLines(horizontal*.34+boardSeed*17.0,.007);
         color*=(.79+.30*boardSeed)*(1.0-.46*board)*(1.0-.18*endGrain);
-        n=timber.normal;rough=max(.78,timber.roughness);
+        n=timber.normal;rough=lerp(timber.roughness,.88,silver*.65);dielectricF0=timber.specular;
         if(mat==6)color=lerp(color,lerp(float3(.055,.10,.08),float3(.15,.038,.022),step(.78,seed)),step(.40,seed));
         if(mat==35)color*=.83+.17*smoothstep(0,2.0,i.local.y);
         ao=.83;
@@ -806,6 +733,12 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         float3 tangent=float3(-sin(azimuth),0,cos(azimuth));
         n=normalize(n+tangent*sin(barkUV.x*TAU+bark*2.0)*.13);
         rough=.97;
+    }
+    else if(mat==25||mat==26||mat==27)
+    {
+        float density=mat==26?1:EcologyNeedleDensity(i.local,i.uv,seed);
+        color=EcologyNeedleAlbedo(seed,density);rough=.80;ao=lerp(.58,.90,density);
+        if(mat==26)n=dot(n,view)>=0?n:-n;
     }
     else if(mat==21||mat==24)
     {
@@ -872,8 +805,13 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         rough=lerp(rough,.86,clothing);
     }
     float sunVisibility=CinematicShadow(i.world,(mat==50||mat==51)?neuralReceiverNormal:n);
-    float3 lit=CinematicLightingVisible(n,view,color,rough,metal,ao,sunVisibility);
-    if(mat==21||mat==22||mat==24)
+#if defined(ALPINE_QA_CHARACTER_UNSHADOWED)
+    if(mat==50||mat==51)sunVisibility=1;
+#endif
+    float3 lit=CinematicLightingVisibleBentF0(n,n,view,color,rough,metal,ao,sunVisibility,dielectricF0);
+    if(mat==2||mat==23)
+        lit=lerp(lit,CinematicLightingVisibleBentF0(n,n,view,color,neuralBareRough,metal,ao,sunVisibility,neuralBareF0),neuralBareCoverage);
+    if(mat==21||mat==22||mat==24||mat==25||mat==26||mat==27)
     {
         float transmission=pow(saturate(dot(-view,CinematicFrame[8].xyz)),3.0);
         lit+=color*CinematicSunColor()*transmission*(mat==22?.35:.22)*sunVisibility;

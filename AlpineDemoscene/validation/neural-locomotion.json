@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "kind": "Independent CPU analytic contact reference, not GPU execution",
+  "rig_sha256": "6000040c114e32788b65dbd6c2084be681944f327183f661f3cfd04c64ac8e14",
+  "shader_sha256": "33a0801d473cda7576f5eab81f938924de7dea38df1d4e87c3573da5e6c6f610",
+  "foot_vertices": 992,
+  "terrains": {
+    "flat": {
+      "pose_samples": 1542,
+      "max_target_reach_error_metres": 6.206335383118183e-17,
+      "max_bone_length_error_metres": 2.220446049250313e-16,
+      "rotation_orthogonality_error": 4.440892098500626e-16,
+      "loop_transform_error": 8.215650382226158e-15,
+      "lowest_pelvis_offset_metres": -0.03535439961751019,
+      "max_contact_projection_metres": 0.01107213784210423,
+      "before_projection_lowest_stance_sole_error_metres": -0.01068714553323815,
+      "actual_skinned_stance_sole_error_metres": {
+        "minimum": 0.0,
+        "median": 0.0,
+        "p95": 0.0,
+        "maximum": 0.001718896430057678
+      }
+    },
+    "slope": {
+      "pose_samples": 1542,
+      "max_target_reach_error_metres": 6.206335383118183e-17,
+      "max_bone_length_error_metres": 2.220446049250313e-16,
+      "rotation_orthogonality_error": 4.440892098500626e-16,
+      "loop_transform_error": 8.049116928532385e-15,
+      "lowest_pelvis_offset_metres": -0.03713225862239067,
+      "max_contact_projection_metres": 0.01157276915722481,
+      "before_projection_lowest_stance_sole_error_metres": -0.011245059133308644,
+      "actual_skinned_stance_sole_error_metres": {
+        "minimum": -1.0658141036401503e-14,
+        "median": -3.552713678800501e-15,
+        "p95": 0.0,
+        "maximum": 0.0016659654401252055
+      }
+    },
+    "wave": {
+      "pose_samples": 1542,
+      "max_target_reach_error_metres": 6.206335383118183e-17,
+      "max_bone_length_error_metres": 2.220446049250313e-16,
+      "rotation_orthogonality_error": 4.440892098500626e-16,
+      "loop_transform_error": 8.326672684688674e-15,
+      "lowest_pelvis_offset_metres": -0.03263893900344361,
+      "max_contact_projection_metres": 0.01144934879091673,
+      "before_projection_lowest_stance_sole_error_metres": -0.01085416702747747,
+      "actual_skinned_stance_sole_error_metres": {
+        "minimum": -2.4010728972217316e-05,
+        "median": -1.9830227444249393e-06,
+        "p95": 5.0556681837281265e-06,
+        "maximum": 0.0016435314123670053
+      }
+    }
+  },
+  "limits": [
+    "Surface-derived bind landmarks approximate skeleton joints.",
+    "Contact IK is kinematic; no force, balance or muscle solver.",
+    "Sole measurements include learned skinning distortion; zero ankle-target error does not imply every foot vertex lies on the ground."
+  ],
+  "passed": true
+}

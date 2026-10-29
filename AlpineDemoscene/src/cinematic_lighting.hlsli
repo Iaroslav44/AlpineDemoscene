@@ -74,7 +74,7 @@ float CinematicShadow(float3 p,float3 n)
     float farVisibility=ShadowCascade(p,n,true,farBorder);
     return lerp(nearVisibility,farVisibility,smoothstep(.75,.97,nearBorder));
 }
-float3 CinematicLightingVisibleBent(float3 n,float3 bentNormal,float3 v,float3 albedo,float rough,float metal,float ao,float sunVisibility)
+float3 CinematicLightingVisibleBentF0(float3 n,float3 bentNormal,float3 v,float3 albedo,float rough,float metal,float ao,float sunVisibility,float3 dielectricF0)
 {
     float3 l=CinematicFrame[8].xyz,h=l+v;
     h*=rsqrt(max(dot(h,h),1e-8));
@@ -85,7 +85,7 @@ float3 CinematicLightingVisibleBent(float3 n,float3 bentNormal,float3 v,float3 a
     float den=nh*nh*(a2-1.0)+1.0;
     float D=a2/(PI*den*den);
     float visibility=0.5/max(nl*sqrt(nv*nv*(1.0-a2)+a2)+nv*sqrt(nl*nl*(1.0-a2)+a2),1e-5);
-    float3 f0=lerp(0.04,albedo,metal),F=f0+(1.0-f0)*pow(1.0-vh,5.0);
+    float3 f0=lerp(clamp(dielectricF0,.002,.95),albedo,metal),F=f0+(1.0-f0)*pow(1.0-vh,5.0);
     // Rough diffuse retroreflection. The Fresnel factors reduce grazing
     // transmission; rough stone no longer responds like a uniformly painted
     // Lambert surface. This remains an analytic surface model, not full GI.
@@ -111,6 +111,10 @@ float3 CinematicLightingVisibleBent(float3 n,float3 bentNormal,float3 v,float3 a
     float3 indirectSpecular=env*(f0*dfg.x+dfg.y)*specularOcclusion;
     float3 indirectDiffuse=albedo*(1.0-metal)*(1.0-f0)*sky*ao;
     return max(0,direct+indirectDiffuse+indirectSpecular);
+}
+float3 CinematicLightingVisibleBent(float3 n,float3 bentNormal,float3 v,float3 albedo,float rough,float metal,float ao,float sunVisibility)
+{
+    return CinematicLightingVisibleBentF0(n,bentNormal,v,albedo,rough,metal,ao,sunVisibility,.04);
 }
 float3 CinematicLightingVisible(float3 n,float3 v,float3 albedo,float rough,float metal,float ao,float sunVisibility)
 {

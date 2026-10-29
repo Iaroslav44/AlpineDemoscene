@@ -5,6 +5,7 @@
 StructuredBuffer<float4> NeuralResidentVertices : register(t16);
 StructuredBuffer<float4> NeuralHeadVertices : register(t17);
 StructuredBuffer<float4> NeuralHeadMotion : register(t18);
+StructuredBuffer<float4> NeuralBodyRig : register(t23);
 
 float3 NeuralResidentShirtColor(float seed)
 {
@@ -20,58 +21,171 @@ float NeuralHeadClothingCoverage(float3 source)
     return 1.0-smoothstep(neckline-.012,neckline+.012,source.y);
 }
 
-float3 NeuralRotateX(float3 p, float a)
+float NeuralHeadCropCoverage(float3 source)
 {
-    float s=sin(a),c=cos(a);
-    return float3(p.x,c*p.y-s*p.z,s*p.y+c*p.z);
+    // The independent head generator includes a broad scanner shoulder crop.
+    // The body already supplies shoulders: retain only a widening lower-neck
+    // envelope here. The first 1.535m cutoff removed part of this generator's
+    // low chin in visual QA: preserve everything above 1.49m and widen the
+    // envelope early, so the correction is confined to the shoulder base.
+    float blend=smoothstep(1.430,1.490,source.y);
+    float2 radius=lerp(float2(.052,.060),float2(.160,.160),blend);
+    float2 q=(source.xz-float2(0,-.015))/radius;
+    return max(source.y-1.490,1-dot(q,q));
 }
 
-void NeuralBone(uint joint,float3 source,float3 sourceNormal,float time,float phase,float walking,
-                out float3 p,out float3 n)
+static const uint NEURAL_RIG_BASE=118016;
+float3x3 NeuralRotationX(float a){float s=sin(a),c=cos(a);return float3x3(1,0,0,0,c,-s,0,s,c);}
+float3x3 NeuralRotationY(float a){float s=sin(a),c=cos(a);return float3x3(c,0,s,0,1,0,-s,0,c);}
+float3x3 NeuralRotationZ(float a){float s=sin(a),c=cos(a);return float3x3(c,-s,0,s,c,0,0,0,1);}
+float3x3 NeuralAlign(float3 source,float3 target)
 {
-    p=source;n=sourceNormal;
-    bool leftLeg=joint==1||joint==4||joint==7||joint==10;
-    bool rightLeg=joint==2||joint==5||joint==8||joint==11;
-    // Clavicle joints13/14 belong to the torso. Rotating those with the upper
-    // arms pulls the collar into spikes instead of lowering the shoulder chain.
-    bool leftArm=joint==16||joint==18||joint==20||joint==22;
-    bool rightArm=joint==17||joint==19||joint==21||joint==23;
-    float gait=time*(TAU*80.0/128.0)+phase;
-    if(leftLeg||rightLeg)
+    float3 a=normalize(source),b=normalize(target),v=cross(a,b);float c=dot(a,b);
+    float3x3 skew=float3x3(0,-v.z,v.y,v.z,0,-v.x,-v.y,v.x,0);
+    // IK limbs stay within the reachable forward hemisphere; this safeguard
+    // also makes the helper well-defined for an antiparallel diagnostic input.
+    if(c<-.9999)
     {
-        float side=leftLeg?1.0:-1.0;
-        float3 hip=float3(side*.105,.91,0);
-        // Undo gDNA's spread-leg canonical pose before the walking swing.
-        p=hip+RotateZ(p-hip,-side*PI/6.0);
-        n=RotateZ(n,-side*PI/6.0);
-        float swing=sin(gait+(leftLeg?0:PI))*.22*walking;
-        bool lower=joint==4||joint==5||joint==7||joint==8||joint==10||joint==11;
-        if(lower)
+        float3 axis=normalize(cross(a,abs(a.y)<.9?float3(0,1,0):float3(1,0,0)));
+        return float3x3(2*axis.x*axis.x-1,2*axis.x*axis.y,2*axis.x*axis.z,
+                        2*axis.y*axis.x,2*axis.y*axis.y-1,2*axis.y*axis.z,
+                        2*axis.z*axis.x,2*axis.z*axis.y,2*axis.z*axis.z-1);
+    }
+    return float3x3(1,0,0,0,1,0,0,0,1)+skew+mul(skew,skew)/max(1+c,.0001);
+}
+void NeuralStoreBone(uint id,uint joint,float3x3 rotation,float3 translation)
+{
+    uint first=NEURAL_RIG_BASE+id*96+joint*4;
+    FrameOutput[first]=float4(rotation[0],translation.x);
+    FrameOutput[first+1]=float4(rotation[1],translation.y);
+    FrameOutput[first+2]=float4(rotation[2],translation.z);
+    FrameOutput[first+3]=float4(0,0,0,1);
+}
+float3 NeuralPlantPoint(uint id,float time,float side)
+{
+    float2 velocity=PeopleVelocity(id,time);
+    float2 forward=normalize(velocity+float2(.0001,.0001)),right=float2(forward.y,-forward.x);
+    float scale=PeopleScale(id);
+    uint hipJoint=side>0?1u:2u,ankleJoint=side>0?7u:8u;
+    float3 hip=NeuralBodyRig[hipJoint].xyz;
+    float3 ankle=hip+mul(NeuralRotationZ(-side*PI/6),NeuralBodyRig[ankleJoint].xyz-hip);
+    float soleHeight=NeuralBodyRig[side>0?24:25].x;
+    float2 xz=PeopleCentre(id,time)+(right*ankle.x+forward*ankle.z)*scale;
+    return float3(xz.x,Terrain(xz)+soleHeight*scale,xz.y);
+}
+float3 NeuralFootWorld(uint id,float time,float side,float walking,out float swing)
+{
+    const float period=1.28,stance=.62;
+    float offset=id*1.37/TAU+(side<0?.5:0),cycle=time/period+offset;
+    float fraction=frac(cycle),start=(floor(cycle)-offset)*period;
+    float3 plant=NeuralPlantPoint(id,start+stance*.5*period,side);
+    float3 next=NeuralPlantPoint(id,start+(1+stance*.5)*period,side);
+    swing=saturate((fraction-stance)/(1-stance));
+    float blend=swing*swing*swing*(swing*(swing*6-15)+10);
+    float3 foot=lerp(plant,next,blend);float scale=PeopleScale(id);
+    // World-space stance anchors remain stationary while the pelvis passes.
+    // During swing the foot clears the actual generated terrain, not Y=0.
+    float soleHeight=NeuralBodyRig[side>0?24:25].x;
+    foot.y=Terrain(foot.xz)+scale*(soleHeight+.075*sin(PI*swing)*sin(PI*swing)*walking);
+    return foot;
+}
+void NeuralWriteLeg(uint id,float time,float side,float3 pelvis,float3 root,float3 right,float3 forward,float walking)
+{
+    float swing;float3 foot=NeuralFootWorld(id,time,side,walking,swing);float scale=PeopleScale(id);
+    float3 d=foot-root;
+    float3 ankleTarget=float3(dot(d,right),d.y,dot(d,forward))/scale;
+    uint hipJoint=side>0?1u:2u,kneeJoint=side>0?4u:5u,ankleJoint=side>0?7u:8u,toeJoint=side>0?10u:11u;
+    float3x3 canonical=NeuralRotationZ(-side*PI/6.0);
+    float3 bindHip=NeuralBodyRig[hipJoint].xyz;
+    float3 bindKnee=bindHip+mul(canonical,NeuralBodyRig[kneeJoint].xyz-bindHip);
+    float3 bindAnkle=bindHip+mul(canonical,NeuralBodyRig[ankleJoint].xyz-bindHip);
+    float3 hip=bindHip+pelvis,axis=ankleTarget-hip;
+    float upperLength=length(bindKnee-bindHip),lowerLength=length(bindAnkle-bindKnee);
+    float reach=clamp(length(axis),abs(upperLength-lowerLength)+.02,upperLength+lowerLength-.002);
+    axis=normalize(axis);float3 ankle=hip+axis*reach;
+    float along=(upperLength*upperLength-lowerLength*lowerLength+reach*reach)/(2*reach);
+    float bend=sqrt(max(upperLength*upperLength-along*along,0));
+    float3 kneeDirection=normalize(float3(0,0,1)-axis*axis.z);
+    float3 knee=hip+axis*along+kneeDirection*bend;
+    float3x3 upper=NeuralAlign(bindKnee-bindHip,knee-hip),lower=NeuralAlign(bindAnkle-bindKnee,ankle-knee);
+    float2 dx=float2(.04,0),dz=float2(0,.04);
+    float3 ground=normalize(float3(Terrain(foot.xz-dx)-Terrain(foot.xz+dx),.08,Terrain(foot.xz-dz)-Terrain(foot.xz+dz)));
+    ground=float3(dot(ground,right),ground.y,dot(ground,forward));
+    float3x3 sole=mul(NeuralAlign(float3(0,1,0),ground),NeuralRotationX(.10*sin(PI*swing)*walking));
+    float3x3 rotation=mul(upper,canonical);
+    NeuralStoreBone(id,hipJoint,rotation,hip-mul(rotation,bindHip));
+    rotation=mul(lower,canonical);
+    NeuralStoreBone(id,kneeJoint,rotation,knee+mul(lower,bindHip-bindKnee)-mul(rotation,bindHip));
+    rotation=mul(sole,canonical);
+    float3 translation=ankle+mul(sole,bindHip-bindAnkle)-mul(rotation,bindHip);
+    NeuralStoreBone(id,ankleJoint,rotation,translation);NeuralStoreBone(id,toeJoint,rotation,translation);
+    float3 groundPoint=foot;groundPoint.y=Terrain(foot.xz);d=groundPoint-root;
+    groundPoint=float3(dot(d,right),d.y,dot(d,forward))/scale;
+    float4 contact=float4(ground,dot(ground,groundPoint));
+    // Fourth records of foot bones carry a contact plane, not a matrix row.
+    FrameOutput[NEURAL_RIG_BASE+id*96+ankleJoint*4+3]=contact;
+    FrameOutput[NEURAL_RIG_BASE+id*96+toeJoint*4+3]=contact;
+}
+void NeuralWriteResidentRig(uint id,float time)
+{
+    float2 velocity=PeopleVelocity(id,time);float speed=length(velocity),walking=smoothstep(.015,.25,speed);
+    float3 forward=normalize(float3(velocity.x,0,velocity.y)+float3(.0001,0,.0001)),right=float3(forward.z,0,-forward.x);
+    float gait=time*(TAU/1.28)+id*1.37;
+    float3 pelvis=float3(.006*sin(gait)*walking,-.010-.004*(1-cos(2*gait))*walking,0);
+    float3 root=PeopleRoot(id,time);
+    // Lower the common pelvis only as much as required for both feet to remain
+    // inside their calibrated reach. Otherwise clamping the IK silently slides
+    // or floats a supposedly planted foot at long strides or on slopes.
+    [unroll]for(uint leg=0;leg<2;++leg)
+    {
+        float side=leg==0?1:-1,swing;float3 foot=NeuralFootWorld(id,time,side,walking,swing),d=foot-root;
+        float3 target=float3(dot(d,right),d.y,dot(d,forward))/PeopleScale(id);
+        float3 h=NeuralBodyRig[leg==0?1:2].xyz,k=NeuralBodyRig[leg==0?4:5].xyz,a=NeuralBodyRig[leg==0?7:8].xyz;
+        float reach=length(k-h)+length(a-k)-.005;
+        float2 horizontal=target.xz-h.xz-pelvis.xz;
+        float highestHip=target.y+sqrt(max(reach*reach-dot(horizontal,horizontal),.01));
+        pelvis.y=min(pelvis.y,highestHip-h.y);
+    }
+    float breathing=.0025*sin(time*(TAU*29.0/128.0)+id*1.37);
+    [unroll]for(uint joint=0;joint<24;++joint)
+    {
+        float3x3 rotation=float3x3(1,0,0,0,1,0,0,0,1);float3 translation=pelvis;
+        bool leftArm=joint==16||joint==18||joint==20||joint==22;
+        bool rightArm=joint==17||joint==19||joint==21||joint==23;
+        if(leftArm||rightArm)
         {
-            float knee=-max(0.0,-sin(gait+(leftLeg?0:PI)))*.40*walking;
-            float3 pivot=float3(side*.105,.50,.015);
-            p=pivot+NeuralRotateX(p-pivot,knee);n=NeuralRotateX(n,knee);
+            float side=leftArm?1:-1;float3 shoulder=NeuralBodyRig[leftArm?16:17].xyz;
+            rotation=mul(NeuralRotationX(-side*sin(gait)*.18*walking),NeuralRotationZ(-side*1.30));
+            float3 localTranslation=0;
+            bool lower=joint==18||joint==19||joint==20||joint==21||joint==22||joint==23;
+            if(lower)
+            {
+                float3 elbow=NeuralBodyRig[leftArm?18:19].xyz;float3x3 elbowRotation=NeuralRotationY(-side*(.14+.08*max(0,-side*sin(gait))*walking));
+                localTranslation=mul(rotation,elbow-mul(elbowRotation,elbow));rotation=mul(rotation,elbowRotation);
+            }
+            // Lower-arm rotation is around its bind elbow, then the full chain
+            // rotates around the shoulder. Clavicles stay with the torso.
+            float3x3 shoulderRotation=mul(NeuralRotationX(-side*sin(gait)*.18*walking),NeuralRotationZ(-side*1.30));
+            translation=pelvis+shoulder-mul(shoulderRotation,shoulder)+localTranslation;
         }
-        p=hip+NeuralRotateX(p-hip,swing);n=NeuralRotateX(n,swing);
+        else if(joint==12||joint==15)
+        {
+            float yaw=.12*sin(time*(TAU*6.0/128.0)+id*1.37),pitch=.025*sin(time*(TAU*12.0/128.0)+id*1.37);
+            rotation=mul(NeuralRotationY(yaw),NeuralRotationX(pitch));float3 neck=NeuralBodyRig[15].xyz;
+            translation=pelvis+neck-mul(rotation,neck);
+        }
+        if(joint>=3&&joint!=4&&joint!=5&&joint!=7&&joint!=8&&joint!=10&&joint!=11)translation.y+=breathing;
+        NeuralStoreBone(id,joint,rotation,translation);
     }
-    else if(leftArm||rightArm)
-    {
-        float side=leftArm?1.0:-1.0;
-        float3 shoulder=float3(side*.18,1.39,0);
-        float down=-side*1.30;
-        p=shoulder+RotateZ(p-shoulder,down);n=RotateZ(n,down);
-        float swing=-side*sin(gait)*.18*walking;
-        p=shoulder+NeuralRotateX(p-shoulder,swing);n=NeuralRotateX(n,swing);
-    }
-    else if(joint==12||joint==15)
-    {
-        float yaw=.12*sin(time*(TAU*6.0/128.0)+phase),pitch=.025*sin(time*(TAU*12.0/128.0)+phase);
-        float3 neck=float3(0,1.48,0);
-        p=neck+RotateY(NeuralRotateX(p-neck,pitch),yaw);
-        n=RotateY(NeuralRotateX(n,pitch),yaw);
-    }
-    float breathing=.0025*sin(time*(TAU*29.0/128.0)+phase);
-    p.y+=breathing*smoothstep(.85,1.45,source.y);
+    NeuralWriteLeg(id,time,1,pelvis,root,right,forward,walking);
+    NeuralWriteLeg(id,time,-1,pelvis,root,right,forward,walking);
+}
+void NeuralBone(uint joint,float3 source,float3 sourceNormal,uint id,out float3 p,out float3 n)
+{
+    uint first=NEURAL_RIG_BASE+id*96+joint*4;
+    float4 a=SceneInstanceData[first],b=SceneInstanceData[first+1],c=SceneInstanceData[first+2];
+    p=float3(dot(a.xyz,source)+a.w,dot(b.xyz,source)+b.w,dot(c.xyz,source)+c.w);
+    n=float3(dot(a.xyz,sourceNormal),dot(b.xyz,sourceNormal),dot(c.xyz,sourceNormal));
 }
 
 Geometry NeuralPersonGeometry(uint vertex,uint id)
@@ -87,8 +201,23 @@ Geometry NeuralPersonGeometry(uint vertex,uint id)
     [unroll]for(uint k=0;k<4;++k)
     {
         float3 posedPosition,normal;
-        NeuralBone(joints[k],source,sourceNormal,G.z,id*1.37,walking,posedPosition,normal);
+        NeuralBone(joints[k],source,sourceNormal,id,posedPosition,normal);
         p+=weights[k]*posedPosition;n+=weights[k]*normal;
+    }
+    float2 footInfluence=0;
+    [unroll]for(uint influenceSlot=0;influenceSlot<4;++influenceSlot)
+    {
+        if(joints[influenceSlot]==7||joints[influenceSlot]==10)footInfluence.x+=weights[influenceSlot];
+        if(joints[influenceSlot]==8||joints[influenceSlot]==11)footInfluence.y+=weights[influenceSlot];
+    }
+    if(max(footInfluence.x,footInfluence.y)>.45)
+    {
+        uint ankle=footInfluence.x>footInfluence.y?7u:8u;
+        float4 contact=SceneInstanceData[NEURAL_RIG_BASE+id*96+ankle*4+3];
+        // Learned skin blending can move sole vertices below an otherwise
+        // correct ankle target. Enforce the measured ground plane locally.
+        float penetration=max(0,contact.w-dot(contact.xyz,p));
+        p+=contact.xyz*min(penetration,.025);
     }
     float3 forward=normalize(float3(velocity.x,0,velocity.y)+float3(.0001,0,.0001));
     float3 right=float3(forward.z,0,-forward.x);
@@ -114,7 +243,16 @@ Geometry NeuralHeadGeometry(uint vertex,uint id)
     [unroll]for(uint k=0;k<4;++k)local+=NeuralHeadVertices[vertex*9+5+k].xyz*expression[k];
     float3 source=local+float3(0,1.42,0);
     float3 posed,posedNormal;
-    NeuralBone(15,source,normal,G.z,id*1.37,0,posed,posedNormal);
+    NeuralBone(15,source,normal,id,posed,posedNormal);
+    // The trained head skin field identifies the lower neck/collar as root
+    // tissue. Attach that influence to the torso, not the moving head: rotating
+    // the entire crop used to pull the captured collar away from the shirt.
+    uint4 joints=asuint(NeuralHeadVertices[vertex*9+2]);
+    float4 weights=NeuralHeadVertices[vertex*9+3];float rootInfluence=0;
+    [unroll]for(uint j=0;j<4;++j)if(joints[j]==0)rootInfluence+=weights[j];
+    float3 torso,torsoNormal;NeuralBone(9,source,normal,id,torso,torsoNormal);
+    posed=lerp(posed,torso,saturate(rootInfluence));
+    posedNormal=normalize(lerp(posedNormal,torsoNormal,saturate(rootInfluence)));
     float2 velocity=PeopleVelocity(id,G.z);
     float3 forward=normalize(float3(velocity.x,0,velocity.y)+float3(.0001,0,.0001));
     float3 right=float3(forward.z,0,-forward.x);

@@ -1,0 +1,149 @@
+{
+  "schema": 1,
+  "passed": true,
+  "acceptance_scope": "isolated closed-domain conservation/regression probe and final-candidate combined scene generation",
+  "source_sha256": {
+    "src/world_generation.cpp": "069a2348da2da2d1cecce50d1ff8959760fb1ba4f22e537722d10146ce2167a0",
+    "src/world_generation.h": "6c0134d13a8dd30d2144a64553745ad9d50bc747d6221750510ea513e33a30e7",
+    "src/geomorphology.hlsl": "af1d5ce1fe556232465f8790c52ad42779cf85443f3dcd239fe05c24e6ed0c3c",
+    "src/geomorph_common.hlsli": "3c84ca333dc55ab3bcc0fa0c662744ecec4e834baaa3032a9385a10e74f78b53",
+    "tools/world_probe.cpp": "b0264d6708fd15991b455155fc66e736fff1f3b65f70a845679e1cbdee780370",
+    "tools/build_world_probe.ps1": "cf302851ff417ce1c354061ee150d51ff7435e9ec0c0b962af47504388a62ced"
+  },
+  "probe": {
+    "path": "build/world_probe.json",
+    "sha256": "b50add0ee50859bc0e28eb5f86743530c6e42c34a6a4a2dd8762b05ee0934476",
+    "executable_sha256": "8aec5f2ac24a7aa5b2bfc91bcc9d1eb5c688b87cb6d5ccba10a5267e7e3376ee",
+    "shader_sha256": "3799eb321e01d03ccbf2476d3f3d1f06ce92253dc74205d9f189d3f14277cbdd",
+    "metrics": {
+      "passed": true,
+      "seconds": 6.1766,
+      "iterations": 96,
+      "height_nonfinite": 0,
+      "ecology_invalid": 0,
+      "mean_height_delta": 6.85068e-07,
+      "rms_height_delta": 1.15587,
+      "max_height_delta": 6.26849,
+      "protected_max_delta": 0,
+      "changed_texels": 16390549,
+      "debug_warnings": 0,
+      "debug_errors": 0,
+      "ecology_min": [
+        0.334229,
+        0.21521,
+        0,
+        0.974121
+      ],
+      "ecology_max": [
+        0.787109,
+        0.827148,
+        0.754883,
+        1
+      ],
+      "throughflow": {
+        "passed": true,
+        "standing_erosion": 0.00155301,
+        "east_erosion": 0.0188327,
+        "west_erosion": 0.0188327
+      },
+      "cancellation_passed": true,
+      "cancel_callbacks": 2
+    }
+  },
+  "regression": {
+    "problem": "Incoming flux had outgoing direction sign, cancelling velocity on sustained throughflow.",
+    "fix": "Sum direction * (outgoing - incoming).",
+    "fixture": "A sloping bed with identical initial water and sediment is evaluated with standing water, balanced eastward throughflow, and balanced westward throughflow.",
+    "assertions": [
+      "Throughflow erosion exceeds standing-water erosion by a factor greater than 5.",
+      "East and west erosion agree within 0.0001 m."
+    ],
+    "measured_ratio": 12.126579996265317
+  },
+  "conservation": {
+    "quantity": "Mean bed elevation before/after the complete authoring run including final sediment settling; proxy for solid volume on a uniform closed grid.",
+    "boundary": "No water/sediment/creep exchange beyond domain edges; incoming flux is taken only from valid adjacent cells.",
+    "final_settling": "Phase 7 returns all remaining suspended solid material to the bed before scratch buffers are freed.",
+    "maximum_abs_mean_height_drift_m": 0.0001,
+    "measured_mean_height_drift_m": 6.85068e-07,
+    "not_measured": "Water conservation is not asserted: rainfall and evaporation are explicit source/sink terms."
+  },
+  "review": {
+    "abi": "WorldGenerationResult32B; eight Win64 arguments; MASM shadow space and offsets checked. Material results64B; six texture/SRV references per result cleaned exactly once.",
+    "scratch_texture_bytes": 54525952,
+    "output_ecology_bytes": 8388608,
+    "dimensions": "State1024x1024 RGBA32F; final height4096x4096 R32F; ecology1024x1024 RGBA16F.",
+    "cancellation": "Callback cancellation after the first simulation dispatch returns failure with no transferred result references; final height write is not reached.",
+    "bindings": "Input SRVs and output UAVs are unbound between phases; MASM restores CS b0/s0 and binds t19 after success.",
+    "cleanup": "COM ownership transfer is explicit; partial failure uses RAII and application ClearState before final releases.",
+    "weathering": "Terrain and mortar now suppress exposed neural substrate under opaque coverage; F0 remains linear and no unsupported scale/gamma is introduced.",
+    "temporary_and_output_texture_bytes": 62914560,
+    "memory_scope": "Texture payloads only; excludes original height field, driver allocations and staging used by QA."
+  },
+  "combined_world_probe": {
+    "accepted": true,
+    "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+    "metrics_sha256": "ee3399ef252e8b9fd0089789b178153d57276e4d6baf499dc946e6a1eb9a6e70",
+    "metrics_path": "build/generative_final_timeline/world_generation_metrics.json",
+    "render_metrics_sha256": "f933b04c9254ae84d3d23c79c5ab994b4ee08d45179dee48e7660735658e48b8",
+    "render_metrics_path": "build/generative_final_timeline/metrics.json",
+    "shader_sha256": "3799eb321e01d03ccbf2476d3f3d1f06ce92253dc74205d9f189d3f14277cbdd",
+    "metrics": {
+      "algorithm": "virtual-pipe erosion, sediment transport and talus creep",
+      "shader_resource_id": 122,
+      "shader_sha256": "3799eb321e01d03ccbf2476d3f3d1f06ce92253dc74205d9f189d3f14277cbdd",
+      "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+      "source_kind": "candidate_resources",
+      "generation_executed": true,
+      "status": 1,
+      "iterations": 96,
+      "resolution": 1024,
+      "helper_seconds": 6.19893,
+      "field_float32_sha256": "7dcbe904716d1b05f3a4c0039b8e8f6116936a4dc82ab74c631300014dbc7391",
+      "nonfinite_values": 0,
+      "out_of_range_values": 0,
+      "height_samples": 65536,
+      "changed_height_samples": 64300,
+      "maximum_height_change_m": 73.7146,
+      "mean_signed_height_change_m": 0.00212269,
+      "channels": [
+        {
+          "name": "moisture",
+          "minimum": 0,
+          "maximum": 1,
+          "mean": 0.56136
+        },
+        {
+          "name": "soil_deposition",
+          "minimum": 0,
+          "maximum": 1,
+          "mean": 0.435435
+        },
+        {
+          "name": "drainage",
+          "minimum": 0,
+          "maximum": 1,
+          "mean": 0.5217
+        },
+        {
+          "name": "ambient_visibility",
+          "minimum": 0.611328,
+          "maximum": 1,
+          "mean": 0.961406
+        }
+      ]
+    },
+    "render_frame_count": 50,
+    "debug_errors": 0,
+    "debug_warnings": 0,
+    "scope": "The actual final executable resource122 ran on the generated Alpine terrain. Body/head and both neural materials were freshly generated in this timeline.",
+    "conservation_scope": "Combined mean_signed_height_change_m samples 65,536 locations of the nonuniform scene. It is not the full-grid closed-field conservation measure; that independent assertion remains in probe/conservation above."
+  },
+  "limitations": [
+    "Accelerated authoring erosion, sediment transport and talus creep; not a calibrated geological-time prediction.",
+    "Isolated probe uses a synthetic closed field, not the final Alpine scene.",
+    "No change to visual photorealism is certified by these numerical checks."
+  ],
+  "errors": [],
+  "shader_sha256": "3799eb321e01d03ccbf2476d3f3d1f06ce92253dc74205d9f189d3f14277cbdd"
+}

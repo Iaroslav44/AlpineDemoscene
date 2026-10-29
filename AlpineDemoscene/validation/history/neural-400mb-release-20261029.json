@@ -1,0 +1,1011 @@
+{
+  "schema": 5,
+  "date": "2026-10-29",
+  "milestone": "First embedded pretrained neural inference",
+  "executable": "dist/AlpineDreaming.exe",
+  "sha256": "9f82e8eda15eb1f679a6f757697969f5fa734ea5c42a9254e0229effb877bd00",
+  "bytes": 31750144,
+  "limit_bytes_exclusive": 400000000,
+  "packaging": {
+    "Path": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\dist\\AlpineDreaming.exe",
+    "Bytes": 31750144,
+    "LimitBytesExclusive": 400000000,
+    "SHA256": "9F82E8EDA15EB1F679A6F757697969F5FA734EA5C42A9254E0229EFFB877BD00",
+    "ShaderResources": "101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120",
+    "ModelResources": "200,201,202",
+    "Imports": "kernel32.dll,user32.dll,d3d11.dll,winmm.dll"
+  },
+  "baseline": {
+    "commit": "b46f4f41",
+    "tag": "alpine-before-neural-400mb-20261029",
+    "bytes": 1405440
+  },
+  "size_increase_bytes": 30344704,
+  "embedded_neural_models": [
+    {
+      "resource_id": 200,
+      "path": "models/avatar/gdna-thuman.nav",
+      "bytes": 8695856,
+      "sha256": "cbda91973caba80d1adfdcf64b6cdd9e47c08d5542a7cffc182300b28fb5dd92",
+      "magic_hex": "4e41563101000000"
+    },
+    {
+      "resource_id": 201,
+      "path": "models/audio/midi_ddsp_timbre.nad",
+      "bytes": 9395768,
+      "sha256": "807425787be973d97639d11010f9f84d0022a822fc66af35e420bc70cc0d4f92",
+      "magic_hex": "4e41443101000000"
+    },
+    {
+      "resource_id": 202,
+      "path": "models/head/ganhead-faceverse.nah",
+      "bytes": 12330948,
+      "sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
+      "magic_hex": "4e41483101000000"
+    }
+  ],
+  "model_manifest_sha256": "73695470cb94ca6d9f181881442dac82cfb4a669a3138836657dea9e5e67ee36",
+  "avatar_reference": {
+    "path": "validation/neural-avatar.json",
+    "sha256": "e0a110dde2bd9bda3292b6f48671271966c35727c82dcd5bb9f6502e7182c758",
+    "result": {
+      "seed": 42,
+      "model_sha256": "cbda91973caba80d1adfdcf64b6cdd9e47c08d5542a7cffc182300b28fb5dd92",
+      "model_bytes": 8695856,
+      "feature_shape": [
+        64,
+        16,
+        64,
+        64
+      ],
+      "feature_finite": true,
+      "feature_min": -0.7108868360519409,
+      "feature_max": 30.67577362060547,
+      "occupancy_min": -67.09727478027344,
+      "occupancy_max": 20.29119300842285,
+      "gpu_dir": "build/neural_body_release42",
+      "gpu_dump_sha256": {
+        "latent": "15e3f3704888d6f636aed7c3120184fa8048df88759dbb69de6630b605497428",
+        "feature": "70b7c8f21c88096d0e47f8c4c5be7ee1562f46c138558a1638a55d2565301a6d",
+        "field": "4556a97d9e3fa36afb2f18ae1930431d4392c1b7381e2d771b3f7fdc9bc18ea2",
+        "positions": "0da1377cc1e4512960505c4b62e42979c3e60a0124668fac06a05db5e4ceebe8",
+        "attributes": "5a508e0f1b474adf3f6229c2e8676cdfadf1536d55e2a48a753376fd075948c3"
+      },
+      "gpu_metrics_sha256": "b1191bab173615c6a72d4f8f5e4ac9d2819433ab37f8d4a881a49cdd5c29aad5",
+      "gpu_metrics": {
+        "model": "gDNA THuman2.0",
+        "model_resource_id": 200,
+        "model_bytes": 8695856,
+        "model_sha256": "cbda91973caba80d1adfdcf64b6cdd9e47c08d5542a7cffc182300b28fb5dd92",
+        "candidate_sha256": "bb236f1f8a710342f371654ee0c1a09050f52084ae482b3358ff62305cb64323",
+        "source_kind": "candidate_resources",
+        "inference_executed": true,
+        "seed": 42,
+        "vertex_count": 150876,
+        "vertex_stride_bytes": 64,
+        "status": 1,
+        "startup_wall_seconds": 74.5941,
+        "helper_seconds": 74.5921,
+        "feature_ms": 6297,
+        "field_ms": 55484,
+        "geometry_fnv1a64": "a1d0dd3d734e1fb",
+        "invalid_values": 0,
+        "invalid_joint_ids": 0,
+        "max_weight_sum_error": 1.98372e-07,
+        "normal_length_min": 1,
+        "normal_length_max": 1,
+        "active_joint_count": 24,
+        "joint_influence_counts": [
+          61624,
+          62507,
+          63926,
+          48416,
+          32168,
+          23754,
+          43336,
+          17911,
+          13605,
+          55936,
+          14128,
+          14927,
+          16389,
+          22495,
+          16227,
+          19399,
+          15754,
+          13480,
+          8757,
+          7521,
+          4068,
+          4324,
+          5533,
+          6440
+        ],
+        "bounds_min": [
+          -0.861276,
+          0,
+          -0.155129
+        ],
+        "bounds_max": [
+          0.883182,
+          1.75,
+          0.192249
+        ],
+        "invalid_color_values": 0,
+        "invalid_morph_values": 0,
+        "max_abs_morph_delta": 0,
+        "motion_frames": 0,
+        "motion_duration_seconds": 0,
+        "invalid_motion_values": 0,
+        "motion_max_difference_from_first": 0
+      },
+      "latent_max_abs_error": 0.0,
+      "feature_max_abs_error": 8.392333984375e-05,
+      "feature_rms_error": 3.341885076224571e-06,
+      "occupancy_max_abs_error": 0.00026702880859375,
+      "normal_max_abs_error": 0.0003210306167602539,
+      "joint_ids_equal": true,
+      "weights_max_abs_error": 1.6689300537109375e-06,
+      "joint_distribution_max_abs_error": 1.6689300537109375e-06,
+      "passed": true,
+      "schema": 1,
+      "validation_scope": "Independent NumPy versus actual D3D11 compute output; numerical graph correctness for one seed, not a perceptual realism claim",
+      "reference_report": "build/neural_reference/report-42.json",
+      "reference_report_sha256": "a093bd7f99d8e16cf8b1941c0f68d7130fbe60eb1fd5a62513fe2e52fff90be7",
+      "model_path": "models/avatar/gdna-thuman.nav",
+      "model_metadata_sha256": "670589e6f72ac5e4ab5112e03431a0104af6848825a2fc5beb24309637401136",
+      "source_sha256": {
+        "src/neural_avatar_runtime.cpp": "6ac5965a54fd976404ec5a4f563c550d0a6fb6e0e6d2a251172c7c5c79759def",
+        "src/neural_avatar_runtime.h": "52055736d6ac267a750c12c01f2a0831037db0a6e87540da3a89d3124b4f1456",
+        "src/neural_avatar.hlsl": "31a9a7cfec71d4030eda820a34006b20784722a7b421a45eeb3c1bfedfe05901",
+        "src/neural_mesh_cleanup.h": "42b32e7f92cd91f0818ee0dc2ee43a7b3ee460b1af7c563c690df3444c777478",
+        "tools/neural_avatar_export.py": "12b9a35a8c59f1be88f90e2e957e3587e8190c167856deae3dedac9cf120e368",
+        "tools/neural_avatar_reference.py": "6edae3d00c0b46f572d4cecfb53cf8281f9d6cfde902cdbfc45aaf164fbf0f9a",
+        "tools/neural_avatar_validation_report.py": "26e69c4cb245736b279c0b448516af8f4ba085cb3a0ad0d79c24e24c7f8c7281"
+      },
+      "provenance": {
+        "schema": 1,
+        "model": "gDNA THuman2.0 pretrained (CVPR 2022)",
+        "source_repository": "https://github.com/xuchen-ethz/gdna",
+        "source_checkpoint_url": "https://dataset.ait.ethz.ch/downloads/gdna/trained_models.zip",
+        "source_checkpoint_member": "outputs/thuman/checkpoints/last.ckpt",
+        "source_checkpoint_sha256": "23386f2ff110a305e9fe78a7003b9252307c2a75103413f83d74156c05c0d3a4",
+        "training_data": "THuman2.0 scans of real clothed people",
+        "code_license": "MIT; model/data/SMPL conditions are separate",
+        "export": "Only inference neural tensors; weight_norm folded; no SMPL templates, training examples, discriminator or optimiser",
+        "runtime_input": "64D sampled shape/detail latent codes and 3D query positions; no input photograph",
+        "limitations": [
+          "No learned albedo/PBR material generator",
+          "Not photorealistic face generation",
+          "Canonical-shape mode does not implement full SMPL body deformation"
+        ],
+        "resource_id": 200
+      },
+      "comparison_sample_counts": {
+        "latent_scalars": 128,
+        "feature_scalars": 4194304,
+        "occupancy_coordinates": 1024,
+        "surface_attribute_coordinates": 1024,
+        "motion_scalars": 0
+      },
+      "geometry_pipeline": {
+        "runtime_input": "Seed and generated 3D coordinates; embedded learned network parameters",
+        "occupancy_grid_xyz": [
+          65,
+          129,
+          49
+        ],
+        "surface_extraction": "Marching tetrahedra with shared edge vertices",
+        "component_filter": "Largest connected component by vertex count, before bounds normalization and surface-attribute inference",
+        "normalization": "Uniform scale to 1.75 metres high; minimum Y translated to zero; X/Z origin retained",
+        "up_axis": "+Y",
+        "face_forward_axis": "+Z",
+        "runtime_images_or_source_meshes": false,
+        "generation_occurs_at_startup": true,
+        "network_evaluated_every_animation_frame": false
+      },
+      "quality": {
+        "photographic_indistinguishability_established": false,
+        "physical_face_or_muscle_simulation": false,
+        "independent_held_out_seed_validation": false
+      },
+      "integration_limits": [
+        "Largest-component filtering can remove real disconnected parts as well as generated floaters.",
+        "Uniform bounds normalization is not a fitted skeletal registration.",
+        "Numerical correctness does not establish anatomical realism or artifact-free pose deformation.",
+        "Body skinning uses learned weights with an authored approximate 24-joint rig; no fitted SMPL template is embedded.",
+        "Body checkpoint supplies geometry and normals, not learned appearance; materials are procedural."
+      ]
+    }
+  },
+  "head_reference": {
+    "path": "validation/neural-head.json",
+    "sha256": "057c9e44e95250a6dfdf111f07ce15283e9cc7a1e9f5fc3ababa151ccd0b035b",
+    "result": {
+      "seed": 42,
+      "model_sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
+      "model_bytes": 12330948,
+      "gpu_dir": "build/neural_head_probe42",
+      "gpu_dump_sha256": {
+        "latent": "fd8f880f380575e1fbd1f8cf3232037bc167d2b67ec7c28d81e8a866f1ff10fc",
+        "feature": "5f2acfccef277254aa8a7aae8ecbd35b8bb0732141570602fd9bd668ea259fc0",
+        "field": "3c8f4d98aa0cb20e8f84c2b76aeb0e838c1301d09f21f51ffe6c0beb09be7b2a",
+        "positions": "e7c551745dd07b5612e40b364488fcef100b9060c7ed1652f96166164679b4e4",
+        "attributes": "02b871454574b431c0e245e12b55d4dfcdb7f5faa9b11d6bffce370fa5ac4e48",
+        "motion": "64ad1c015763e2ddaa741d6ad6bc85049b78d44bd8a727c9d4aa3098cccf28c8"
+      },
+      "gpu_metrics_sha256": "bac2c6f6563aca755d168c9d0e3204106b42122ee60c84aafacf454cc4789fce",
+      "gpu_metrics": {
+        "model": "GANHead FaceVerse",
+        "model_resource_id": 202,
+        "model_bytes": 12330948,
+        "model_sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
+        "candidate_sha256": "",
+        "source_kind": "development_files",
+        "inference_executed": true,
+        "seed": 42,
+        "vertex_count": 400056,
+        "vertex_stride_bytes": 144,
+        "status": 1,
+        "startup_wall_seconds": 226.506,
+        "helper_seconds": 226.502,
+        "feature_ms": 13547,
+        "field_ms": 107969,
+        "geometry_fnv1a64": "8f32735a157081c6",
+        "invalid_values": 0,
+        "invalid_joint_ids": 0,
+        "max_weight_sum_error": 2.16649e-07,
+        "normal_length_min": 1,
+        "normal_length_max": 1,
+        "active_joint_count": 5,
+        "joint_influence_counts": [
+          399959,
+          400056,
+          400056,
+          12943,
+          387210
+        ],
+        "bounds_min": [
+          -0.161348,
+          0,
+          -0.136008
+        ],
+        "bounds_max": [
+          0.164452,
+          0.33,
+          0.114503
+        ],
+        "invalid_color_values": 0,
+        "invalid_morph_values": 0,
+        "max_abs_morph_delta": 0.00329753,
+        "motion_frames": 1825,
+        "motion_duration_seconds": 128,
+        "invalid_motion_values": 0,
+        "motion_max_difference_from_first": 2.49728
+      },
+      "latent_max_abs_error": 0.0,
+      "feature_max_abs_error": 0.000148773193359375,
+      "occupancy_max_abs_error": 0.00023651123046875,
+      "normal_max_abs_error": 7.659196853637695e-05,
+      "color_max_abs_error": 2.2530555725097656e-05,
+      "joint_ids_equal": true,
+      "weights_max_abs_error": 7.152557373046875e-07,
+      "morph_max_abs_error": 6.51925802230835e-09,
+      "motion_max_abs_error": 0.0,
+      "passed": true,
+      "schema": 1,
+      "validation_scope": "Independent NumPy versus actual D3D11 compute output; numerical graph correctness for one seed, not a perceptual realism claim",
+      "reference_report": "build/neural_head_reference/report-42.json",
+      "reference_report_sha256": "e985a5b8d9b8beaf5cd0aeb605d35501bcdd271aa218d249608bef40269e3e85",
+      "model_path": "models/head/ganhead-faceverse.nah",
+      "model_metadata_sha256": "21e0d13b54cbc4a97f83b03e2f4a621ba335680bacb8f9701d39e9240d546761",
+      "source_sha256": {
+        "src/neural_avatar_runtime.cpp": "6ac5965a54fd976404ec5a4f563c550d0a6fb6e0e6d2a251172c7c5c79759def",
+        "src/neural_avatar_runtime.h": "52055736d6ac267a750c12c01f2a0831037db0a6e87540da3a89d3124b4f1456",
+        "src/neural_avatar.hlsl": "31a9a7cfec71d4030eda820a34006b20784722a7b421a45eeb3c1bfedfe05901",
+        "src/neural_mesh_cleanup.h": "42b32e7f92cd91f0818ee0dc2ee43a7b3ee460b1af7c563c690df3444c777478",
+        "tools/neural_avatar_export.py": "12b9a35a8c59f1be88f90e2e957e3587e8190c167856deae3dedac9cf120e368",
+        "tools/neural_avatar_reference.py": "6edae3d00c0b46f572d4cecfb53cf8281f9d6cfde902cdbfc45aaf164fbf0f9a",
+        "tools/neural_avatar_validation_report.py": "26e69c4cb245736b279c0b448516af8f4ba085cb3a0ad0d79c24e24c7f8c7281",
+        "tools/neural_head_export.py": "5399aa3e78b9adb6c8b6f4557e7279855fd5b2341a619016d6a5d8bdb0b68de9",
+        "tools/neural_head_reference.py": "7f153bf04a72785aa538a8acb9581ec3231f34683f43f8a62a7f79b8a3e848a2"
+      },
+      "provenance": {
+        "schema": 1,
+        "model": "GANHead FaceVerse pretrained stage2 (CVPR2023)",
+        "source_repository": "https://github.com/wsj-sjtu/GANHead",
+        "source_repository_commit": "76c98ce18f940caf6aec4cf620df8f8d2bc788b6",
+        "source_checkpoint_url": "https://drive.google.com/file/d/1ztHGU9GdCoMkAlQB7ynoztIFewVaILlQ/view",
+        "source_checkpoint_member": "model_and_data/stage2_model/checkpoints/last.ckpt",
+        "source_checkpoint_sha256": "03ef6010ee1b2a81d64c0728d32b578eb1170a05aabc672a4b2f60a5d10e86ce",
+        "source_checkpoint_bytes": 82158734,
+        "training_data": "FaceVerse textured scans of real people",
+        "license_status": "No explicit code/weights license found in the public repository or model archive; local research evaluation only; redistribution rights not established",
+        "export": "Learned inference tensors only; no FLAME template vertices, faces, regressors or landmark tables; no photographs, scans or training-example latent tables",
+        "runtime_input": "Seed-derived shape256/detail128/color256 latent codes and 3D coordinates; canonical appearance uses zero pose controls; four captured-expression PCA curves deform the generated surface each frame",
+        "limitations": [
+          "Cinematic photorealism is not established by numerical graph validation",
+          "Surface color is learned RGB, not independently verified relightable PBR albedo",
+          "Four expression modes retain 86.2354% of source variation; canonical normals are not corrected per expression",
+          "Accurate jaw/eye transforms and physical facial tissues are not implemented"
+        ],
+        "resource_id": 202,
+        "motion": {
+          "source": "IMavatar yufeng_1812 fitted sequence distributed with GANHead",
+          "source_numeric_array_sha256": "80a048a1abc7340612e84691e358cc8723d1c9091234e0623713a06c78254a76",
+          "frames": 1825,
+          "pca_modes": 4,
+          "retained_expression_variance": 0.8623538613319397,
+          "endpoint_blend_frames": 24,
+          "playback_seconds": 128,
+          "interpretation": "Centered captured expression variations projected onto four PCA modes; source identity-fitting mean omitted; no invented semantic meaning assigned to PCA modes",
+          "jaw": "relative axis-angle stored separately; not included in expression PCA"
+        }
+      },
+      "comparison_sample_counts": {
+        "latent_scalars": 640,
+        "feature_scalars": 4194304,
+        "occupancy_coordinates": 1024,
+        "surface_attribute_coordinates": 1024,
+        "motion_scalars": 14600
+      },
+      "geometry_pipeline": {
+        "runtime_input": "Seed and generated 3D coordinates; embedded learned network parameters",
+        "occupancy_grid_xyz": [
+          81,
+          97,
+          81
+        ],
+        "surface_extraction": "Marching tetrahedra with shared edge vertices",
+        "component_filter": "Largest connected component by vertex count, before bounds normalization and surface-attribute inference",
+        "normalization": "Uniform scale to 0.33 metres high; minimum Y translated to zero; X/Z origin retained",
+        "up_axis": "+Y",
+        "face_forward_axis": "+Z",
+        "runtime_images_or_source_meshes": false,
+        "generation_occurs_at_startup": true,
+        "network_evaluated_every_animation_frame": false
+      },
+      "quality": {
+        "photographic_indistinguishability_established": false,
+        "physical_face_or_muscle_simulation": false,
+        "independent_held_out_seed_validation": false
+      },
+      "integration_limits": [
+        "Largest-component filtering can remove real disconnected parts as well as generated floaters.",
+        "Uniform bounds normalization is not a fitted skeletal registration.",
+        "Numerical correctness does not establish anatomical realism or artifact-free pose deformation.",
+        "Learned RGB may contain photographic illumination; it is not verified relightable PBR albedo.",
+        "Four learned expression directions retain a limited subspace; jaw/eye bone transforms are not applied and canonical normals are unchanged during expressions.",
+        "Head is attached at body-local Y=1.42m, body clipped above Y=1.44m; this is an authored seam rather than learned body/head correspondence.",
+        "Five predicted head skin weights are verified but renderer follows the body's head bone as a whole."
+      ],
+      "morphology": {
+        "measured_unique_vertices": 66672,
+        "measured_control_frames": 1825,
+        "expression_modes": 4,
+        "control_duration_seconds": 128.0,
+        "control_keyframes_per_second": 14.2578125,
+        "control_format": "Two float4 records per frame: four expression coefficients; relative jaw axis-angle XYZ plus padding",
+        "packed_control_bytes": 58400,
+        "expression_control_bytes": 29200,
+        "interpolation": "Linear in the vertex shader; whole loop duration is authored, not a claim about source capture frame rate",
+        "coefficient_minimum": [
+          -2.2528722286224365,
+          -1.7639292478561401,
+          -0.9583161473274231,
+          -1.5494121313095093
+        ],
+        "coefficient_maximum": [
+          2.351773977279663,
+          1.477323293685913,
+          1.4981287717819214,
+          1.5709539651870728
+        ],
+        "endpoint_maximum_difference": 0.0,
+        "normalization_scale_metres_per_model_unit": 0.18184983730316162,
+        "maximum_expression_displacement_metres": 0.012339049950242043,
+        "maximum_absolute_expression_displacement_xyz_metres": [
+          0.006773193366825581,
+          0.006607163697481155,
+          0.008678753860294819
+        ],
+        "measurement_scope": "All stored coefficients times every generated vertex's learned four displacement directions, before global head articulation",
+        "jaw_controls_applied_by_renderer": false,
+        "expression_normals_recomputed_by_renderer": false
+      }
+    }
+  },
+  "audio_reference": {
+    "path": "validation/neural-audio.json",
+    "sha256": "5278be0d1be628818dca85ba78adac497a336c8f38a8d6cb6714bc073e37aaa0",
+    "result": {
+      "schema": 1,
+      "model_sha256": "807425787be973d97639d11010f9f84d0022a822fc66af35e420bc70cc0d4f92",
+      "source_sha256": {
+        "src/neural_audio.cpp": "0dd50a15b9d12f3996645f89f9aea39ef6d073c28838177be0c57e5a61250517",
+        "src/neural_audio.h": "c2b9497b0327b246b3623f3e1630de68b7ad0e64db3a07f411cee207d69d3130",
+        "tools/neural_audio_checkpoint.py": "40d9c1bd697a2b658e50d366e91a58df01eaf216f8f99a1a4f12c7a9ce8c5d85",
+        "tools/neural_audio_export.py": "0846182063e38126d1049dc66fca119668035fd9e0b72bc03810fc43ee9f75dd",
+        "tools/neural_audio_validate.py": "f723a850a5a5255ca412d8c7a353798bca37d3c4fc7cea9c735e99c85a54e800"
+      },
+      "checkpoint_data_sha256": "781cf09aebfb28c176b566c5290d953814759b7bc63f417df6bba0c2619991cd",
+      "checkpoint_archive_sha256": "46bae44c16c3399c24f8f0ba2557fc0432bc12aa23088606d465b22fec2cd05e",
+      "model_bytes": 9395768,
+      "trained_parameter_count": 2348926,
+      "reference": "Independent NumPy graph using original TensorFlow checkpoint tensors, not the exported blob",
+      "raw_max_absolute_error": 6.4373016357421875e-06,
+      "raw_rms_error": 1.0144435691472609e-06,
+      "instrument_control_rms_distance": 0.4578922390937805,
+      "instruments": [
+        {
+          "name": "violin_C4",
+          "midi": 60,
+          "frames": 198450,
+          "peak": 0.8199999928474426,
+          "rms": 0.36465877294540405,
+          "fundamental_hz": 261.66666666666663,
+          "pitch_error_cents": 0.2719554398080802,
+          "fraction_energy_above8khz": 2.1495606144832443e-09
+        },
+        {
+          "name": "double_bass_A1",
+          "midi": 33,
+          "frames": 198450,
+          "peak": 0.8199999928474426,
+          "rms": 0.18148398399353027,
+          "fundamental_hz": 55.0,
+          "pitch_error_cents": 0.0,
+          "fraction_energy_above8khz": 2.3047239293834243e-10
+        },
+        {
+          "name": "trumpet_A4",
+          "midi": 69,
+          "frames": 198450,
+          "peak": 0.8199999928474426,
+          "rms": 0.25368601083755493,
+          "fundamental_hz": 440.0,
+          "pitch_error_cents": 0.0,
+          "fraction_energy_above8khz": 2.476371791095962e-08
+        }
+      ],
+      "perceptual_indistinguishability_verified": false,
+      "source_sample_rate_hz": 16000,
+      "output_sample_rate_hz": 44100,
+      "runtime_dependencies": [
+        "Windows kernel32",
+        "SSE2 CPU"
+      ],
+      "timing_and_input_checks": {
+        "sample_duration_seconds": 4.5,
+        "sample_generation_seconds": [
+          0.408105,
+          0.623409,
+          0.441722
+        ],
+        "truncated_model_rejected": true,
+        "invalid_magic_rejected": true,
+        "cancellation_callbacks_before_abort": 3
+      },
+      "temporary_memory_upper_bound_bytes": 14500000,
+      "notes": [
+        "Authored pitch and expression; trained timbre subnetwork only",
+        "Output resampling does not extend source bandwidth",
+        "Double-bass timbre derives from URMP, not a separately verified pizzicato model"
+      ]
+    }
+  },
+  "full_score": {
+    "path": "validation/neural-audio-fullscore.json",
+    "sha256": "16cc53e8e8a5bcc8878b5129cc138d8a72b8e6c4efdfc32adf9f4a23f132a594",
+    "result": {
+      "schema": 1,
+      "date": "2026-10-29",
+      "scope": "Full 128-second production MASM score with embedded pretrained MIDI-DDSP timbre resource 201",
+      "passed": true,
+      "errors": [],
+      "model_sha256": "807425787be973d97639d11010f9f84d0022a822fc66af35e420bc70cc0d4f92",
+      "model_bytes": 9395768,
+      "source_sha256": {
+        "src/orchestra.inc": "8efb0d3fc43cd17695c55a3824eadd488c57925603ba2e81c404e854b14714dc",
+        "src/neural_audio.cpp": "0dd50a15b9d12f3996645f89f9aea39ef6d073c28838177be0c57e5a61250517",
+        "src/neural_audio.h": "c2b9497b0327b246b3623f3e1630de68b7ad0e64db3a07f411cee207d69d3130",
+        "tools/audio_probe.cpp": "c83ccef94e464221a376c1ae6e680992e3f5e937ae5d1cd7ed7f9ceec413a873",
+        "tools/verify_audio.py": "5f2aee888d00bb19a2622310f21304afb7f3d609ba31b29532d6be57a9c939df"
+      },
+      "host_source_sha256_at_probe_build": "66afe7de01f1dbc64dacdfffc44debfd5d5a6d06039517d655c7f41743860cec",
+      "host_source_unchanged_after_probe_build": true,
+      "probe_executable_sha256": "ce46fc3b06ba2c2d89fc6f5c9d76909fa5aae7a2a9db0fb23e96357f86fe5972",
+      "masm_object_sha256": "eea14605f5f2a04eda6c99d2a4fd74f55f33d9eb52eeae3ca6574c607226c7a7",
+      "metrics_artifact": "build/neural_audio_fullscore/audio_metrics.json",
+      "metrics_sha256": "a5650cba9288a5a19ffdb9687c435c9612f7cd33e8f29c34b2f75737c6aa1c6b",
+      "generation": {
+        "seed": 1243184189,
+        "seconds": 21.045669,
+        "bank_nonfinite": 0,
+        "bank_peak": 0.819999993,
+        "mix_peak_before_master_gain": 0.581806242,
+        "master_gain": 1.55,
+        "bank_bytes": 14288400,
+        "frames": 5644800,
+        "sample_rate": 44100
+      },
+      "audio_metrics": {
+        "quality_claim": "URMP-trained MIDI-DDSP timbre decoder with authored pitch and expression; perceptual indistinguishability is not established by these numerical checks.",
+        "files": {
+          "orchestral_house_full.wav": {
+            "seconds": 128.0,
+            "channels": 2,
+            "sample_peak_dbfs": -1.3104871580695558,
+            "rms_dbfs": -17.959312935931003,
+            "dc": [
+              3.914714129873955e-08,
+              9.85030954927544e-08
+            ],
+            "fullscale_samples": 0,
+            "sha256": "71ddb97c123173186a579e75ed35f6c37c674bfb0bd1b8f543ed2d6e4732e118",
+            "stereo_correlation": 0.8685077024846564,
+            "side_mid_db": -11.512170164144141,
+            "boundary_first_last": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0
+              ]
+            ],
+            "max_sample_step": 0.368438720703125
+          },
+          "violin_C4.wav": {
+            "seconds": 3.0,
+            "channels": 1,
+            "sample_peak_dbfs": -1.7242919066612568,
+            "rms_dbfs": -8.139359088044042,
+            "dc": [
+              -0.0008636137831868858
+            ],
+            "fullscale_samples": 0,
+            "sha256": "c135fdc04b613c3885dd15ed0cc9084e25b77d4a43cd9cd2bf824e9d698101a7",
+            "fundamental_hz": 261.5947723388672,
+            "expected_hz": 261.625565,
+            "pitch_error_cents": -0.20377382021190146,
+            "spectral_centroid_hz": 332.23620956934417
+          },
+          "double_bass_A1.wav": {
+            "seconds": 2.0,
+            "channels": 1,
+            "sample_peak_dbfs": -1.7242919066612568,
+            "rms_dbfs": -9.05025353860033,
+            "dc": [
+              3.349598302862812e-05
+            ],
+            "fullscale_samples": 0,
+            "sha256": "8d66e772dee66b786264cdc08d5042dfbe12ccac248244f46293342c0957a048",
+            "fundamental_hz": 55.01060485839844,
+            "expected_hz": 55.0,
+            "pitch_error_cents": 0.33377676680195606,
+            "spectral_centroid_hz": 72.01839759720835
+          },
+          "trumpet_A4.wav": {
+            "seconds": 3.0,
+            "channels": 1,
+            "sample_peak_dbfs": -1.7242919066612568,
+            "rms_dbfs": -11.772809152933972,
+            "dc": [
+              -4.2676168774801585e-05
+            ],
+            "fullscale_samples": 0,
+            "sha256": "e4fea5fe67cdf828b7d815616b02a79bbdec18ab3d2f63e8c31a9f693ffcc084",
+            "fundamental_hz": 440.00072479248047,
+            "expected_hz": 440.0,
+            "pitch_error_cents": 0.002851782698262237,
+            "spectral_centroid_hz": 1363.5692703571813
+          }
+        },
+        "generation": {
+          "seed": 1243184189,
+          "seconds": 21.045669,
+          "bank_nonfinite": 0,
+          "bank_peak": 0.819999993,
+          "mix_peak_before_master_gain": 0.581806242,
+          "master_gain": 1.55,
+          "bank_bytes": 14288400,
+          "frames": 5644800,
+          "sample_rate": 44100
+        },
+        "loudness_summary": "Summary:\n\n  Integrated loudness:\n    I:         -16.6 LUFS\n    Threshold: -26.7 LUFS\n\n  Loudness range:\n    LRA:         3.8 LU\n    Threshold: -36.6 LUFS\n    LRA low:   -19.1 LUFS\n    LRA high:  -15.3 LUFS\n\n  True peak:\n    Peak:       -1.3 dBFS\n[out#0/null @ 000002c8cdd83480] video:0KiB audio:22050KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\nsize=N/A time=00:02:08.00 bitrate=N/A speed= 291x elapsed=0:00:00.43",
+        "errors": [],
+        "passed": true
+      },
+      "source_sample_rate_hz": 16000,
+      "output_sample_rate_hz": 44100,
+      "runtime_neural_scope": "Trained timbre decoder; authored MIDI pitch, vibrato, expression, arrangement and reverb",
+      "perceptual_indistinguishability_verified": false,
+      "timing_context": "CPU full-score synthesis during concurrent project validation; wall-clock timing is hardware/load dependent"
+    }
+  },
+  "native": {
+    "executable": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\dist\\AlpineDreaming.exe",
+    "sha256": "9F82E8EDA15EB1F679A6F757697969F5FA734EA5C42A9254E0229EFFB877BD00",
+    "hold_seconds": 600,
+    "window_was_visible": false,
+    "responsive_before_close": true,
+    "close_latency_seconds": 1.1958,
+    "exit_code": 0,
+    "forced_termination": false,
+    "rendered_frames": 122,
+    "minimum_rendered_frames": 120,
+    "first_frame_observed_seconds": 308.0472,
+    "observed_seconds": 320.0727,
+    "peak_working_set_bytes": 689217536
+  },
+  "startup_cancellation": {
+    "path": "build/native_cancel_400.json",
+    "sha256": "32cb59051a7399411d4ee1f6fe09073410cbfff4d5c4537877fe1ef8a2dc9296",
+    "result": {
+      "executable": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\dist\\AlpineDreaming.exe",
+      "sha256": "9F82E8EDA15EB1F679A6F757697969F5FA734EA5C42A9254E0229EFFB877BD00",
+      "hold_seconds": 3,
+      "window_was_visible": false,
+      "responsive_before_close": false,
+      "close_latency_seconds": 1.9409,
+      "exit_code": 0,
+      "forced_termination": false,
+      "rendered_frames": 0,
+      "minimum_rendered_frames": 0,
+      "first_frame_observed_seconds": null,
+      "observed_seconds": 3.6289,
+      "peak_working_set_bytes": 137175040
+    }
+  },
+  "startup_responsiveness_target_met": false,
+  "startup_responsiveness_issue": "The 500 ms message-response target was missed during neural startup. Cancellation was orderly within three seconds; this does not pass the responsiveness target.",
+  "hardware": {
+    "path": "build/gpu_capabilities.json",
+    "sha256": "c3f97af97e0a89152d6cb110ccbefc1838dd38d0981008d92a2418edac0ce547",
+    "result": {
+      "schema": 1,
+      "physical_memory_bytes": 16785965056,
+      "available_physical_memory_bytes": 2133929984,
+      "adapters": [
+        {
+          "index": 0,
+          "name": "Intel(R) Iris(R) Xe Graphics",
+          "vendor_id": 32902,
+          "device_id": 18086,
+          "software": false,
+          "dedicated_video_memory_bytes": 134217728,
+          "dedicated_system_memory_bytes": 0,
+          "shared_system_memory_bytes": 8392982528,
+          "d3d11_device_created": true,
+          "feature_level": 45312,
+          "local_memory": {
+            "budget_bytes": 7704897946,
+            "current_usage_bytes": 1265664,
+            "available_for_reservation_bytes": 3986666701
+          },
+          "nonlocal_memory": {
+            "budget_bytes": 0,
+            "current_usage_bytes": 0,
+            "available_for_reservation_bytes": 0
+          }
+        },
+        {
+          "index": 1,
+          "name": "Microsoft Basic Render Driver",
+          "vendor_id": 5140,
+          "device_id": 140,
+          "software": true,
+          "dedicated_video_memory_bytes": 0,
+          "dedicated_system_memory_bytes": 0,
+          "shared_system_memory_bytes": 8392982528,
+          "d3d11_device_created": true,
+          "feature_level": 45312,
+          "local_memory": {
+            "budget_bytes": 7704897946,
+            "current_usage_bytes": 0,
+            "available_for_reservation_bytes": 3986666701
+          },
+          "nonlocal_memory": {
+            "budget_bytes": 0,
+            "current_usage_bytes": 0,
+            "available_for_reservation_bytes": 0
+          }
+        }
+      ]
+    }
+  },
+  "timeline_input": {
+    "path": "tools/neural_release_times.txt",
+    "sha256": "b361f0febb429460aa23dcda86b86fb3f1302923b9c86337b216c052da6f1264",
+    "times": [
+      0.0,
+      16.0,
+      24.0,
+      24.033333333333335,
+      24.066666666666666,
+      24.1,
+      24.133333333333333,
+      24.166666666666668,
+      24.2,
+      24.233333333333334,
+      24.266666666666666,
+      24.3,
+      24.333333333333332,
+      24.366666666666667,
+      24.4,
+      24.433333333333334,
+      24.466666666666665,
+      24.5,
+      24.533333333333335,
+      24.566666666666666,
+      24.6,
+      24.633333333333333,
+      32.0,
+      40.0,
+      48.0,
+      56.0,
+      64.0,
+      64.03333333333333,
+      64.06666666666666,
+      64.1,
+      64.13333333333334,
+      64.16666666666667,
+      64.2,
+      64.23333333333333,
+      64.26666666666667,
+      64.3,
+      80.0,
+      96.0,
+      96.03333333333333,
+      96.06666666666666,
+      96.1,
+      96.13333333333334,
+      96.16666666666667,
+      96.2,
+      96.23333333333333,
+      96.26666666666667,
+      96.3,
+      112.0,
+      126.0,
+      128.0
+    ]
+  },
+  "render_sequences": [
+    {
+      "directory": "build/neural_final_timeline",
+      "metrics_sha256": "f2aed5c3854c5c392780c1c0fdd3ac6f4ba06a9c9f6f0c95d9d6b81311a46f52",
+      "frames": 50,
+      "start": 0,
+      "end": 128,
+      "time_min": 0,
+      "time_max": 128,
+      "frame_times": [
+        0,
+        16,
+        24,
+        24.0333,
+        24.0667,
+        24.1,
+        24.1333,
+        24.1667,
+        24.2,
+        24.2333,
+        24.2667,
+        24.3,
+        24.3333,
+        24.3667,
+        24.4,
+        24.4333,
+        24.4667,
+        24.5,
+        24.5333,
+        24.5667,
+        24.6,
+        24.6333,
+        32,
+        40,
+        48,
+        56,
+        64,
+        64.0333,
+        64.0667,
+        64.1,
+        64.1333,
+        64.1667,
+        64.2,
+        64.2333,
+        64.2667,
+        64.3,
+        80,
+        96,
+        96.0333,
+        96.0667,
+        96.1,
+        96.1333,
+        96.1667,
+        96.2,
+        96.2333,
+        96.2667,
+        96.3,
+        112,
+        126,
+        128
+      ],
+      "continuous_frame_pairs": 37,
+      "dt": null,
+      "adapter": "Intel(R) Iris(R) Xe Graphics",
+      "width": 1280,
+      "height": 720,
+      "invalid_pixels": 0,
+      "debug_errors": 0,
+      "debug_warnings": 0,
+      "neural_avatar": {
+        "model": "gDNA THuman2.0",
+        "model_resource_id": 200,
+        "model_bytes": 8695856,
+        "model_sha256": "cbda91973caba80d1adfdcf64b6cdd9e47c08d5542a7cffc182300b28fb5dd92",
+        "candidate_sha256": "9f82e8eda15eb1f679a6f757697969f5fa734ea5c42a9254e0229effb877bd00",
+        "source_kind": "candidate_resources",
+        "inference_executed": true,
+        "seed": 42,
+        "vertex_count": 150876,
+        "vertex_stride_bytes": 64,
+        "status": 1,
+        "startup_wall_seconds": 98.1477,
+        "helper_seconds": 98.1454,
+        "feature_ms": 7109,
+        "field_ms": 78125,
+        "geometry_fnv1a64": "a1d0dd3d734e1fb",
+        "invalid_values": 0,
+        "invalid_joint_ids": 0,
+        "max_weight_sum_error": 1.98372e-07,
+        "normal_length_min": 1,
+        "normal_length_max": 1,
+        "active_joint_count": 24,
+        "joint_influence_counts": [
+          61624,
+          62507,
+          63926,
+          48416,
+          32168,
+          23754,
+          43336,
+          17911,
+          13605,
+          55936,
+          14128,
+          14927,
+          16389,
+          22495,
+          16227,
+          19399,
+          15754,
+          13480,
+          8757,
+          7521,
+          4068,
+          4324,
+          5533,
+          6440
+        ],
+        "bounds_min": [
+          -0.861276,
+          0,
+          -0.155129
+        ],
+        "bounds_max": [
+          0.883182,
+          1.75,
+          0.192249
+        ],
+        "invalid_color_values": 0,
+        "invalid_morph_values": 0,
+        "max_abs_morph_delta": 0,
+        "motion_frames": 0,
+        "motion_duration_seconds": 0,
+        "invalid_motion_values": 0,
+        "motion_max_difference_from_first": 0
+      },
+      "neural_head": {
+        "model": "GANHead FaceVerse",
+        "model_resource_id": 202,
+        "model_bytes": 12330948,
+        "model_sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
+        "candidate_sha256": "9f82e8eda15eb1f679a6f757697969f5fa734ea5c42a9254e0229effb877bd00",
+        "source_kind": "candidate_resources",
+        "inference_executed": true,
+        "seed": 42,
+        "vertex_count": 400056,
+        "vertex_stride_bytes": 144,
+        "status": 1,
+        "startup_wall_seconds": 203.817,
+        "helper_seconds": 203.812,
+        "feature_ms": 6484,
+        "field_ms": 104328,
+        "geometry_fnv1a64": "8f32735a157081c6",
+        "invalid_values": 0,
+        "invalid_joint_ids": 0,
+        "max_weight_sum_error": 2.16649e-07,
+        "normal_length_min": 1,
+        "normal_length_max": 1,
+        "active_joint_count": 5,
+        "joint_influence_counts": [
+          399959,
+          400056,
+          400056,
+          12943,
+          387210
+        ],
+        "bounds_min": [
+          -0.161348,
+          0,
+          -0.136008
+        ],
+        "bounds_max": [
+          0.164452,
+          0.33,
+          0.114503
+        ],
+        "invalid_color_values": 0,
+        "invalid_morph_values": 0,
+        "max_abs_morph_delta": 0.00329753,
+        "motion_frames": 1825,
+        "motion_duration_seconds": 128,
+        "invalid_motion_values": 0,
+        "motion_max_difference_from_first": 2.49728
+      },
+      "unique_frame_hashes": 49,
+      "render_ms_excluding_physics_and_first_when_multiple": {
+        "median": 131.0332385,
+        "mean": 125.6956892312653,
+        "maximum": 195.5147121666
+      }
+    }
+  ],
+  "inherited_checks": [],
+  "source_sha256": {
+    "src/alpine.asm": "66afe7de01f1dbc64dacdfffc44debfd5d5a6d06039517d655c7f41743860cec",
+    "src/atmosphere_common.hlsli": "75254f9cdfb29034f702afd8edebb2b7fbf82e7280db6f0fabf6e685b686965a",
+    "src/atmosphere_compute.hlsl": "c36874d78341b4414ffd5e71d7c79d10e404d9e6db6404a0f07cfb97b44e8a81",
+    "src/cinematic_lighting.hlsli": "8ad5d7f51e0c43792016ccba05f78eb45da3f2ec898290ed024f5fcbd3e1e4aa",
+    "src/cinematic_mesh.hlsl": "24e7e28c5ef22bdfa69357aee40d68088a25ca085f13d103b3802cabf95e4d24",
+    "src/cloud_post.hlsl": "194591d992fcfe6343246e14a3ad690433fa1f23f5a5dc8accb8d1fc63b835c4",
+    "src/cloud_render.hlsli": "05f26c1a7fc756c80c19e529b8ba869073a1370fdac8f930362630ee7a4d09ec",
+    "src/cloud_volume.hlsl": "99b679cf8df551b16fdc53a69961c90284ca9917c893d718f6027704405295a5",
+    "src/detail_common.hlsli": "8aefe535de1f9989825cdbdecbd6a0f7ecbe054e88cbefe78247e3de06365de8",
+    "src/frame_vertex.hlsli": "7041e8f08dc5ced0ac0f98b99f39ffd1beb7e1c1dacdacf51dddd1ef1860e72c",
+    "src/human_pass.hlsl": "bfe19fe7b5326df891be730198db53bc48ff624315c96fac4edff39d87f679b3",
+    "src/human_procedural.hlsli": "5f460f21501414b57485a9655af9eafae4010bee0a88c4f8d61b29bbeccec1a9",
+    "src/loading.inc": "79bd46d5166fe60a3101424241a01a9ebdd16cbfa7316b5e36154f850e2f9a98",
+    "src/material_common.hlsli": "fea7a4727fc3bd17bdac752f5aa9647c56098b57027163916bf0a5ecd8ff80f2",
+    "src/material_compute.hlsl": "9ae0bc66f04f5f4aad8b38bbd38d4f53698c49d8c13854a31e1573fd2b5424f2",
+    "src/neural_audio.cpp": "0dd50a15b9d12f3996645f89f9aea39ef6d073c28838177be0c57e5a61250517",
+    "src/neural_audio.h": "c2b9497b0327b246b3623f3e1630de68b7ad0e64db3a07f411cee207d69d3130",
+    "src/neural_avatar.hlsl": "31a9a7cfec71d4030eda820a34006b20784722a7b421a45eeb3c1bfedfe05901",
+    "src/neural_avatar_runtime.cpp": "6ac5965a54fd976404ec5a4f563c550d0a6fb6e0e6d2a251172c7c5c79759def",
+    "src/neural_avatar_runtime.h": "52055736d6ac267a750c12c01f2a0831037db0a6e87540da3a89d3124b4f1456",
+    "src/neural_mesh_cleanup.h": "42b32e7f92cd91f0818ee0dc2ee43a7b3ee460b1af7c563c690df3444c777478",
+    "src/neural_resident.hlsli": "6a2a5916597e24fbfbebfa4ce0e5d49b6fc247526bfe7b4bab8c9586ec558fc9",
+    "src/orchestra.inc": "8efb0d3fc43cd17695c55a3824eadd488c57925603ba2e81c404e854b14714dc",
+    "src/people_motion.hlsli": "ca95d99c5be7be29cec6bc1bb60a461533372c3c27c585c5e075650411b29ab6",
+    "src/physics_common.hlsli": "f3a8abd285bc8b386822a76ffcd3b7cbe982aba711206b381acabdd1014ed7b1",
+    "src/physics_simulation.hlsl": "4d25953184da7ea7585f1eda58f8cc7a195136e0428baece60ceb611487e1923",
+    "src/post.hlsl": "9e95ffab9918b692a50ac1afb7294b26696c1302e6d8ad9ec99b7e223d8341e0",
+    "src/sampler_common.hlsli": "476e9c01c765c134040125e2b98fd33ee74545af6b4f5d9d9fd6fcc8cd6aacbc",
+    "src/scene.hlsl": "b034f5d0a33d2559de5c96c146f49c017e872cc7c4b01620767ac0a045d43b1b",
+    "src/scene_common.hlsli": "7a4661bff180b0ef5c24a6043785b7cc8cbbe79ba4b406ffaf8587f549a0e7b4",
+    "src/settlement_geometry.hlsli": "76b54cfee8ef1c891dfa5c5c53ca3f103398cf585c593b6708cc4e414aa68322",
+    "src/shaders.rc": "23b776c2c98cc692c3fd804341a94f443600df5ea69abfce59d4fe2db2495b05",
+    "src/terrain_bounds.hlsl": "c2564e45ddc8e342677e5083c14f6d900c81b9657859b26183370baf0c5afbcd",
+    "src/terrain_compute.hlsl": "487dc84c4416ca5f8e164838a900726f005567bde0ef29d011ec930a758bb67b",
+    "src/terrain_material.hlsli": "98ac4e6be27d8d3ac4c403cf2cc8c6334e967a2f1657722724662fc8bbe23308",
+    "src/terrain_trace.hlsli": "09bf3e2ce7edd55c9035b1382d97a0f0b311dc0aa5b89723c820fdff790a8a2f"
+  },
+  "quality": {
+    "photorealism_achieved": false,
+    "acoustic_indistinguishability_established": false,
+    "reason": "Neural execution, packaging and numerical/runtime behavior are checked. Photographic and acoustic indistinguishability are not established."
+  }
+}

@@ -1,0 +1,2 @@
+/AlpineDemoscene/dist/AlpineDreaming.exe filter=lfs diff=lfs merge=lfs -text
+/AlpineDemoscene/models/material/photomat-256.nam filter=lfs diff=lfs merge=lfs -text

@@ -21,8 +21,15 @@ struct NeuralAvatarResult {
     uint32_t vertexStrideBytes;
     float motionDuration;
     uint32_t padding;
+    ID3D11Buffer* rigBuffer;
+    ID3D11ShaderResourceView* rigSRV;
 };
-static_assert(sizeof(NeuralAvatarResult)==96,"MASM result ABI");
+static_assert(sizeof(NeuralAvatarResult)==112,"MASM result ABI");
+
+// Body-only generated rig metadata: 32 float4 records (512 bytes), CS t23.
+// Records0..23 are learned skin-interface bind landmarks in normalized metres.
+// Records24/25 hold left/right ankle-to-sole distances after canonical unspread;
+// records26..31 are reserved. Heads currently leave this buffer null.
 
 // pump returns nonzero to continue, zero to cancel. All transient buffers are
 // released before returning. Success transfers vertexBuffer/vertexSRV to caller.

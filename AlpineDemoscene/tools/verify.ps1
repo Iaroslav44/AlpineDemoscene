@@ -16,6 +16,8 @@ $modelMap = @{}
 foreach ($model in $models) { $modelMap[$model.ResourceId] = $model }
 $shaderIds = @(101..119)
 if ($modelMap.ContainsKey(200)) { $shaderIds += 120 }
+if ($modelMap.ContainsKey(203)) { $shaderIds += 121 }
+$shaderIds += 122
 $bytes = [IO.File]::ReadAllBytes($file.FullName)
 function U16([int]$p) { [BitConverter]::ToUInt16($bytes, $p) }
 function U32([int]$p) { [BitConverter]::ToUInt32($bytes, $p) }
@@ -109,7 +111,7 @@ function WalkResources([int]$relative, [int[]]$keys) {
                 if ($tag -in @('SHDR','SHEX')) {
                     if ($chunkLength -lt 8) { throw 'Invalid shader program chunk.' }
                     $version=U32 ($data+$offset+8)
-                    $expected=if($path[1] -in @(101,106,108)){1}elseif($path[1] -in @(110,111,112,113,114,115,116,117,118,120)){5}else{0}
+                    $expected=if($path[1] -in @(101,106,108)){1}elseif($path[1] -in @(110,111,112,113,114,115,116,117,118,120,121,122)){5}else{0}
                     if (($version -shr 16) -ne $expected -or (($version -shr 4) -band 15) -ne 5 -or ($version -band 15) -ne 0) {
                         throw "Resource $($path[1]) does not contain its expected Shader Model 5.0 stage."
                     }

@@ -21,6 +21,13 @@
       "bytes": 12330948,
       "sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
       "magic_hex": "4e41483101000000"
+    },
+    {
+      "resource_id": 203,
+      "path": "models/material/photomat-256.nam",
+      "bytes": 115774612,
+      "sha256": "6d4706e0814ea7265e0f23b336c663ffbdcbaa47a893c2f8f96d7c6428e35257",
+      "magic_hex": "4e414d3101000000"
     }
   ]
 }

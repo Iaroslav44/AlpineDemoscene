@@ -149,6 +149,10 @@ if (200 -in $neuralModels.ResourceId) {
     if ($LASTEXITCODE -ne 0) { throw 'Pretrained neural avatar compute shader compilation failed.' }
 }
 
+& $fxc /nologo /T cs_5_0 /E NeuralMaterialCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo (Join-Path $buildDir 'neural_material_cs.cso') (Join-Path $sourceDir 'neural_material.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Neural material shader compilation failed.' }
+& $fxc /nologo /T cs_5_0 /E WorldCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo (Join-Path $buildDir 'world_cs.cso') (Join-Path $sourceDir 'geomorphology.hlsl')
+if ($LASTEXITCODE -ne 0) { throw 'Watershed generation shader compilation failed.' }
 Write-Host 'Embedding compact procedural DXBC shaders...'
 Push-Location $sourceDir
 try {
@@ -168,7 +172,7 @@ if ($LASTEXITCODE -ne 0) { throw 'MASM compilation failed.' }
 $inferenceObjects = @()
 $includes = @("/I$($toolset.FullName)\include", "/I$sourceDir")
 foreach ($part in @('ucrt','shared','um','winrt')) { $includes += "/I$sdkRoot\Include\$sdkVersion\$part" }
-foreach ($name in @('neural_avatar_runtime', 'neural_audio')) {
+foreach ($name in @('neural_avatar_runtime', 'neural_audio', 'neural_material_runtime', 'world_generation')) {
     $nativeSource = Join-Path $sourceDir "$name.cpp"
     if (Test-Path -LiteralPath $nativeSource) {
         if (-not (Test-Path -LiteralPath $cl)) { throw 'C++ compiler is required for native inference helpers.' }

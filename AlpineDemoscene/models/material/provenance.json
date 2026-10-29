@@ -1,0 +1,1438 @@
+{
+  "schema": 1,
+  "name": "PhotoMat 256",
+  "paper": "https://arxiv.org/abs/2305.12296",
+  "repository": "https://github.com/xilongzhou/PhotoMat",
+  "repository_revision": "035067e96c6fa7ed3c3c5412285fef5c6152316f",
+  "official_source_sha256": {
+    "LICENSE.txt": "877d9dcaeaea87c5bd61f19fc547923431b6ccf2a750c0fe09b10ebd331484e1",
+    "LICENSE-stylegan.txt": "8f5e467a7bffe111d57b51e940d56b0d5e342835489118b7efd1127680c99839",
+    "training/networks.py": "a4e53b902059f2cb974465e9b60b9cbe0a7d08da97d661f825402f9237b5723e",
+    "torch_utils/ops/conv2d_resample.py": "f7a68220f8d03a042b3d44bea460accea28af54b04857890a6906a0074f23534",
+    "torch_utils/ops/upfirdn2d.py": "38865dbf89604a5e6bd6c0ec167143d01392fb1ffaca13649143d08689c089d7",
+    "torch_utils/render.py": "de5e08941804a1996bceb8047717ef72dd58ed45c978ac3416a89bd50ac392d4"
+  },
+  "training": "Real flash photographs of physical material samples, as stated by the authors.",
+  "source_checkpoints": {
+    "G_256.pkl": "4648af64714a59d3c6a40eef176935c6b8374d348fa10a40f40b6791a21b55ba",
+    "MatUnet_256.pt": "8e08510fdd91ce5004a2cd63fdbd37b7e1292c724474e24861760218a8e5fd1e"
+  },
+  "export_bytes": 115774612,
+  "export_sha256": "6d4706e0814ea7265e0f23b336c663ffbdcbaa47a893c2f8f96d7c6428e35257",
+  "format": "NAM1; 64-byte header; 128-byte tensor records; little-endian float32; logical source dimensions",
+  "retained": "G_ema mapping/synthesis feature generator and MatUnet trained SVBRDF estimator.",
+  "excluded": "Discriminator, non-EMA generator, learned relighting MLP, stored fixed random noise, fixed resample filters.",
+  "noise": "Fresh seeded CLT Gaussian noise evaluated during runtime, using trained noise strengths.",
+  "inference": "Float32 operators. Checkpoint FP16 acceleration is not reproduced; reference requests float32.",
+  "output": "256x256 height, diffuse RGB, roughness, specular RGB; source height-to-normal conversion.",
+  "limitations": [
+    "Unconditional model; no guaranteed semantic material category.",
+    "Generator uses zero padding; generated tiles are not inherently seamless.",
+    "Materials do not generate object geometry.",
+    "PhotoMat and StyleGAN license limits to noncommercial research/evaluation."
+  ],
+  "generator": {
+    "z_dim": 512,
+    "c_dim": 3,
+    "w_dim": 512,
+    "img_resolution": 256,
+    "img_channels": 32,
+    "_init_args": [],
+    "_init_kwargs": {
+      "z_dim": 512,
+      "w_dim": 512,
+      "mapping_kwargs": {
+        "num_layers": 2,
+        "no_cond_map": true
+      },
+      "synthesis_kwargs": {
+        "channel_base": 16384,
+        "channel_max": 512,
+        "num_fp16_res": 4,
+        "conv_clamp": 256,
+        "circular": false,
+        "use_ray": true
+      },
+      "deco_mlp": 2,
+      "c_dim": 3,
+      "img_resolution": 256,
+      "img_channels": 3
+    }
+  },
+  "tensors": [
+    {
+      "name": "synthesis.b4.const",
+      "shape": [
+        512,
+        4,
+        4
+      ],
+      "offset": 17600,
+      "bytes": 32768,
+      "layout": 3
+    },
+    {
+      "name": "synthesis.b4.conv1.weight",
+      "shape": [
+        512,
+        512,
+        3,
+        3
+      ],
+      "offset": 50368,
+      "bytes": 9437184,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b4.conv1.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 9487552,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b4.conv1.bias",
+      "shape": [
+        512
+      ],
+      "offset": 9487556,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b4.conv1.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 9489604,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b4.conv1.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 10538180,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b4.torgb.weight",
+      "shape": [
+        32,
+        512,
+        1,
+        1
+      ],
+      "offset": 10540228,
+      "bytes": 65536,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b4.torgb.bias",
+      "shape": [
+        32
+      ],
+      "offset": 10605764,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b4.torgb.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 10605892,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b4.torgb.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 11654468,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.conv0.weight",
+      "shape": [
+        512,
+        512,
+        3,
+        3
+      ],
+      "offset": 11656516,
+      "bytes": 9437184,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b8.conv0.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 21093700,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.conv0.bias",
+      "shape": [
+        512
+      ],
+      "offset": 21093704,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.conv0.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 21095752,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.conv0.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 22144328,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.conv1.weight",
+      "shape": [
+        512,
+        512,
+        3,
+        3
+      ],
+      "offset": 22146376,
+      "bytes": 9437184,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b8.conv1.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 31583560,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.conv1.bias",
+      "shape": [
+        512
+      ],
+      "offset": 31583564,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.conv1.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 31585612,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.conv1.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 32634188,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.torgb.weight",
+      "shape": [
+        32,
+        512,
+        1,
+        1
+      ],
+      "offset": 32636236,
+      "bytes": 65536,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b8.torgb.bias",
+      "shape": [
+        32
+      ],
+      "offset": 32701772,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.torgb.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 32701900,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b8.torgb.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 33750476,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.conv0.weight",
+      "shape": [
+        512,
+        512,
+        3,
+        3
+      ],
+      "offset": 33752524,
+      "bytes": 9437184,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b16.conv0.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 43189708,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.conv0.bias",
+      "shape": [
+        512
+      ],
+      "offset": 43189712,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.conv0.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 43191760,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.conv0.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 44240336,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.conv1.weight",
+      "shape": [
+        512,
+        512,
+        3,
+        3
+      ],
+      "offset": 44242384,
+      "bytes": 9437184,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b16.conv1.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 53679568,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.conv1.bias",
+      "shape": [
+        512
+      ],
+      "offset": 53679572,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.conv1.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 53681620,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.conv1.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 54730196,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.torgb.weight",
+      "shape": [
+        32,
+        512,
+        1,
+        1
+      ],
+      "offset": 54732244,
+      "bytes": 65536,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b16.torgb.bias",
+      "shape": [
+        32
+      ],
+      "offset": 54797780,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.torgb.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 54797908,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b16.torgb.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 55846484,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.conv0.weight",
+      "shape": [
+        512,
+        512,
+        3,
+        3
+      ],
+      "offset": 55848532,
+      "bytes": 9437184,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b32.conv0.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 65285716,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.conv0.bias",
+      "shape": [
+        512
+      ],
+      "offset": 65285720,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.conv0.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 65287768,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.conv0.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 66336344,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.conv1.weight",
+      "shape": [
+        512,
+        512,
+        3,
+        3
+      ],
+      "offset": 66338392,
+      "bytes": 9437184,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b32.conv1.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 75775576,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.conv1.bias",
+      "shape": [
+        512
+      ],
+      "offset": 75775580,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.conv1.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 75777628,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.conv1.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 76826204,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.torgb.weight",
+      "shape": [
+        32,
+        512,
+        1,
+        1
+      ],
+      "offset": 76828252,
+      "bytes": 65536,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b32.torgb.bias",
+      "shape": [
+        32
+      ],
+      "offset": 76893788,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.torgb.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 76893916,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b32.torgb.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 77942492,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.conv0.weight",
+      "shape": [
+        256,
+        512,
+        3,
+        3
+      ],
+      "offset": 77944540,
+      "bytes": 4718592,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b64.conv0.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 82663132,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.conv0.bias",
+      "shape": [
+        256
+      ],
+      "offset": 82663136,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.conv0.affine.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 82664160,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.conv0.affine.bias",
+      "shape": [
+        512
+      ],
+      "offset": 83712736,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.conv1.weight",
+      "shape": [
+        256,
+        256,
+        3,
+        3
+      ],
+      "offset": 83714784,
+      "bytes": 2359296,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b64.conv1.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 86074080,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.conv1.bias",
+      "shape": [
+        256
+      ],
+      "offset": 86074084,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.conv1.affine.weight",
+      "shape": [
+        256,
+        512
+      ],
+      "offset": 86075108,
+      "bytes": 524288,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.conv1.affine.bias",
+      "shape": [
+        256
+      ],
+      "offset": 86599396,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.torgb.weight",
+      "shape": [
+        32,
+        256,
+        1,
+        1
+      ],
+      "offset": 86600420,
+      "bytes": 32768,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b64.torgb.bias",
+      "shape": [
+        32
+      ],
+      "offset": 86633188,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.torgb.affine.weight",
+      "shape": [
+        256,
+        512
+      ],
+      "offset": 86633316,
+      "bytes": 524288,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b64.torgb.affine.bias",
+      "shape": [
+        256
+      ],
+      "offset": 87157604,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.conv0.weight",
+      "shape": [
+        128,
+        256,
+        3,
+        3
+      ],
+      "offset": 87158628,
+      "bytes": 1179648,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b128.conv0.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 88338276,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.conv0.bias",
+      "shape": [
+        128
+      ],
+      "offset": 88338280,
+      "bytes": 512,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.conv0.affine.weight",
+      "shape": [
+        256,
+        512
+      ],
+      "offset": 88338792,
+      "bytes": 524288,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.conv0.affine.bias",
+      "shape": [
+        256
+      ],
+      "offset": 88863080,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.conv1.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ],
+      "offset": 88864104,
+      "bytes": 589824,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b128.conv1.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 89453928,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.conv1.bias",
+      "shape": [
+        128
+      ],
+      "offset": 89453932,
+      "bytes": 512,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.conv1.affine.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 89454444,
+      "bytes": 262144,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.conv1.affine.bias",
+      "shape": [
+        128
+      ],
+      "offset": 89716588,
+      "bytes": 512,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.torgb.weight",
+      "shape": [
+        32,
+        128,
+        1,
+        1
+      ],
+      "offset": 89717100,
+      "bytes": 16384,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b128.torgb.bias",
+      "shape": [
+        32
+      ],
+      "offset": 89733484,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.torgb.affine.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 89733612,
+      "bytes": 262144,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b128.torgb.affine.bias",
+      "shape": [
+        128
+      ],
+      "offset": 89995756,
+      "bytes": 512,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.conv0.weight",
+      "shape": [
+        64,
+        128,
+        3,
+        3
+      ],
+      "offset": 89996268,
+      "bytes": 294912,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b256.conv0.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 90291180,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.conv0.bias",
+      "shape": [
+        64
+      ],
+      "offset": 90291184,
+      "bytes": 256,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.conv0.affine.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 90291440,
+      "bytes": 262144,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.conv0.affine.bias",
+      "shape": [
+        128
+      ],
+      "offset": 90553584,
+      "bytes": 512,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.conv1.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ],
+      "offset": 90554096,
+      "bytes": 147456,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b256.conv1.noise_strength",
+      "shape": [
+        1
+      ],
+      "offset": 90701552,
+      "bytes": 4,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.conv1.bias",
+      "shape": [
+        64
+      ],
+      "offset": 90701556,
+      "bytes": 256,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.conv1.affine.weight",
+      "shape": [
+        64,
+        512
+      ],
+      "offset": 90701812,
+      "bytes": 131072,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.conv1.affine.bias",
+      "shape": [
+        64
+      ],
+      "offset": 90832884,
+      "bytes": 256,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.torgb.weight",
+      "shape": [
+        32,
+        64,
+        1,
+        1
+      ],
+      "offset": 90833140,
+      "bytes": 8192,
+      "layout": 2
+    },
+    {
+      "name": "synthesis.b256.torgb.bias",
+      "shape": [
+        32
+      ],
+      "offset": 90841332,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.torgb.affine.weight",
+      "shape": [
+        64,
+        512
+      ],
+      "offset": 90841460,
+      "bytes": 131072,
+      "layout": 1
+    },
+    {
+      "name": "synthesis.b256.torgb.affine.bias",
+      "shape": [
+        64
+      ],
+      "offset": 90972532,
+      "bytes": 256,
+      "layout": 1
+    },
+    {
+      "name": "mapping.w_avg",
+      "shape": [
+        512
+      ],
+      "offset": 90972788,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "mapping.fc0.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 90974836,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "mapping.fc0.bias",
+      "shape": [
+        512
+      ],
+      "offset": 92023412,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "mapping.fc1.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 92025460,
+      "bytes": 1048576,
+      "layout": 1
+    },
+    {
+      "name": "mapping.fc1.bias",
+      "shape": [
+        512
+      ],
+      "offset": 93074036,
+      "bytes": 2048,
+      "layout": 1
+    },
+    {
+      "name": "unet.block0.model.0.weight",
+      "shape": [
+        32,
+        32,
+        4,
+        4
+      ],
+      "offset": 93076084,
+      "bytes": 65536,
+      "layout": 2
+    },
+    {
+      "name": "unet.block0.model.0.bias",
+      "shape": [
+        32
+      ],
+      "offset": 93141620,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "unet.block0.model.2.weight",
+      "shape": [
+        32,
+        32,
+        3,
+        3
+      ],
+      "offset": 93141748,
+      "bytes": 36864,
+      "layout": 2
+    },
+    {
+      "name": "unet.block0.model.2.bias",
+      "shape": [
+        32
+      ],
+      "offset": 93178612,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "unet.block1.model.0.weight",
+      "shape": [
+        64,
+        32,
+        4,
+        4
+      ],
+      "offset": 93178740,
+      "bytes": 131072,
+      "layout": 2
+    },
+    {
+      "name": "unet.block1.model.0.bias",
+      "shape": [
+        64
+      ],
+      "offset": 93309812,
+      "bytes": 256,
+      "layout": 1
+    },
+    {
+      "name": "unet.block1.model.2.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ],
+      "offset": 93310068,
+      "bytes": 147456,
+      "layout": 2
+    },
+    {
+      "name": "unet.block1.model.2.bias",
+      "shape": [
+        64
+      ],
+      "offset": 93457524,
+      "bytes": 256,
+      "layout": 1
+    },
+    {
+      "name": "unet.block2.model.0.weight",
+      "shape": [
+        128,
+        64,
+        4,
+        4
+      ],
+      "offset": 93457780,
+      "bytes": 524288,
+      "layout": 2
+    },
+    {
+      "name": "unet.block2.model.0.bias",
+      "shape": [
+        128
+      ],
+      "offset": 93982068,
+      "bytes": 512,
+      "layout": 1
+    },
+    {
+      "name": "unet.block2.model.2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ],
+      "offset": 93982580,
+      "bytes": 589824,
+      "layout": 2
+    },
+    {
+      "name": "unet.block2.model.2.bias",
+      "shape": [
+        128
+      ],
+      "offset": 94572404,
+      "bytes": 512,
+      "layout": 1
+    },
+    {
+      "name": "unet.block3.model.0.weight",
+      "shape": [
+        256,
+        128,
+        4,
+        4
+      ],
+      "offset": 94572916,
+      "bytes": 2097152,
+      "layout": 2
+    },
+    {
+      "name": "unet.block3.model.0.bias",
+      "shape": [
+        256
+      ],
+      "offset": 96670068,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "unet.block3.model.2.weight",
+      "shape": [
+        256,
+        256,
+        3,
+        3
+      ],
+      "offset": 96671092,
+      "bytes": 2359296,
+      "layout": 2
+    },
+    {
+      "name": "unet.block3.model.2.bias",
+      "shape": [
+        256
+      ],
+      "offset": 99030388,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "unet.block4.model.0.weight",
+      "shape": [
+        256,
+        256,
+        4,
+        4
+      ],
+      "offset": 99031412,
+      "bytes": 4194304,
+      "layout": 2
+    },
+    {
+      "name": "unet.block4.model.0.bias",
+      "shape": [
+        256
+      ],
+      "offset": 103225716,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "unet.block4.model.2.weight",
+      "shape": [
+        256,
+        256,
+        3,
+        3
+      ],
+      "offset": 103226740,
+      "bytes": 2359296,
+      "layout": 2
+    },
+    {
+      "name": "unet.block4.model.2.bias",
+      "shape": [
+        256
+      ],
+      "offset": 105586036,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "unet.block5.model.0.weight",
+      "shape": [
+        256,
+        512,
+        3,
+        3
+      ],
+      "offset": 105587060,
+      "bytes": 4718592,
+      "layout": 2
+    },
+    {
+      "name": "unet.block5.model.0.bias",
+      "shape": [
+        256
+      ],
+      "offset": 110305652,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "unet.block5.model.2.weight",
+      "shape": [
+        256,
+        256,
+        3,
+        3
+      ],
+      "offset": 110306676,
+      "bytes": 2359296,
+      "layout": 2
+    },
+    {
+      "name": "unet.block5.model.2.bias",
+      "shape": [
+        256
+      ],
+      "offset": 112665972,
+      "bytes": 1024,
+      "layout": 1
+    },
+    {
+      "name": "unet.block6.model.0.weight",
+      "shape": [
+        128,
+        384,
+        3,
+        3
+      ],
+      "offset": 112666996,
+      "bytes": 1769472,
+      "layout": 2
+    },
+    {
+      "name": "unet.block6.model.0.bias",
+      "shape": [
+        128
+      ],
+      "offset": 114436468,
+      "bytes": 512,
+      "layout": 1
+    },
+    {
+      "name": "unet.block6.model.2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ],
+      "offset": 114436980,
+      "bytes": 589824,
+      "layout": 2
+    },
+    {
+      "name": "unet.block6.model.2.bias",
+      "shape": [
+        128
+      ],
+      "offset": 115026804,
+      "bytes": 512,
+      "layout": 1
+    },
+    {
+      "name": "unet.block7.model.0.weight",
+      "shape": [
+        64,
+        192,
+        3,
+        3
+      ],
+      "offset": 115027316,
+      "bytes": 442368,
+      "layout": 2
+    },
+    {
+      "name": "unet.block7.model.0.bias",
+      "shape": [
+        64
+      ],
+      "offset": 115469684,
+      "bytes": 256,
+      "layout": 1
+    },
+    {
+      "name": "unet.block7.model.2.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ],
+      "offset": 115469940,
+      "bytes": 147456,
+      "layout": 2
+    },
+    {
+      "name": "unet.block7.model.2.bias",
+      "shape": [
+        64
+      ],
+      "offset": 115617396,
+      "bytes": 256,
+      "layout": 1
+    },
+    {
+      "name": "unet.block8.model.0.weight",
+      "shape": [
+        32,
+        96,
+        3,
+        3
+      ],
+      "offset": 115617652,
+      "bytes": 110592,
+      "layout": 2
+    },
+    {
+      "name": "unet.block8.model.0.bias",
+      "shape": [
+        32
+      ],
+      "offset": 115728244,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "unet.block8.model.2.weight",
+      "shape": [
+        32,
+        32,
+        3,
+        3
+      ],
+      "offset": 115728372,
+      "bytes": 36864,
+      "layout": 2
+    },
+    {
+      "name": "unet.block8.model.2.bias",
+      "shape": [
+        32
+      ],
+      "offset": 115765236,
+      "bytes": 128,
+      "layout": 1
+    },
+    {
+      "name": "unet.out.weight",
+      "shape": [
+        8,
+        32,
+        3,
+        3
+      ],
+      "offset": 115765364,
+      "bytes": 9216,
+      "layout": 2
+    },
+    {
+      "name": "unet.out.bias",
+      "shape": [
+        8
+      ],
+      "offset": 115774580,
+      "bytes": 32,
+      "layout": 1
+    }
+  ]
+}

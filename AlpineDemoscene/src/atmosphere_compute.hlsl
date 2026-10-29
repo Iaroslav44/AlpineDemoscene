@@ -1,8 +1,11 @@
 // A runtime sky-view transport cache. Spherical Rayleigh/Mie single scattering
 // with ozone absorption and planet shadow, not an embedded skydome image.
 #include "scene_common.hlsli"
+#include "atmosphere_sh.hlsli"
 StructuredBuffer<float4> AtmosphereFrame : register(t3);
 RWTexture2D<float4> AtmosphereOutput : register(u0);
+RWTexture2D<float4> AtmosphereIrradianceOutput : register(u1);
+groupshared float3 SHReduction[64];
 static const float PLANET_R=6360.0;
 static const float ATMOSPHERE_R=6460.0;
 static const float3 BETA_R=float3(.005802,.013558,.033100);
@@ -37,13 +40,8 @@ float3 AtmosphereSolar(float3 position,float3 sun)
     }
     return exp(-optical);
 }
-[numthreads(8,8,1)]
-void AtmosphereCS(uint3 id:SV_DispatchThreadID)
+float4 AtmosphereTransport(float3 rd)
 {
-    if(id.x>=256||id.y>=128)return;
-    float2 uv=(id.xy+.5)/float2(256,128);
-    float phi=(uv.x-.5)*TAU,theta=uv.y*PI;
-    float3 rd=float3(cos(phi)*sin(theta),cos(theta),sin(phi)*sin(theta));
     float3 sun=AtmosphereFrame[8].xyz;
     float3 origin=float3(0,PLANET_R+max(.01,AtmosphereFrame[0].y*.001),0);
     float distance=AtmosphereSphere(origin,rd,ATMOSPHERE_R).y;
@@ -71,5 +69,40 @@ void AtmosphereCS(uint3 id:SV_DispatchThreadID)
         float3 irradiance=AtmosphereSolar(p+normal*.005,sun)*7.8*saturate(dot(normal,sun));
         radiance+=transmission*float3(.10,.13,.067)*(irradiance/PI+.035);
     }
-    AtmosphereOutput[id.xy]=float4(max(radiance,0),dot(transmission,float3(.2126,.7152,.0722)));
+    return float4(max(radiance,0),dot(transmission,float3(.2126,.7152,.0722)));
+}
+[numthreads(8,8,1)]
+void AtmosphereCS(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_GroupIndex)
+{
+    float2 uv=(id.xy+.5)/float2(256,128);
+    float phi=(uv.x-.5)*TAU,theta=uv.y*PI;
+    float3 rd=float3(cos(phi)*sin(theta),cos(theta),sin(phi)*sin(theta));
+    if(id.x<256&&id.y<128)AtmosphereOutput[id.xy]=AtmosphereTransport(rd);
+    // Nine groups project the same analytic transport, not a partially written
+    // LUT. Every lane participates in group-uniform reductions. 128 fixed
+    // equal-area directions avoid a changing tangent frame at each pixel.
+    if(group.y==0&&group.x<9)
+    {
+        float3 integral=0;
+        [unroll]for(uint j=0;j<2;++j)
+        {
+            uint sample=lane+j*64;
+            float y=1-2*(sample+.5)/128.0;
+            float angle=sample*2.3999632297;
+            float radius=sqrt(max(0,1-y*y));
+            float3 direction=float3(cos(angle)*radius,y,sin(angle)*radius);
+            integral+=AtmosphereTransport(direction).rgb*AtmosphereSHBasis(group.x,direction);
+        }
+        SHReduction[lane]=integral;GroupMemoryBarrierWithGroupSync();
+        [unroll]for(uint stride=32;stride>0;stride>>=1)
+        {
+            if(lane<stride)SHReduction[lane]+=SHReduction[lane+stride];
+            GroupMemoryBarrierWithGroupSync();
+        }
+        if(lane==0)
+        {
+            float cosineBand=group.x==0?1:(group.x<4?2.0/3.0:.25);
+            AtmosphereIrradianceOutput[uint2(group.x,0)]=float4(SHReduction[0]*(4*PI/128)*cosineBand,0);
+        }
+    }
 }

@@ -26,6 +26,8 @@
 #include <string>
 #include <vector>
 #include "../src/neural_avatar_runtime.h"
+#include "../src/neural_material_runtime.h"
+#include "../src/world_generation.h"
 using Microsoft::WRL::ComPtr;
 // Match the ABI sizes used by the hand-written x64 host, against the SDK.
 static_assert(sizeof(MMTIME)==12, "MMTIME ABI differs from MASM host");
@@ -47,7 +49,7 @@ static void dumpNeuralStage(const char* name,const float* values,uint32_t count)
 }
 constexpr UINT TerrainSize=4096,WaterSize=256,FlightSamples=3841,FlightElements=4*FlightSamples*4;
 constexpr UINT MaterialSize=1024,MaterialLayers=8,MaterialMips=11,CameraFloats=15*4;
-constexpr UINT InstanceElements=81152,InstanceGroups=778;
+constexpr UINT InstanceElements=118592,InstanceGroups=779;
 constexpr UINT CloudSize=128,BoundsMips=13;
 void check(HRESULT h, const char* context) {
     if (FAILED(h)) { std::ostringstream s; s << context << " HRESULT=0x" << std::hex << unsigned(h); throw std::runtime_error(s.str()); }
@@ -240,6 +242,27 @@ float half(uint16_t h) {
     else f=std::ldexp(float(m+1024),e-25);
     return (h&32768)?-f:f;
 }
+std::vector<float> readFloatRGBA(ID3D11Device* device,ID3D11DeviceContext* context,
+    ID3D11Texture2D* source,UINT mip=0) {
+    D3D11_TEXTURE2D_DESC descriptor{};source->GetDesc(&descriptor);
+    if(mip>=descriptor.MipLevels||descriptor.ArraySize!=1||
+       (descriptor.Format!=DXGI_FORMAT_R32G32B32A32_FLOAT&&descriptor.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT))
+        throw std::runtime_error("Unexpected generated RGBA texture format.");
+    const bool narrow=descriptor.Format==DXGI_FORMAT_R16G16B16A16_FLOAT;
+    descriptor.Width=std::max(1u,descriptor.Width>>mip);descriptor.Height=std::max(1u,descriptor.Height>>mip);
+    descriptor.MipLevels=1;descriptor.BindFlags=descriptor.MiscFlags=0;
+    descriptor.Usage=D3D11_USAGE_STAGING;descriptor.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+    ComPtr<ID3D11Texture2D> staging;check(device->CreateTexture2D(&descriptor,nullptr,&staging),"Create generated texture readback");
+    context->CopySubresourceRegion(staging.Get(),0,0,0,0,source,mip,nullptr);
+    D3D11_MAPPED_SUBRESOURCE mapped{};check(context->Map(staging.Get(),0,D3D11_MAP_READ,0,&mapped),"Read generated RGBA texture");
+    std::vector<float> values(size_t(descriptor.Width)*descriptor.Height*4);
+    for(UINT y=0;y<descriptor.Height;++y){
+        auto row=static_cast<const uint8_t*>(mapped.pData)+size_t(y)*mapped.RowPitch;
+        for(UINT x=0;x<descriptor.Width*4;++x)
+            values[(size_t(y)*descriptor.Width*4)+x]=narrow?half(reinterpret_cast<const uint16_t*>(row)[x]):reinterpret_cast<const float*>(row)[x];
+    }
+    context->Unmap(staging.Get(),0);return values;
+}
 struct Metrics {
     size_t invalid=0, zeroDepth=0, nearDepth=0, outOfDepthRange=0, reactive=0, geometry=0;
     double minRGB=1e30,maxRGB=-1e30,luma=0,minDepth=1,maxDepth=0;
@@ -286,14 +309,15 @@ template<class T> T query(ID3D11DeviceContext* c, ID3D11Query* q) {
     }
 }
 int main(int argc,char** argv) try {
-    fs::path shaderDir="build", outDir="build/probe", executable,rawProbe,writeNeuralCache,replayNeuralCache,timesFile;
+    fs::path shaderDir="build", outDir="build/probe", executable,rawProbe,writeNeuralCache,replayNeuralCache,timesFile,modelRoot;
     UINT w=1280,h=720,frames=3,startFrame=0;float time=8,dt=1.f/60,seed=.375f;double scale=1;bool warp=false,debug=true,diagnostic=false,loopTime=false,validateInstances=false,physicsOnly=false,dumpWorld=false,waterDiagnostic=false;
-    UINT avatarSeed=42;bool neuralOnly=false,dumpNeural=false,headOnly=false;
+    UINT avatarSeed=42,materialSeed=42;bool neuralOnly=false,dumpNeural=false,headOnly=false,dumpMaterial=false;
     float diagnosticStart=0,diagnosticSpan=128;
     for(int i=1;i<argc;i++) {
         std::string a=argv[i];
         auto value=[&](){if(++i>=argc)throw std::runtime_error("Missing argument after "+a);return std::string(argv[i]);};
         if(a=="--shaders")shaderDir=value();else if(a=="--out")outDir=value();else if(a=="--exe")executable=value();
+        else if(a=="--model-root")modelRoot=value();
         else if(a=="--raw-probe")rawProbe=value();
         else if(a=="--width")w=std::stoul(value());else if(a=="--height")h=std::stoul(value());
         else if(a=="--scale") {
@@ -303,6 +327,8 @@ int main(int argc,char** argv) try {
         else if(a=="--frames")frames=std::stoul(value());else if(a=="--start-frame")startFrame=std::stoul(value());
         else if(a=="--avatar-seed")avatarSeed=std::stoul(value());else if(a=="--neural-only")neuralOnly=true;
         else if(a=="--dump-neural")dumpNeural=true;
+        else if(a=="--material-seed")materialSeed=std::stoul(value());
+        else if(a=="--dump-material")dumpMaterial=true;
         else if(a=="--neural-head")headOnly=true;
         else if(a=="--write-neural-cache")writeNeuralCache=value();
         else if(a=="--replay-neural-cache")replayNeuralCache=value();
@@ -370,7 +396,7 @@ int main(int argc,char** argv) try {
             if(!data||size<32||std::string(data,4)!=magic)throw std::runtime_error("Invalid candidate neural model.");
             return std::vector<char>(data,data+size);
         }
-        const fs::path modelPath=shaderDir.parent_path()/relativePath;
+        const fs::path modelPath=(modelRoot.empty()?shaderDir.parent_path():modelRoot)/relativePath;
         std::ifstream file(modelPath,std::ios::binary|std::ios::ate);
         if(!file)throw std::runtime_error("Cannot read pretrained model: "+modelPath.string());
         const auto length=file.tellg();
@@ -382,8 +408,8 @@ int main(int argc,char** argv) try {
     const auto avatarShader=shaderBytes(120,"neural_avatar_cs.cso");
     struct NeuralProduct {
         NeuralAvatarResult result{};
-        ComPtr<ID3D11Buffer> vertices,motion;
-        ComPtr<ID3D11ShaderResourceView> srv,motionSRV;
+        ComPtr<ID3D11Buffer> vertices,motion,rig;
+        ComPtr<ID3D11ShaderResourceView> srv,motionSRV,rigSRV;
         std::string json;
     };
     auto generateNeural=[&](bool isHead){
@@ -420,13 +446,16 @@ int main(int argc,char** argv) try {
             };
             uploadCached(".vertices",size_t(result.vertexCount)*expectedStride,product.vertices,product.srv);
             if(isHead)uploadCached(".motion",size_t(result.motionFrames)*32,product.motion,product.motionSRV);
+            else uploadCached(".rig",512,product.rig,product.rigSRV);
             result.vertexBuffer=product.vertices.Get();result.vertexSRV=product.srv.Get();result.motionBuffer=product.motion.Get();result.motionSRV=product.motionSRV.Get();
+            result.rigBuffer=product.rig.Get();result.rigSRV=product.rigSRV.Get();
             result.status=1;result.seed=avatarSeed;success=1;
         } else {
             success=NeuralAvatarCreate(device.Get(),context.Get(),model.data(),UINT(model.size()),
                 avatarShader.data(),UINT(avatarShader.size()),avatarSeed,&result,nullptr);
             product.vertices.Attach(result.vertexBuffer);product.srv.Attach(result.vertexSRV);
             product.motion.Attach(result.motionBuffer);product.motionSRV.Attach(result.motionSRV);
+            product.rig.Attach(result.rigBuffer);product.rigSRV.Attach(result.rigSRV);
         }
         NeuralAvatarSetDiagnosticSink(nullptr);
         const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
@@ -469,7 +498,18 @@ int main(int argc,char** argv) try {
             }
         }
         const size_t activeJoints=std::count_if(jointUse.begin(),jointUse.end(),[](uint64_t count){return count!=0;});
-        std::vector<uint8_t> motionBytes;
+        std::vector<uint8_t> motionBytes,rigBytes;
+        size_t invalidRig=0;std::string rigSha;
+        if(!isHead){
+            if(!product.rig||!product.rigSRV)throw std::runtime_error("Generated body lacks model-calibrated rig landmarks.");
+            D3D11_BUFFER_DESC rigDescriptor{};product.rig->GetDesc(&rigDescriptor);
+            if(rigDescriptor.ByteWidth!=512||rigDescriptor.StructureByteStride!=16)throw std::runtime_error("Unexpected body rig buffer layout.");
+            rigBytes=readBuffer(product.rig.Get(),512);const float* values=reinterpret_cast<const float*>(rigBytes.data());
+            for(size_t i=0;i<128;++i)invalidRig+=!std::isfinite(values[i]);
+            invalidRig+=values[96]<=0||values[100]<=0||values[96]>.4f||values[100]>.4f;
+            Sha256 rigHasher;rigHasher.update(rigBytes.data(),rigBytes.size());rigSha=rigHasher.finish();
+            if(invalidRig)throw std::runtime_error("Generated body rig contains invalid landmarks or sole offsets.");
+        }
         size_t invalidMotion=0;double motionDifference=0;
         if(isHead) {
             if(!product.motion||!product.motionSRV||result.motionFrames<2||!std::isfinite(result.motionDuration)||result.motionDuration<=0)
@@ -493,7 +533,8 @@ int main(int argc,char** argv) try {
         description<<"],\"bounds_min\":["<<lo[0]<<","<<lo[1]<<","<<lo[2]<<"],\"bounds_max\":["<<hi[0]<<","<<hi[1]<<","<<hi[2]<<"]"
             <<",\"invalid_color_values\":"<<invalidColor<<",\"invalid_morph_values\":"<<invalidMorph<<",\"max_abs_morph_delta\":"<<maxMorph
             <<",\"motion_frames\":"<<result.motionFrames<<",\"motion_duration_seconds\":"<<result.motionDuration
-            <<",\"invalid_motion_values\":"<<invalidMotion<<",\"motion_max_difference_from_first\":"<<motionDifference<<"}";
+            <<",\"invalid_motion_values\":"<<invalidMotion<<",\"motion_max_difference_from_first\":"<<motionDifference
+            <<",\"rig_bytes\":"<<rigBytes.size()<<",\"rig_sha256\":\""<<rigSha<<"\",\"invalid_rig_values\":"<<invalidRig<<"}";
         product.json=description.str();
         std::ofstream(outDir/(isHead?"neural_head_metrics.json":"neural_avatar_metrics.json"))<<product.json<<"\n";
         if(isHead&&dumpNeural)std::ofstream(dumpDirectory/"neural_avatar_metrics.json")<<product.json<<"\n";
@@ -505,10 +546,11 @@ int main(int argc,char** argv) try {
             const fs::path base=writeNeuralCache/std::to_string(id);
             std::ofstream mesh(base.string()+".vertices",std::ios::binary);mesh.write(reinterpret_cast<const char*>(vertices.data()),vertices.size());
             std::ofstream motion(base.string()+".motion",std::ios::binary);if(!motionBytes.empty())motion.write(reinterpret_cast<const char*>(motionBytes.data()),motionBytes.size());
+            std::ofstream rig(base.string()+".rig",std::ios::binary);if(!rigBytes.empty())rig.write(reinterpret_cast<const char*>(rigBytes.data()),rigBytes.size());
             std::ofstream metadata(base.string()+".meta");metadata<<std::setprecision(9)<<"ALPINE_NEURAL_QA_CACHE_1\n"<<id<<" "<<avatarSeed<<" "<<modelSha<<"\n"
                 <<expectedStride<<" "<<result.vertexCount<<" "<<result.motionFrames<<" "<<result.motionDuration<<"\n";
             for(float value:result.boundsMin)metadata<<value<<" ";for(float value:result.boundsMax)metadata<<value<<" ";metadata<<"\n";
-            if(!mesh||!motion||!metadata)throw std::runtime_error("Cannot write QA-only generated geometry cache.");
+            if(!mesh||!motion||!rig||!metadata)throw std::runtime_error("Cannot write QA-only generated geometry cache.");
         }
         std::cout<<"Neural "<<(isHead?"head":"body")<<": "<<result.vertexCount<<" vertices in "<<seconds<<" s"<<std::endl;
         return product;
@@ -526,8 +568,80 @@ int main(int argc,char** argv) try {
         std::ofstream(outDir/"neural_debug.json")<<"{\"debug_layer\":"<<(debug?"true":"false")<<",\"warnings_errors\":"<<warnings<<"}\n";
         return warnings?2:0;
     }
+    const auto learnedMaterialCode=shaderBytes(121,"neural_material_cs.cso");
+    Sha256 materialShaderHasher;materialShaderHasher.update(learnedMaterialCode.data(),learnedMaterialCode.size());const std::string materialShaderSha=materialShaderHasher.finish();
+    auto learnedMaterialModel=neuralModelBytes(203,"models/material/photomat-256.nam","NAM1");
+    Sha256 materialModelHasher;materialModelHasher.update(learnedMaterialModel.data(),learnedMaterialModel.size());
+    const std::string materialModelSha=materialModelHasher.finish();
+    struct MaterialProduct {std::array<ComPtr<ID3D11Texture2D>,3> textures;std::array<ComPtr<ID3D11ShaderResourceView>,3> views;std::string json;};
+    auto generateMaterial=[&](UINT selectedSeed,const char* label,UINT firstSlot){
+    NeuralMaterialResult learnedMaterial{};
+    if(dumpMaterial){neuralDumpDirectory=outDir/(std::string("neural_material_")+label);fs::create_directories(neuralDumpDirectory);NeuralMaterialSetDiagnosticSink(dumpNeuralStage);}
+    std::cout<<"Generating pretrained PhotoMat "<<label<<", seed="<<selectedSeed<<"..."<<std::endl;
+    const int materialSuccess=NeuralMaterialCreate(device.Get(),context.Get(),learnedMaterialModel.data(),UINT(learnedMaterialModel.size()),
+        learnedMaterialCode.data(),UINT(learnedMaterialCode.size()),selectedSeed,&learnedMaterial,[]()->int{return 1;});
+    NeuralMaterialSetDiagnosticSink(nullptr);
+    ComPtr<ID3D11Texture2D> learnedDiffuse,learnedNormal,learnedSpecular;
+    ComPtr<ID3D11ShaderResourceView> learnedDiffuseSRV,learnedNormalSRV,learnedSpecularSRV;
+    learnedDiffuse.Attach(learnedMaterial.diffuseRoughnessTexture);learnedDiffuseSRV.Attach(learnedMaterial.diffuseRoughnessSRV);
+    learnedNormal.Attach(learnedMaterial.normalHeightTexture);learnedNormalSRV.Attach(learnedMaterial.normalHeightSRV);
+    learnedSpecular.Attach(learnedMaterial.specularTexture);learnedSpecularSRV.Attach(learnedMaterial.specularSRV);
+    if(!materialSuccess||learnedMaterial.status!=0||learnedMaterial.width!=256||neuralDumpFailed)
+        throw std::runtime_error("PhotoMat inference/diagnostic failed; status="+std::to_string(learnedMaterial.status));
+    std::ostringstream neuralMaterialReport;
+    neuralMaterialReport<<"{\"model\":\"PhotoMat real-flash-photo SVBRDF\",\"model_resource_id\":203,\"model_bytes\":"<<learnedMaterialModel.size()
+        <<",\"model_sha256\":\""<<materialModelSha<<"\",\"candidate_sha256\":\""<<candidateSha256
+        <<"\",\"source_kind\":\""<<(module.value?"candidate_resources":"development_files")<<"\",\"inference_executed\":true,\"seed\":"<<selectedSeed
+        <<",\"status\":"<<learnedMaterial.status<<",\"helper_seconds\":"<<learnedMaterial.seconds<<",\"shader_resource_id\":121,\"shader_sha256\":\""<<materialShaderSha
+        <<"\",\"raw_svbrdf_sha256\":\""<<(dumpMaterial?sha256File(neuralDumpDirectory/"svbrdf_raw.f32"):"")<<"\",\"width\":256,\"mips\":9,\"maps\":[";
+    ID3D11Texture2D* learnedTextures[]={learnedDiffuse.Get(),learnedNormal.Get(),learnedSpecular.Get()};
+    const char* learnedNames[]={"diffuse_roughness","normal_height","specular"};
+    for(UINT map=0;map<3;++map){
+        D3D11_TEXTURE2D_DESC desc{};learnedTextures[map]->GetDesc(&desc);
+        if(desc.Width!=256||desc.Height!=256||desc.MipLevels!=9)throw std::runtime_error("PhotoMat texture/mip extent mismatch.");
+        size_t invalid=0,outside=0,badNormals=0;double normalError=0;
+        float minima[4]={INFINITY,INFINITY,INFINITY,INFINITY},maxima[4]={-INFINITY,-INFINITY,-INFINITY,-INFINITY};
+        Sha256 packedHasher;std::string baseSha;std::vector<uint8_t> preview(256*256*4);
+        for(UINT mip=0;mip<9;++mip){auto values=readFloatRGBA(device.Get(),context.Get(),learnedTextures[map],mip);
+            packedHasher.update(values.data(),values.size()*sizeof(float));
+            if(!mip){Sha256 baseHasher;baseHasher.update(values.data(),values.size()*sizeof(float));baseSha=baseHasher.finish();}
+            for(size_t p=0;p<values.size();p+=4){
+                for(UINT c=0;c<4;++c){float v=values[p+c];invalid+=!std::isfinite(v);
+                    const float minimum=map==1&&c<3?-1.f:0.f;
+                    outside+=v<minimum-1e-6f||v>1.000001f;
+                    if(!mip){minima[c]=std::min(minima[c],v);maxima[c]=std::max(maxima[c],v);
+                        float shown=map==1&&c<3?v*.5f+.5f:(c<3?std::pow(std::clamp(v,0.f,1.f),1.f/2.2f):1.f);
+                        preview[p+c]=uint8_t(std::clamp(shown,0.f,1.f)*255.f);}
+                }
+                if(map==0)outside+=values[p+3]<.199999f||values[p+3]>.900001f;
+                if(map==2)outside+=std::abs(values[p+3]-1.f)>1e-6f;
+                if(map==1&&!mip){double length=std::sqrt(double(values[p])*values[p]+double(values[p+1])*values[p+1]+double(values[p+2])*values[p+2]);
+                    normalError=std::max(normalError,std::abs(length-1));badNormals+=std::abs(length-1)>.001;}
+            }
+        }
+        if(invalid||outside||badNormals)throw std::runtime_error("PhotoMat finite/range/normal validation failed.");
+        bmp(outDir/(std::string("neural_material_")+label+"_"+learnedNames[map]+".bmp"),preview,256,256);
+        neuralMaterialReport<<(map?",":"")<<"{\"name\":\""<<learnedNames[map]<<"\",\"base_level_sha256\":\""<<baseSha<<"\",\"all_mips_sha256\":\""<<packedHasher.finish()
+            <<"\",\"nonfinite_values\":"<<invalid<<",\"out_of_range_values\":"<<outside<<",\"invalid_base_normals\":"<<badNormals<<",\"max_base_normal_length_error\":"<<normalError<<",\"minimum\":[";
+        for(UINT c=0;c<4;++c)neuralMaterialReport<<(c?",":"")<<minima[c];neuralMaterialReport<<"],\"maximum\":[";
+        for(UINT c=0;c<4;++c)neuralMaterialReport<<(c?",":"")<<maxima[c];neuralMaterialReport<<"]}";
+    }
+    neuralMaterialReport<<"]}";const std::string neuralMaterialJson=neuralMaterialReport.str();
+    std::ofstream(outDir/(std::string("neural_material_")+label+"_metrics.json"))<<neuralMaterialJson<<"\n";
+    std::cout<<"Neural material: "<<learnedMaterial.seconds<<" s, all maps/mips valid"<<std::endl;
+    ID3D11ShaderResourceView* learnedMaterialViews[]={learnedDiffuseSRV.Get(),learnedNormalSRV.Get(),learnedSpecularSRV.Get()};
+    context->PSSetShaderResources(firstSlot,3,learnedMaterialViews);
+    MaterialProduct product;product.textures={learnedDiffuse,learnedNormal,learnedSpecular};
+    product.views={learnedDiffuseSRV,learnedNormalSRV,learnedSpecularSRV};product.json=neuralMaterialJson;return product;
+    };
+    auto neuralStone=generateMaterial(materialSeed,"stone",20);
+    auto neuralWood=generateMaterial(materialSeed+1u,"wood",23);
+    const std::string neuralMaterialJson="{\"stone\":"+neuralStone.json+",\"wood\":"+neuralWood.json+"}";
+    std::ofstream(outDir/"neural_material_metrics.json")<<neuralMaterialJson<<"\n";
+    std::vector<char>().swap(learnedMaterialModel);
     ID3D11ShaderResourceView* neuralViews[]={body.srv.Get(),head.srv.Get(),head.motionSRV.Get()};
     context->VSSetShaderResources(16,3,neuralViews);
+    context->CSSetShaderResources(23,1,body.rigSRV.GetAddressOf());
     auto vb=shaderBytes(101,"scene_vs.cso");ComPtr<ID3D11VertexShader> vs;check(device->CreateVertexShader(vb.data(),vb.size(),nullptr,&vs),"CreateVS");
     std::array<ComPtr<ID3D11PixelShader>,4> ps;
     const char* files[]={"scene_ps.cso","human_ps.cso","temporal_ps.cso","display_ps.cso"};
@@ -568,6 +682,14 @@ int main(int argc,char** argv) try {
     check(device->CreateUnorderedAccessView(atmosphereTexture.Get(),nullptr,&atmosphereUAV),"Create atmosphere UAV");
     atmosphereDesc.BindFlags=0;atmosphereDesc.Usage=D3D11_USAGE_STAGING;atmosphereDesc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
     check(device->CreateTexture2D(&atmosphereDesc,nullptr,&atmosphereStaging),"Create atmosphere staging");
+    D3D11_TEXTURE2D_DESC shDesc{};shDesc.Width=9;shDesc.Height=shDesc.MipLevels=shDesc.ArraySize=1;
+    shDesc.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;shDesc.SampleDesc.Count=1;
+    shDesc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
+    ComPtr<ID3D11Texture2D> irradianceSHTexture;ComPtr<ID3D11ShaderResourceView> irradianceSHSRV;ComPtr<ID3D11UnorderedAccessView> irradianceSHUAV;
+    std::array<float,36> shPoison;shPoison.fill(NAN);D3D11_SUBRESOURCE_DATA shInitial{shPoison.data(),9*16,0};
+    check(device->CreateTexture2D(&shDesc,&shInitial,&irradianceSHTexture),"Create irradiance SH coefficients");
+    check(device->CreateShaderResourceView(irradianceSHTexture.Get(),nullptr,&irradianceSHSRV),"Create irradiance SH SRV");
+    check(device->CreateUnorderedAccessView(irradianceSHTexture.Get(),nullptr,&irradianceSHUAV),"Create irradiance SH UAV");
     const UINT reflectionWidth=std::max(1u,lowWidth/2),reflectionHeight=std::max(1u,lowHeight/2);
     Surface reflection(device.Get(),reflectionWidth,reflectionHeight,DXGI_FORMAT_R16G16B16A16_FLOAT);
     Surface reflectionClouded(device.Get(),reflectionWidth,reflectionHeight,DXGI_FORMAT_R16G16B16A16_FLOAT);
@@ -678,6 +800,35 @@ int main(int argc,char** argv) try {
     context->CSSetShader(terrainCS.Get(),nullptr,0);context->CSSetUnorderedAccessViews(0,1,terrainUAV.GetAddressOf(),nullptr);
     context->Begin(terrainDisjoint.Get());context->End(terrainStart.Get());context->Dispatch(TerrainSize/8,TerrainSize/8,1);context->End(terrainEnd.Get());context->End(terrainDisjoint.Get());
     context->CSSetUnorderedAccessViews(0,1,&nullUAV,nullptr);
+    // Sample the actual pre-simulation height field, then run the same native
+    // world generator as the shipped EXE before any bounds/flight generation.
+    context->CopyResource(terrainStaging.Get(),terrainTexture.Get());D3D11_MAPPED_SUBRESOURCE originalTerrainMap{};
+    check(context->Map(terrainStaging.Get(),0,D3D11_MAP_READ,0,&originalTerrainMap),"Read original terrain samples");
+    std::vector<float> originalTerrainSamples;originalTerrainSamples.reserve(256*256);
+    for(UINT y=0;y<TerrainSize;y+=16){auto row=reinterpret_cast<const float*>(static_cast<const uint8_t*>(originalTerrainMap.pData)+size_t(y)*originalTerrainMap.RowPitch);
+        for(UINT x=0;x<TerrainSize;x+=16)originalTerrainSamples.push_back(row[x]);}
+    context->Unmap(terrainStaging.Get(),0);
+    const auto worldCode=shaderBytes(122,"world_cs.cso");
+    Sha256 worldShaderHasher;worldShaderHasher.update(worldCode.data(),worldCode.size());const std::string worldShaderSha=worldShaderHasher.finish();
+    WorldGenerationResult generatedWorld{};
+    std::cout<<"Generating watershed and soil fields..."<<std::endl;
+    const int worldSuccess=WorldGenerate(device.Get(),context.Get(),terrainSRV.Get(),terrainUAV.Get(),worldCode.data(),UINT(worldCode.size()),&generatedWorld,[]()->int{return 1;});
+    ComPtr<ID3D11Texture2D> ecologyTexture;ComPtr<ID3D11ShaderResourceView> ecologySRV;
+    ecologyTexture.Attach(generatedWorld.ecologyTexture);ecologySRV.Attach(generatedWorld.ecologySRV);
+    if(!worldSuccess||generatedWorld.status!=1||generatedWorld.resolution!=1024||generatedWorld.iterations!=96)
+        throw std::runtime_error("Watershed generation failed; status="+std::to_string(generatedWorld.status));
+    context->CSSetConstantBuffers(0,1,cb.GetAddressOf());
+    context->VSSetShaderResources(19,1,ecologySRV.GetAddressOf());context->PSSetShaderResources(19,1,ecologySRV.GetAddressOf());context->CSSetShaderResources(19,1,ecologySRV.GetAddressOf());
+    auto ecologyValues=readFloatRGBA(device.Get(),context.Get(),ecologyTexture.Get());
+    float ecoMin[4]={INFINITY,INFINITY,INFINITY,INFINITY},ecoMax[4]={-INFINITY,-INFINITY,-INFINITY,-INFINITY};
+    double ecoMean[4]={};size_t ecoInvalid=0,ecoOutside=0;
+    for(size_t p=0;p<ecologyValues.size();++p){float v=ecologyValues[p];UINT c=UINT(p%4);
+        ecoInvalid+=!std::isfinite(v);ecoOutside+=v<0||v>1;ecoMin[c]=std::min(ecoMin[c],v);ecoMax[c]=std::max(ecoMax[c],v);ecoMean[c]+=v;}
+    if(ecoInvalid||ecoOutside)throw std::runtime_error("Watershed field contains invalid values.");
+    Sha256 ecologyHasher;ecologyHasher.update(ecologyValues.data(),ecologyValues.size()*sizeof(float));const std::string ecologySha=ecologyHasher.finish();
+    std::vector<uint8_t> ecologyPreview(1024*1024*4);
+    for(size_t p=0;p<ecologyValues.size();p+=4){for(UINT c=0;c<3;++c)ecologyPreview[p+c]=uint8_t(ecologyValues[p+c]*255.f);ecologyPreview[p+3]=255;}
+    bmp(outDir/"world_ecology.bmp",ecologyPreview,1024,1024);
     context->VSSetShaderResources(4,1,terrainSRV.GetAddressOf());context->PSSetShaderResources(4,1,terrainSRV.GetAddressOf());context->CSSetShaderResources(4,1,terrainSRV.GetAddressOf());
     context->CopyResource(terrainStaging.Get(),terrainTexture.Get());D3D11_MAPPED_SUBRESOURCE terrainMap{};
     check(context->Map(terrainStaging.Get(),0,D3D11_MAP_READ,0,&terrainMap),"Map terrain cache");
@@ -689,6 +840,21 @@ int main(int argc,char** argv) try {
     const UINT64 terrainTicks0=query<UINT64>(context.Get(),terrainStart.Get()),terrainTicks1=query<UINT64>(context.Get(),terrainEnd.Get());
     if(terrainTiming.Disjoint||!terrainTiming.Frequency)throw std::runtime_error("Terrain startup GPU timing is disjoint.");
     const double terrainMS=1000.0*double(terrainTicks1-terrainTicks0)/terrainTiming.Frequency;
+    size_t changedTerrainSamples=0;double maxTerrainChange=0,meanTerrainChange=0;
+    const float* evolvedTerrain=reinterpret_cast<const float*>(terrainValues.data());size_t sampleIndex=0;
+    for(UINT y=0;y<TerrainSize;y+=16)for(UINT x=0;x<TerrainSize;x+=16){double change=double(evolvedTerrain[size_t(y)*TerrainSize+x])-originalTerrainSamples[sampleIndex++];
+        changedTerrainSamples+=std::abs(change)>1e-5;maxTerrainChange=std::max(maxTerrainChange,std::abs(change));meanTerrainChange+=change;}
+    if(!changedTerrainSamples)throw std::runtime_error("Watershed generation did not modify any tested terrain sample.");
+    std::ostringstream worldReport;worldReport<<"{\"algorithm\":\"virtual-pipe erosion, sediment transport and talus creep\",\"shader_resource_id\":122,\"shader_sha256\":\""<<worldShaderSha
+        <<"\",\"candidate_sha256\":\""<<candidateSha256<<"\",\"source_kind\":\""<<(module.value?"candidate_resources":"development_files")
+        <<"\",\"generation_executed\":true,\"status\":"<<generatedWorld.status<<",\"iterations\":"<<generatedWorld.iterations<<",\"resolution\":"<<generatedWorld.resolution
+        <<",\"helper_seconds\":"<<generatedWorld.seconds<<",\"field_float32_sha256\":\""<<ecologySha<<"\",\"nonfinite_values\":"<<ecoInvalid<<",\"out_of_range_values\":"<<ecoOutside
+        <<",\"height_samples\":"<<sampleIndex<<",\"changed_height_samples\":"<<changedTerrainSamples<<",\"maximum_height_change_m\":"<<maxTerrainChange
+        <<",\"mean_signed_height_change_m\":"<<meanTerrainChange/sampleIndex<<",\"channels\":[";
+    const char* ecologyNames[]={"moisture","soil_deposition","drainage","ambient_visibility"};
+    for(UINT c=0;c<4;++c)worldReport<<(c?",":"")<<"{\"name\":\""<<ecologyNames[c]<<"\",\"minimum\":"<<ecoMin[c]<<",\"maximum\":"<<ecoMax[c]<<",\"mean\":"<<ecoMean[c]/(1024*1024)<<"}";
+    worldReport<<"]}";const std::string worldJson=worldReport.str();std::ofstream(outDir/"world_generation_metrics.json")<<worldJson<<"\n";
+    std::cout<<"World generation: "<<generatedWorld.seconds<<" s, "<<changedTerrainSamples<<" changed height samples"<<std::endl;
     std::ofstream(outDir/"terrain_metrics.json")<<"{\"heightfield\":"<<json(terrainMetrics)<<",\"startup_gpu_ms\":"<<terrainMS<<"}\n";
     context->CSSetShader(boundsCS.Get(),nullptr,0);context->Begin(terrainDisjoint.Get());context->End(terrainStart.Get());
     for(UINT level=0;level<BoundsMips;level++) {
@@ -827,10 +993,12 @@ int main(int argc,char** argv) try {
     };
     auto updateAtmosphere=[&](){
         ID3D11ShaderResourceView* nullView=nullptr;
-        context->PSSetShaderResources(10,1,&nullView);context->CSSetShaderResources(3,1,cameraSRV.GetAddressOf());
-        context->CSSetShader(atmosphereCS.Get(),nullptr,0);context->CSSetUnorderedAccessViews(0,1,atmosphereUAV.GetAddressOf(),nullptr);
-        context->Dispatch(32,16,1);context->CSSetUnorderedAccessViews(0,1,&nullUAV,nullptr);
+        context->PSSetShaderResources(10,1,&nullView);context->PSSetShaderResources(26,1,&nullView);context->CSSetShaderResources(3,1,cameraSRV.GetAddressOf());
+        ID3D11UnorderedAccessView* outputs[]={atmosphereUAV.Get(),irradianceSHUAV.Get()},*empty[2]={};
+        context->CSSetShader(atmosphereCS.Get(),nullptr,0);context->CSSetUnorderedAccessViews(0,2,outputs,nullptr);
+        context->Dispatch(32,16,1);context->CSSetUnorderedAccessViews(0,2,empty,nullptr);
         context->CSSetShaderResources(3,1,&nullView);context->PSSetShaderResources(10,1,atmosphereSRV.GetAddressOf());
+        context->PSSetShaderResources(26,1,irradianceSHSRV.GetAddressOf());
     };
     auto updateInstances=[&](){
         ID3D11ShaderResourceView* nullView=nullptr;
@@ -964,6 +1132,7 @@ int main(int argc,char** argv) try {
     std::ofstream metrics(outDir/"metrics.json");metrics<<"{\"adapter\":\""<<gpu<<"\",\"debug_layer\":"<<(debug?"true":"false")
         <<",\"candidate_sha256\":\""<<candidateSha256<<"\""
         <<",\"neural_avatar\":"<<neuralJson<<",\"neural_head\":"<<headJson
+        <<",\"neural_material\":"<<neuralMaterialJson<<",\"world_generation\":"<<worldJson
         <<",\"width\":"<<w<<",\"height\":"<<h<<",\"low_width\":"<<lowWidth<<",\"low_height\":"<<lowHeight<<",\"scale\":"<<scale
         <<",\"terrain_startup_gpu_ms\":"<<terrainMS<<",\"flight_startup_gpu_ms\":"<<flightMS<<",\"material_startup_gpu_ms\":"<<materialMS<<",\"terrain_bounds_startup_gpu_ms\":"<<boundsMS<<",\"cloud_startup_gpu_ms\":"<<cloudMS
         <<",\"seed\":"<<seed<<",\"dt\":"<<(frameTimes.empty()?std::to_string(dt):"null")<<",\"custom_frame_times\":"<<(frameTimes.empty()?"false":"true")<<",\"loop_time\":"<<(loopTime?"true":"false")
@@ -1074,6 +1243,11 @@ int main(int argc,char** argv) try {
             atmospherePreview[(row*256+col)*4+3]=255;
         }
         context->Unmap(atmosphereStaging.Get(),0);if(f==0)bmp(outDir/"atmosphere_preview.bmp",atmospherePreview,256,128);
+        const auto shValues=readFloatRGBA(device.Get(),context.Get(),irradianceSHTexture.Get());
+        size_t shInvalid=0;float shMinimum=INFINITY,shMaximum=-INFINITY;
+        for(float value:shValues){shInvalid+=!std::isfinite(value);shMinimum=std::min(shMinimum,value);shMaximum=std::max(shMaximum,value);}
+        // SH coefficients can be negative; they are basis amplitudes, not radiance samples.
+        if(f==0){std::ofstream shFile(outDir/"sh_coefficients.f32",std::ios::binary);shFile.write(reinterpret_cast<const char*>(shValues.data()),shValues.size()*sizeof(float));}
         context->CopyResource(cameraStaging.Get(),cameraBuffer.Get());D3D11_MAPPED_SUBRESOURCE cameraMap{};
         check(context->Map(cameraStaging.Get(),0,D3D11_MAP_READ,0,&cameraMap),"Map camera cache");
         std::vector<uint8_t> cameraValues(CameraFloats*4);memcpy(cameraValues.data(),cameraMap.pData,CameraFloats*4);context->Unmap(cameraStaging.Get(),0);
@@ -1108,8 +1282,9 @@ int main(int argc,char** argv) try {
         for(int i=0;i<15;i++){double ms=dis.Disjoint||!dis.Frequency?0:1000.*double(ticks[stageEnds[i]]-ticks[stageStarts[i]])/dis.Frequency;total+=ms;metrics<<(i?",":"")<<ms;}
         metrics<<"],\"world\":"<<json(wo)<<",\"mesh_composite\":"<<json(lo)<<",\"shadow\":"<<json(sh)<<",\"camera\":"<<json(ca)
             <<",\"instance_cache\":"<<json(instances)
-            <<",\"instance_counts\":{\"records\":"<<InstanceElements<<",\"houses\":64,\"active_near_trees\":"<<activeNearTrees<<",\"active_far_trees\":"<<activeFarTrees<<",\"active_grass\":"<<activeGrass<<",\"rocks\":384,\"branch_responses\":18432,\"invalid_flags\":"<<invalidInstanceFlags<<"}"
+            <<",\"instance_counts\":{\"records\":"<<InstanceElements<<",\"houses\":64,\"active_near_trees\":"<<activeNearTrees<<",\"active_far_trees\":"<<activeFarTrees<<",\"active_grass\":"<<activeGrass<<",\"rocks\":384,\"branch_count\":18432,\"branch_geometry_records\":55296,\"resident_rig_records\":576,\"invalid_flags\":"<<invalidInstanceFlags<<"}"
             <<",\"far_shadow\":"<<json(farSh)<<",\"atmosphere\":{\"nonfinite_values\":"<<atmosphereInvalid<<",\"max_rgb\":"<<atmosphereMax<<",\"mean_rgb\":"<<atmosphereSum/(256*128*3)<<"}"
+            <<",\"irradiance_sh\":{\"coefficients\":9,\"nonfinite_values\":"<<shInvalid<<",\"minimum\":"<<shMinimum<<",\"maximum\":"<<shMaximum<<"}"
             <<",\"human_composite\":"<<json(hu)<<",\"cloud_composite\":"<<json(cl)<<",\"resolved\":"<<json(hi)<<",\"physics_steps\":"<<physicsSteps<<",\"water_state\":"<<json(waterState)
             <<",\"cloud_changed_depth_pixels\":"<<cloudDepthChanged<<",\"reflection_cloud_changed_depth_pixels\":"<<reflectionDepthChanged
             <<",\"reflection_enabled\":"<<(reflectionEnabled?"true":"false")<<",\"reflection\":"<<(reflectionEnabled?json(re):"null")
@@ -1117,7 +1292,7 @@ int main(int argc,char** argv) try {
         // A full image at the minimum encoded depth means the camera/trace is
         // inside geometry. Numeric/API validity alone cannot detect that.
         bool collapsedDepth=lo.nearDepth>size_t(lowWidth)*lowHeight*99/100;
-        failed|=wo.invalid||lo.invalid||hu.invalid||cl.invalid||hi.invalid||sh.invalid||ca.invalid||instances.invalid||invalidInstanceFlags||cloudDepthChanged||reflectionDepthChanged||sh.outOfRange||farSh.invalid||farSh.outOfRange||atmosphereInvalid||atmosphereMax<=0||wo.outOfDepthRange||lo.outOfDepthRange||hu.outOfDepthRange||cl.outOfDepthRange||hi.outOfDepthRange||dis.Disjoint||collapsedDepth||waterState.invalid||waterState.foamOutOfRange||waterState.maxHeight>1.0||(reflectionEnabled&&(re.invalid||re.outOfDepthRange));
+        failed|=wo.invalid||lo.invalid||hu.invalid||cl.invalid||hi.invalid||sh.invalid||ca.invalid||instances.invalid||invalidInstanceFlags||cloudDepthChanged||reflectionDepthChanged||sh.outOfRange||farSh.invalid||farSh.outOfRange||atmosphereInvalid||shInvalid||atmosphereMax<=0||wo.outOfDepthRange||lo.outOfDepthRange||hu.outOfDepthRange||cl.outOfDepthRange||hi.outOfDepthRange||dis.Disjoint||collapsedDepth||waterState.invalid||waterState.foamOutOfRange||waterState.maxHeight>1.0||(reflectionEnabled&&(re.invalid||re.outOfDepthRange));
         std::cout<<"Frame "<<f<<" t="<<t<<" GPU="<<total<<" ms; invalid="<<(wo.invalid+lo.invalid+hu.invalid+hi.invalid+sh.invalid+ca.invalid)<<"; delta="<<difference<<std::endl;
     }
     size_t debugErrors=0,debugWarnings=0;std::ofstream diagnostics(outDir/"d3d11_messages.txt");

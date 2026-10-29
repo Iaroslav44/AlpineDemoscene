@@ -81,7 +81,7 @@ def main():
     for name, digest in report["gpu_dump_sha256"].items():
         if sha(gpu_dir / (name + ".f32")) != digest:
             raise ValueError("GPU dump changed: " + name)
-    if sha(gpu_dir / "neural_avatar_metrics.json") != report["gpu_metrics_sha256"]:
+    if sha(gpu_dir / report.get("gpu_metrics_file", "neural_avatar_metrics.json")) != report["gpu_metrics_sha256"]:
         raise ValueError("GPU metrics changed")
     sources = [
         "src/neural_avatar_runtime.cpp", "src/neural_avatar_runtime.h",
@@ -112,6 +112,9 @@ def main():
             "occupancy_grid_xyz": [81, 97, 81] if head else [65, 129, 49],
             "surface_extraction": "Marching tetrahedra with shared edge vertices",
             "component_filter": "Largest connected component by vertex count, before bounds normalization and surface-attribute inference",
+            "mesh_refinement": "Topology-only bilateral Taubin fairing with pinned boundaries, source-relative displacement cap and local triangle-foldover rejection; area-weighted normals plus band-limited learned detail",
+            "cloth_normal_bandwidth": "Body clothing uses a 25mm geodesic area-weighted compact normal filter, without learned normal residual; head, fingers and feet retain their separate learned-detail treatment",
+            "skinning_refinement": "Two neighbour-only regularization passes, top-four reselection and renormalization; body bind landmarks estimated from generated parent/child influence transitions",
             "normalization": "Uniform scale to %.2f metres high; minimum Y translated to zero; X/Z origin retained" % (.33 if head else 1.75),
             "up_axis": "+Y",
             "face_forward_axis": "+Z",
@@ -132,9 +135,10 @@ def main():
             "Learned RGB may contain photographic illumination; it is not verified relightable PBR albedo.",
             "Four learned expression directions retain a limited subspace; jaw/eye bone transforms are not applied and canonical normals are unchanged during expressions.",
             "Head is attached at body-local Y=1.42m, body clipped above Y=1.44m; this is an authored seam rather than learned body/head correspondence.",
-            "Five predicted head skin weights are verified but renderer follows the body's head bone as a whole.",
+            "Learned root influence attaches the lower head crop to the torso; remaining head influences follow the head bone together, without full jaw/eye articulation.",
+            "A bounded lower-neck crop removes captured shoulder-base geometry below 1.49m; higher geometry is retained after the earlier 1.535m cutoff failed visual chin inspection.",
         ] if head else [
-            "Body skinning uses learned weights with an authored approximate 24-joint rig; no fitted SMPL template is embedded.",
+            "Body skinning uses learned weights and surface-estimated bind landmarks with authored contact IK; this is not a fitted SMPL template or force-based biomechanics solver.",
             "Body checkpoint supplies geometry and normals, not learned appearance; materials are procedural.",
         ]),
     })

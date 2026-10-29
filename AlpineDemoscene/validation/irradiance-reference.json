@@ -1,0 +1,189 @@
+{
+  "schema": 1,
+  "passed": true,
+  "errors": [],
+  "acceptance_scope": "CPU source-parsed SH projection against independent analytic Lambert moments",
+  "source_sha256": {
+    "src/atmosphere_sh.hlsli": "f936055609fa9ea4cf7d2c62691c5467d614dc529b84d14fd3936f0e805aeddb",
+    "src/atmosphere_compute.hlsl": "b925c117d8130ef455e81d70fc13f16473d52bcda14d971a3ae5529cd77e4705",
+    "src/atmosphere_common.hlsli": "c29df7239909ef46d2d7c4089408ba59cca16ebff37b32072eaebbb5902a2af0",
+    "src/alpine.asm": "cfe9c91ae155c9cf9b17e87cd046d78eff6104552c7247c5881dd2d7afb7e00e",
+    "tools/irradiance_reference.py": "0293f501c455a1ee72cb0a85c2bada71355915fb977e1433219a32d8e55df49e"
+  },
+  "primary_reference": "https://graphics.stanford.edu/papers/envmap/envmap.pdf",
+  "oracle": "For L(w)=a+b.w+w^T Q w, E(n)/pi=a+(2/3)b.n+(trace(Q)+n^T Q n)/4.",
+  "normal_count": 8454,
+  "threshold_pairs": 128,
+  "projection_directions": 128,
+  "lanes": 64,
+  "cosine_convolution_bands_over_pi": [
+    1.0,
+    0.6666666666666666,
+    0.25
+  ],
+  "orthonormal_gram_max_abs_error": 3.010838245387504e-10,
+  "cases": [
+    {
+      "name": "constant",
+      "exact_quadrature_max_abs_error": 1.8519963340679624e-10,
+      "fibonacci_128_max_abs_error": 0.001171800874832707,
+      "fibonacci_128_rms_error": 0.0005064925359890255,
+      "threshold_pair_delta_error": 1.1100242947037486e-09
+    },
+    {
+      "name": "linear_x",
+      "exact_quadrature_max_abs_error": 1.8918322464145376e-10,
+      "fibonacci_128_max_abs_error": 0.001591331976571242,
+      "fibonacci_128_rms_error": 0.0005536127238568295,
+      "threshold_pair_delta_error": 1.2683496475318634e-09
+    },
+    {
+      "name": "quadratic_x2",
+      "exact_quadrature_max_abs_error": 7.609124441643189e-11,
+      "fibonacci_128_max_abs_error": 0.000193432763371304,
+      "fibonacci_128_rms_error": 6.512140073147075e-05,
+      "threshold_pair_delta_error": 1.300715091190341e-10
+    },
+    {
+      "name": "linear_y",
+      "exact_quadrature_max_abs_error": 1.8918333566375622e-10,
+      "fibonacci_128_max_abs_error": 0.0017496540610550948,
+      "fibonacci_128_rms_error": 0.0005694904754924997,
+      "threshold_pair_delta_error": 1.5852812396133231e-09
+    },
+    {
+      "name": "quadratic_y2",
+      "exact_quadrature_max_abs_error": 7.609113339412943e-11,
+      "fibonacci_128_max_abs_error": 0.001213027929397481,
+      "fibonacci_128_rms_error": 0.0005118930693283412,
+      "threshold_pair_delta_error": 1.1269761790444477e-09
+    },
+    {
+      "name": "linear_z",
+      "exact_quadrature_max_abs_error": 1.8918255850763899e-10,
+      "fibonacci_128_max_abs_error": 0.0013584650782088037,
+      "fibonacci_128_rms_error": 0.0005464097302308854,
+      "threshold_pair_delta_error": 1.2258500881046075e-09
+    },
+    {
+      "name": "quadratic_z2",
+      "exact_quadrature_max_abs_error": 1.1191403359589458e-10,
+      "fibonacci_128_max_abs_error": 0.00021563875053909332,
+      "fibonacci_128_rms_error": 7.82511465495391e-05,
+      "threshold_pair_delta_error": 1.2287809658673154e-10
+    },
+    {
+      "name": "quadratic_xy",
+      "exact_quadrature_max_abs_error": 1.870115173829845e-10,
+      "fibonacci_128_max_abs_error": 0.0016837268975979924,
+      "fibonacci_128_rms_error": 0.0006223795221112532,
+      "threshold_pair_delta_error": 1.3634364748327243e-09
+    },
+    {
+      "name": "quadratic_yz",
+      "exact_quadrature_max_abs_error": 1.8701085124916972e-10,
+      "fibonacci_128_max_abs_error": 0.001770206026347143,
+      "fibonacci_128_rms_error": 0.0006277292703098385,
+      "threshold_pair_delta_error": 1.2671250715357019e-09
+    },
+    {
+      "name": "quadratic_xz",
+      "exact_quadrature_max_abs_error": 1.8701107329377464e-10,
+      "fibonacci_128_max_abs_error": 0.0012767562184339276,
+      "fibonacci_128_rms_error": 0.0005087781041690311,
+      "threshold_pair_delta_error": 1.1446963377181874e-09
+    },
+    {
+      "name": "mixed_rgb",
+      "exact_quadrature_max_abs_error": 2.293037981715429e-10,
+      "fibonacci_128_max_abs_error": 0.0017718287344274941,
+      "fibonacci_128_rms_error": 0.0007174022473686656,
+      "threshold_pair_delta_error": 1.6728582963310146e-09
+    }
+  ],
+  "tolerances": {
+    "gram": 2e-09,
+    "analytic": 3e-09,
+    "fibonacci_absolute": 0.006,
+    "threshold_pair_delta": 1e-08
+  },
+  "gpu_execution_performed": false,
+  "gpu_readback": {
+    "path": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\build\\generative_final_timeline\\sh_coefficients.f32",
+    "sha256": "c193ac5c3a3b6dc4ad4acc69bf6f3f3ba20519dfff99b8d1be41a85ebd4c6c5b",
+    "finite": true,
+    "alpha_zero": true,
+    "coefficients_rgb": [
+      [
+        0.40177640318870544,
+        0.5345191955566406,
+        0.5204389691352844
+      ],
+      [
+        -0.07994790375232697,
+        -0.05773681402206421,
+        0.09475301206111908
+      ],
+      [
+        -0.0169486366212368,
+        -0.021293414756655693,
+        -0.027881117537617683
+      ],
+      [
+        -0.018626486882567406,
+        -0.02227354794740677,
+        -0.028973905369639397
+      ],
+      [
+        -0.005245991051197052,
+        -0.007311781868338585,
+        -0.01114452350884676
+      ],
+      [
+        -0.00548734562471509,
+        -0.007566408719867468,
+        -0.011268631555140018
+      ],
+      [
+        0.012186354026198387,
+        0.017902469262480736,
+        0.020755307748913765
+      ],
+      [
+        0.012693609111011028,
+        0.016678975895047188,
+        0.02019495889544487
+      ],
+      [
+        0.024511216208338737,
+        0.03361410275101662,
+        0.037976302206516266
+      ]
+    ],
+    "note": "Readback integrity only; actual atmospheric coefficients are not an analytic polynomial environment.",
+    "render_probe": {
+      "path": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\build\\generative_final_timeline\\metrics.json",
+      "sha256": "f933b04c9254ae84d3d23c79c5ab994b4ee08d45179dee48e7660735658e48b8",
+      "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+      "debug_errors": 0,
+      "debug_warnings": 0
+    },
+    "reconstructed_unclamped_min_rgb": [
+      0.055058599646646215,
+      0.09567950202914631,
+      0.07322503925259748
+    ],
+    "reconstructed_unclamped_max_rgb": [
+      0.14757229286537749,
+      0.18832783546018497,
+      0.20629674423425107
+    ],
+    "negative_fraction": 0.0
+  },
+  "limitations": [
+    "128 equal-area samples are a numerical quadrature, not exact integration of arbitrary sky radiance.",
+    "Nine coefficients retain only SH orders zero through two; sharp sun and high-frequency sky energy need separate treatment.",
+    "This validates irradiance mathematics and source configuration, not appearance, GPU shader execution, or final scene quality.",
+    "Input shading normals must be unit length; truncated reconstruction is clamped to nonnegative RGB by the production shader."
+  ]
+}

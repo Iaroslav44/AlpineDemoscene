@@ -1,0 +1,123 @@
+{
+  "schema": 1,
+  "model_sha256": "6d4706e0814ea7265e0f23b336c663ffbdcbaa47a893c2f8f96d7c6428e35257",
+  "source_checkpoints": {
+    "G_256.pkl": "4648af64714a59d3c6a40eef176935c6b8374d348fa10a40f40b6791a21b55ba",
+    "MatUnet_256.pt": "8e08510fdd91ce5004a2cd63fdbd37b7e1292c724474e24861760218a8e5fd1e"
+  },
+  "seed": 42,
+  "errors": [],
+  "operator_comparison": {
+    "latent_z": {
+      "max_absolute": 2.384185791015625e-07,
+      "rms": 2.1120319254980345e-08,
+      "reference_rms": 0.9999999996302349
+    },
+    "latent_w": {
+      "max_absolute": 1.6242265701293945e-06,
+      "rms": 3.8370340846096073e-07,
+      "reference_rms": 0.6824672009673974
+    },
+    "feature_4": {
+      "max_absolute": 1.862645149230957e-07,
+      "rms": 4.4907314429496375e-08,
+      "reference_rms": 0.07257288392530747
+    },
+    "feature_8": {
+      "max_absolute": 2.682209014892578e-07,
+      "rms": 5.937804256198222e-08,
+      "reference_rms": 0.1376599400865879
+    },
+    "feature_16": {
+      "max_absolute": 6.854534149169922e-07,
+      "rms": 1.064431636480653e-07,
+      "reference_rms": 0.26987793277429223
+    },
+    "feature_32": {
+      "max_absolute": 4.0531158447265625e-06,
+      "rms": 3.9454931112181423e-07,
+      "reference_rms": 0.5571950293355702
+    },
+    "feature_64": {
+      "max_absolute": 4.291534423828125e-06,
+      "rms": 6.010564715709374e-07,
+      "reference_rms": 1.0347368766863192
+    },
+    "feature_128": {
+      "max_absolute": 5.245208740234375e-06,
+      "rms": 7.177882341937488e-07,
+      "reference_rms": 1.746179928787724
+    },
+    "feature_256": {
+      "max_absolute": 2.765655517578125e-05,
+      "rms": 1.920333225463404e-06,
+      "reference_rms": 3.1106272233182155
+    },
+    "svbrdf_raw": {
+      "max_absolute": 4.4927000999450684e-05,
+      "rms": 1.9711894952343986e-06,
+      "reference_rms": 0.6501386102117892
+    }
+  },
+  "perceptual_indistinguishability_verified": false,
+  "source_sha256": {
+    "src/neural_material_runtime.cpp": "c65988bfc13367dd7b6209ff578ce38cc9d0f9ff59ace54eb4f216a543466015",
+    "src/neural_material_runtime.h": "1ca202567768fe24d426a9c45269fc07cf297bbb1bf05f95bbd25b55725b5d77",
+    "src/neural_material.hlsl": "a73710f07628742abe12d8905eee95d139d24f3f5f3e33903a00d10a019412a0",
+    "tools/neural_material_export.py": "aaae38bb935624e2728a887922fea5c8f1e057fffc0e634e47467efbd53ea2ab",
+    "tools/neural_material_validate.py": "697e6e5f9b774c72045dfc3d98679fad0422bc27964db4c0cda9c3a8c0425cc7"
+  },
+  "timing": {
+    "success": true,
+    "status": 0,
+    "seconds": 9.841403,
+    "seed": 42,
+    "width": 256,
+    "pump_calls": 1185,
+    "cancel_at": 0,
+    "reject_truncated": true,
+    "reject_bad_magic": true,
+    "reject_bad_offset": true
+  },
+  "reference_seconds": 2.577351500047371,
+  "maps": {
+    "diffuse_min": 0.01468050479888916,
+    "diffuse_max": 0.9999992847442627,
+    "diffuse_std": 0.1219390481710434,
+    "roughness_min": 0.24587294459342957,
+    "roughness_max": 0.712617039680481,
+    "normal_length_max_error": 1.1920928955078125e-07,
+    "specular_min": 8.991360664367676e-05,
+    "specular_max": 0.7576423287391663
+  },
+  "passed": true,
+  "limitations": [
+    "Float32 reference, runtime-generated noise, truncation0.7; no category conditioning.",
+    "No perceptual match-to-reality validation. Generated material appearance is not geometry generation.",
+    "Non-seamless zero-padded generator; world mapping must address seams."
+  ],
+  "output_sha256": {
+    "svbrdf_raw.f32": "77e2f66f2be5740d04cb585a3c2f3e7d705bf38af2507ebce9736ea74b5930ca",
+    "diffuse_roughness.f32": "07773ec503c9a02335b9f324bc9290f58e9da708e5b53919a8c5aca04c7d3f0b",
+    "normal_height.f32": "7287c23935ae66fa288a2577a797fb787b3be7f5ea442a4a6a85fb2f625f4868",
+    "specular.f32": "c035c585b0241dd17d283095e2ea08b993fbe69b4a5128b6aa31a31888498fb2"
+  },
+  "cancellation": {
+    "success": false,
+    "status": 2,
+    "seconds": 0.028116,
+    "seed": 42,
+    "width": 0,
+    "pump_calls": 3,
+    "cancel_at": 3,
+    "reject_truncated": true,
+    "reject_bad_magic": true,
+    "reject_bad_offset": true
+  },
+  "different_seed": {
+    "seed": 43,
+    "raw_rms_difference": 0.6599974891982151,
+    "sha256": "a6f8e259dd390cc135c208f55893934d90b84930875ef4e4bb9c52402d6e5cac"
+  },
+  "same_seed_repeat_identical": true
+}

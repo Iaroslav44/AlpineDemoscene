@@ -9,3 +9,7 @@ dist/*.exe -text
 validation/88mb-release.json text
 validation/audio-release.json text
 validation/history/** text
+# This previous milestone is fingerprinted by the current release collector.
+validation/history/neural-400mb-release-20261029.json -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+# Preserve third-party license text verbatim, including its original spacing.
+models/material/LICENSE*.txt -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol

@@ -21,3 +21,6 @@
 200 RCDATA "..\\models\\avatar\\gdna-thuman.nav"
 201 RCDATA "..\\models\\audio\\midi_ddsp_timbre.nad"
 202 RCDATA "..\\models\\head\\ganhead-faceverse.nah"
+121 RCDATA "..\\build\\neural_material_cs.cso"
+122 RCDATA "..\\build\\world_cs.cso"
+203 RCDATA "..\\models\\material\\photomat-256.nam"

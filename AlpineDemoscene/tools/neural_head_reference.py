@@ -81,10 +81,14 @@ def main():
         model=ROOT/"models/head/ganhead-faceverse.nah"
         report={"seed":args.seed,"model_sha256":fingerprint(model),"model_bytes":model.stat().st_size,"gpu_dir":str(args.gpu_dir.resolve())}
         report["gpu_dump_sha256"]={name:fingerprint(args.gpu_dir/(name+".f32"))for name in("latent","feature","field","positions","attributes","motion")}
-        metrics_path=args.gpu_dir/"neural_head_metrics.json"
-        if metrics_path.is_file():
-            report["gpu_metrics_sha256"]=fingerprint(metrics_path)
-            report["gpu_metrics"]=json.loads(metrics_path.read_text())
+        for metrics_name in ("neural_head_metrics.json","neural_avatar_metrics.json"):
+            metrics_path=args.gpu_dir/metrics_name
+            if not metrics_path.is_file():continue
+            metrics=json.loads(metrics_path.read_text())
+            if metrics.get("model_resource_id")!=202 or metrics.get("model_sha256")!=report["model_sha256"]:continue
+            report["gpu_metrics_file"]=metrics_name
+            report["gpu_metrics_sha256"]=fingerprint(metrics_path);report["gpu_metrics"]=metrics;break
+        if "gpu_metrics" not in report:raise ValueError("No matching completed GANHead metrics beside the GPU dump")
         report["latent_max_abs_error"]=float(np.max(np.abs(read("latent")-codes)))
         report["feature_max_abs_error"]=float(np.max(np.abs(read("feature").reshape(volume.shape)-volume)))
         field=read("field");sample=np.linspace(0,len(field)-1,1024,dtype=int)

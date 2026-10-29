@@ -1,26 +1,30 @@
 {
-  "schema": 5,
+  "schema": 6,
   "date": "2026-10-29",
-  "milestone": "First embedded pretrained neural inference",
+  "milestone": "Generated ecosystem, landscape transport, calibrated residents and two neural materials",
   "executable": "dist/AlpineDreaming.exe",
-  "sha256": "9f82e8eda15eb1f679a6f757697969f5fa734ea5c42a9254e0229effb877bd00",
-  "bytes": 31750144,
+  "sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+  "bytes": 147731968,
   "limit_bytes_exclusive": 400000000,
   "packaging": {
     "Path": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\dist\\AlpineDreaming.exe",
-    "Bytes": 31750144,
+    "Bytes": 147731968,
     "LimitBytesExclusive": 400000000,
-    "SHA256": "9F82E8EDA15EB1F679A6F757697969F5FA734EA5C42A9254E0229EFFB877BD00",
-    "ShaderResources": "101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120",
-    "ModelResources": "200,201,202",
+    "SHA256": "EE2991EF7E2EAF764FDE147848440201F1F54CE7640AF88CA5DB1F577F65FE38",
+    "ShaderResources": "101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122",
+    "ModelResources": "200,201,202,203",
     "Imports": "kernel32.dll,user32.dll,d3d11.dll,winmm.dll"
   },
   "baseline": {
-    "commit": "b46f4f41",
-    "tag": "alpine-before-neural-400mb-20261029",
-    "bytes": 1405440
+    "commit": "8d5e6e6e",
+    "tag": "alpine-before-generative-world-20261029",
+    "bytes": 31750144
   },
-  "size_increase_bytes": 30344704,
+  "previous_audit": {
+    "path": "validation/history/neural-400mb-release-20261029.json",
+    "sha256": "d390f6bc01a44a0a4a93914be671f6cef266cb962219f520d5a38271deca0a71"
+  },
+  "size_increase_bytes": 115981824,
   "embedded_neural_models": [
     {
       "resource_id": 200,
@@ -42,12 +46,19 @@
       "bytes": 12330948,
       "sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
       "magic_hex": "4e41483101000000"
+    },
+    {
+      "resource_id": 203,
+      "path": "models/material/photomat-256.nam",
+      "bytes": 115774612,
+      "sha256": "6d4706e0814ea7265e0f23b336c663ffbdcbaa47a893c2f8f96d7c6428e35257",
+      "magic_hex": "4e414d3101000000"
     }
   ],
-  "model_manifest_sha256": "73695470cb94ca6d9f181881442dac82cfb4a669a3138836657dea9e5e67ee36",
+  "model_manifest_sha256": "85e206605ee7376bb45113d9789aac34e7a18423bebceffa8b6cefdaf5c19119",
   "avatar_reference": {
     "path": "validation/neural-avatar.json",
-    "sha256": "e0a110dde2bd9bda3292b6f48671271966c35727c82dcd5bb9f6502e7182c758",
+    "sha256": "34beacf4e31776a321b979dce56dd2f74920774cfce227279e54d142e1ddcc32",
     "result": {
       "seed": 42,
       "model_sha256": "cbda91973caba80d1adfdcf64b6cdd9e47c08d5542a7cffc182300b28fb5dd92",
@@ -63,73 +74,73 @@
       "feature_max": 30.67577362060547,
       "occupancy_min": -67.09727478027344,
       "occupancy_max": 20.29119300842285,
-      "gpu_dir": "build/neural_body_release42",
+      "gpu_dir": "build/generative_final_timeline",
       "gpu_dump_sha256": {
         "latent": "15e3f3704888d6f636aed7c3120184fa8048df88759dbb69de6630b605497428",
         "feature": "70b7c8f21c88096d0e47f8c4c5be7ee1562f46c138558a1638a55d2565301a6d",
         "field": "4556a97d9e3fa36afb2f18ae1930431d4392c1b7381e2d771b3f7fdc9bc18ea2",
-        "positions": "0da1377cc1e4512960505c4b62e42979c3e60a0124668fac06a05db5e4ceebe8",
-        "attributes": "5a508e0f1b474adf3f6229c2e8676cdfadf1536d55e2a48a753376fd075948c3"
+        "positions": "69077976147c7203c3333bb90abba1789f14a90fe5eb741d06434ea4dae7a9b6",
+        "attributes": "d33a16230abecd2c4d30f784d50334db1c0d3b2dacd81142e76c2f8bf70d6616"
       },
-      "gpu_metrics_sha256": "b1191bab173615c6a72d4f8f5e4ac9d2819433ab37f8d4a881a49cdd5c29aad5",
+      "gpu_metrics_sha256": "57203c3a4f8b092d37146a4edcf8755a3667397f112a901bdae7b66d47b9c6ec",
       "gpu_metrics": {
         "model": "gDNA THuman2.0",
         "model_resource_id": 200,
         "model_bytes": 8695856,
         "model_sha256": "cbda91973caba80d1adfdcf64b6cdd9e47c08d5542a7cffc182300b28fb5dd92",
-        "candidate_sha256": "bb236f1f8a710342f371654ee0c1a09050f52084ae482b3358ff62305cb64323",
+        "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
         "source_kind": "candidate_resources",
         "inference_executed": true,
         "seed": 42,
         "vertex_count": 150876,
         "vertex_stride_bytes": 64,
         "status": 1,
-        "startup_wall_seconds": 74.5941,
-        "helper_seconds": 74.5921,
-        "feature_ms": 6297,
-        "field_ms": 55484,
-        "geometry_fnv1a64": "a1d0dd3d734e1fb",
+        "startup_wall_seconds": 76.5975,
+        "helper_seconds": 76.5951,
+        "feature_ms": 6109,
+        "field_ms": 57219,
+        "geometry_fnv1a64": "d661f4bcc610c9e2",
         "invalid_values": 0,
         "invalid_joint_ids": 0,
-        "max_weight_sum_error": 1.98372e-07,
+        "max_weight_sum_error": 1.41561e-07,
         "normal_length_min": 1,
         "normal_length_max": 1,
         "active_joint_count": 24,
         "joint_influence_counts": [
-          61624,
-          62507,
-          63926,
-          48416,
-          32168,
-          23754,
-          43336,
-          17911,
-          13605,
-          55936,
-          14128,
-          14927,
-          16389,
-          22495,
-          16227,
-          19399,
-          15754,
-          13480,
-          8757,
-          7521,
-          4068,
-          4324,
-          5533,
-          6440
+          61634,
+          62509,
+          63973,
+          48401,
+          32184,
+          23766,
+          43310,
+          17888,
+          13592,
+          55991,
+          14114,
+          14920,
+          16430,
+          22544,
+          16206,
+          19377,
+          15735,
+          13479,
+          8742,
+          7516,
+          4077,
+          4320,
+          5530,
+          6436
         ],
         "bounds_min": [
-          -0.861276,
+          -0.861713,
           0,
-          -0.155129
+          -0.155372
         ],
         "bounds_max": [
-          0.883182,
+          0.883144,
           1.75,
-          0.192249
+          0.192074
         ],
         "invalid_color_values": 0,
         "invalid_morph_values": 0,
@@ -137,31 +148,34 @@
         "motion_frames": 0,
         "motion_duration_seconds": 0,
         "invalid_motion_values": 0,
-        "motion_max_difference_from_first": 0
+        "motion_max_difference_from_first": 0,
+        "rig_bytes": 512,
+        "rig_sha256": "6000040c114e32788b65dbd6c2084be681944f327183f661f3cfd04c64ac8e14",
+        "invalid_rig_values": 0
       },
       "latent_max_abs_error": 0.0,
       "feature_max_abs_error": 8.392333984375e-05,
       "feature_rms_error": 3.341885076224571e-06,
       "occupancy_max_abs_error": 0.00026702880859375,
-      "normal_max_abs_error": 0.0003210306167602539,
+      "normal_max_abs_error": 0.0003906339406967163,
       "joint_ids_equal": true,
-      "weights_max_abs_error": 1.6689300537109375e-06,
-      "joint_distribution_max_abs_error": 1.6689300537109375e-06,
+      "weights_max_abs_error": 1.7881393432617188e-06,
+      "joint_distribution_max_abs_error": 1.7881393432617188e-06,
       "passed": true,
       "schema": 1,
       "validation_scope": "Independent NumPy versus actual D3D11 compute output; numerical graph correctness for one seed, not a perceptual realism claim",
       "reference_report": "build/neural_reference/report-42.json",
-      "reference_report_sha256": "a093bd7f99d8e16cf8b1941c0f68d7130fbe60eb1fd5a62513fe2e52fff90be7",
+      "reference_report_sha256": "fb22533b39bb403e257199792827060257d3016358113f566781665d4905b232",
       "model_path": "models/avatar/gdna-thuman.nav",
       "model_metadata_sha256": "670589e6f72ac5e4ab5112e03431a0104af6848825a2fc5beb24309637401136",
       "source_sha256": {
-        "src/neural_avatar_runtime.cpp": "6ac5965a54fd976404ec5a4f563c550d0a6fb6e0e6d2a251172c7c5c79759def",
-        "src/neural_avatar_runtime.h": "52055736d6ac267a750c12c01f2a0831037db0a6e87540da3a89d3124b4f1456",
+        "src/neural_avatar_runtime.cpp": "9d33a881de5b62d2d60de161754ffc7aa04f2b454a94258ca539cdcff4d34c57",
+        "src/neural_avatar_runtime.h": "6a68a727c49fa855c81488549eb6f834e6824f142c24c2175266fdf76eee924c",
         "src/neural_avatar.hlsl": "31a9a7cfec71d4030eda820a34006b20784722a7b421a45eeb3c1bfedfe05901",
-        "src/neural_mesh_cleanup.h": "42b32e7f92cd91f0818ee0dc2ee43a7b3ee460b1af7c563c690df3444c777478",
+        "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
         "tools/neural_avatar_export.py": "12b9a35a8c59f1be88f90e2e957e3587e8190c167856deae3dedac9cf120e368",
         "tools/neural_avatar_reference.py": "6edae3d00c0b46f572d4cecfb53cf8281f9d6cfde902cdbfc45aaf164fbf0f9a",
-        "tools/neural_avatar_validation_report.py": "26e69c4cb245736b279c0b448516af8f4ba085cb3a0ad0d79c24e24c7f8c7281"
+        "tools/neural_avatar_validation_report.py": "77657c9f15ef5bd15adad171924a5dc2a661ca415a56e6fafd45fa9a09a310de"
       },
       "provenance": {
         "schema": 1,
@@ -197,6 +211,9 @@
         ],
         "surface_extraction": "Marching tetrahedra with shared edge vertices",
         "component_filter": "Largest connected component by vertex count, before bounds normalization and surface-attribute inference",
+        "mesh_refinement": "Topology-only bilateral Taubin fairing with pinned boundaries, source-relative displacement cap and local triangle-foldover rejection; area-weighted normals plus band-limited learned detail",
+        "cloth_normal_bandwidth": "Body clothing uses a 25mm geodesic area-weighted compact normal filter, without learned normal residual; head, fingers and feet retain their separate learned-detail treatment",
+        "skinning_refinement": "Two neighbour-only regularization passes, top-four reselection and renormalization; body bind landmarks estimated from generated parent/child influence transitions",
         "normalization": "Uniform scale to 1.75 metres high; minimum Y translated to zero; X/Z origin retained",
         "up_axis": "+Y",
         "face_forward_axis": "+Z",
@@ -213,102 +230,106 @@
         "Largest-component filtering can remove real disconnected parts as well as generated floaters.",
         "Uniform bounds normalization is not a fitted skeletal registration.",
         "Numerical correctness does not establish anatomical realism or artifact-free pose deformation.",
-        "Body skinning uses learned weights with an authored approximate 24-joint rig; no fitted SMPL template is embedded.",
+        "Body skinning uses learned weights and surface-estimated bind landmarks with authored contact IK; this is not a fitted SMPL template or force-based biomechanics solver.",
         "Body checkpoint supplies geometry and normals, not learned appearance; materials are procedural."
       ]
     }
   },
   "head_reference": {
     "path": "validation/neural-head.json",
-    "sha256": "057c9e44e95250a6dfdf111f07ce15283e9cc7a1e9f5fc3ababa151ccd0b035b",
+    "sha256": "365e46d3c416f418d6d95d2c4a201308202a3d986ec85b8a83fe905442ddb1ba",
     "result": {
       "seed": 42,
       "model_sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
       "model_bytes": 12330948,
-      "gpu_dir": "build/neural_head_probe42",
+      "gpu_dir": "build/generative_final_timeline/head",
       "gpu_dump_sha256": {
         "latent": "fd8f880f380575e1fbd1f8cf3232037bc167d2b67ec7c28d81e8a866f1ff10fc",
         "feature": "5f2acfccef277254aa8a7aae8ecbd35b8bb0732141570602fd9bd668ea259fc0",
         "field": "3c8f4d98aa0cb20e8f84c2b76aeb0e838c1301d09f21f51ffe6c0beb09be7b2a",
-        "positions": "e7c551745dd07b5612e40b364488fcef100b9060c7ed1652f96166164679b4e4",
-        "attributes": "02b871454574b431c0e245e12b55d4dfcdb7f5faa9b11d6bffce370fa5ac4e48",
+        "positions": "8ab0f5105ef0249c7d638b5514bd38827e6f1ba5902257c346d50864a73b1883",
+        "attributes": "2f1ccf5a3911be41e7a77f4fc54db55970fcc581c33ff44875accf3facec3a44",
         "motion": "64ad1c015763e2ddaa741d6ad6bc85049b78d44bd8a727c9d4aa3098cccf28c8"
       },
-      "gpu_metrics_sha256": "bac2c6f6563aca755d168c9d0e3204106b42122ee60c84aafacf454cc4789fce",
+      "gpu_metrics_file": "neural_avatar_metrics.json",
+      "gpu_metrics_sha256": "af01cf5367fd79a70aa04adb0df85b01d3f0cd7a65594b14a91865eab84fcef0",
       "gpu_metrics": {
         "model": "GANHead FaceVerse",
         "model_resource_id": 202,
         "model_bytes": 12330948,
         "model_sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
-        "candidate_sha256": "",
-        "source_kind": "development_files",
+        "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+        "source_kind": "candidate_resources",
         "inference_executed": true,
         "seed": 42,
         "vertex_count": 400056,
         "vertex_stride_bytes": 144,
         "status": 1,
-        "startup_wall_seconds": 226.506,
-        "helper_seconds": 226.502,
-        "feature_ms": 13547,
-        "field_ms": 107969,
-        "geometry_fnv1a64": "8f32735a157081c6",
+        "startup_wall_seconds": 174.194,
+        "helper_seconds": 174.189,
+        "feature_ms": 6687,
+        "field_ms": 91938,
+        "geometry_fnv1a64": "a80ecaaac7ba6dde",
         "invalid_values": 0,
         "invalid_joint_ids": 0,
-        "max_weight_sum_error": 2.16649e-07,
+        "max_weight_sum_error": 1.49012e-07,
         "normal_length_min": 1,
         "normal_length_max": 1,
         "active_joint_count": 5,
         "joint_influence_counts": [
-          399959,
+          399947,
           400056,
           400056,
-          12943,
-          387210
+          12949,
+          387216
         ],
         "bounds_min": [
-          -0.161348,
+          -0.160743,
           0,
-          -0.136008
+          -0.136026
         ],
         "bounds_max": [
-          0.164452,
+          0.164467,
           0.33,
-          0.114503
+          0.114522
         ],
         "invalid_color_values": 0,
         "invalid_morph_values": 0,
-        "max_abs_morph_delta": 0.00329753,
+        "max_abs_morph_delta": 0.00328875,
         "motion_frames": 1825,
         "motion_duration_seconds": 128,
         "invalid_motion_values": 0,
-        "motion_max_difference_from_first": 2.49728
+        "motion_max_difference_from_first": 2.49728,
+        "rig_bytes": 0,
+        "rig_sha256": "",
+        "invalid_rig_values": 0
       },
       "latent_max_abs_error": 0.0,
       "feature_max_abs_error": 0.000148773193359375,
       "occupancy_max_abs_error": 0.00023651123046875,
-      "normal_max_abs_error": 7.659196853637695e-05,
-      "color_max_abs_error": 2.2530555725097656e-05,
+      "normal_max_abs_error": 9.888410568237305e-05,
+      "color_max_abs_error": 2.3365020751953125e-05,
       "joint_ids_equal": true,
-      "weights_max_abs_error": 7.152557373046875e-07,
-      "morph_max_abs_error": 6.51925802230835e-09,
+      "weights_max_abs_error": 6.556510925292969e-07,
+      "morph_max_abs_error": 8.381903171539307e-09,
       "motion_max_abs_error": 0.0,
       "passed": true,
       "schema": 1,
       "validation_scope": "Independent NumPy versus actual D3D11 compute output; numerical graph correctness for one seed, not a perceptual realism claim",
       "reference_report": "build/neural_head_reference/report-42.json",
-      "reference_report_sha256": "e985a5b8d9b8beaf5cd0aeb605d35501bcdd271aa218d249608bef40269e3e85",
+      "reference_report_sha256": "010a5ed20ef99dc213242b7bc87e797f9278d66a45e9ca38e0eaced114638920",
       "model_path": "models/head/ganhead-faceverse.nah",
       "model_metadata_sha256": "21e0d13b54cbc4a97f83b03e2f4a621ba335680bacb8f9701d39e9240d546761",
       "source_sha256": {
-        "src/neural_avatar_runtime.cpp": "6ac5965a54fd976404ec5a4f563c550d0a6fb6e0e6d2a251172c7c5c79759def",
-        "src/neural_avatar_runtime.h": "52055736d6ac267a750c12c01f2a0831037db0a6e87540da3a89d3124b4f1456",
+        "src/neural_avatar_runtime.cpp": "9d33a881de5b62d2d60de161754ffc7aa04f2b454a94258ca539cdcff4d34c57",
+        "src/neural_avatar_runtime.h": "6a68a727c49fa855c81488549eb6f834e6824f142c24c2175266fdf76eee924c",
         "src/neural_avatar.hlsl": "31a9a7cfec71d4030eda820a34006b20784722a7b421a45eeb3c1bfedfe05901",
-        "src/neural_mesh_cleanup.h": "42b32e7f92cd91f0818ee0dc2ee43a7b3ee460b1af7c563c690df3444c777478",
+        "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
         "tools/neural_avatar_export.py": "12b9a35a8c59f1be88f90e2e957e3587e8190c167856deae3dedac9cf120e368",
         "tools/neural_avatar_reference.py": "6edae3d00c0b46f572d4cecfb53cf8281f9d6cfde902cdbfc45aaf164fbf0f9a",
-        "tools/neural_avatar_validation_report.py": "26e69c4cb245736b279c0b448516af8f4ba085cb3a0ad0d79c24e24c7f8c7281",
+        "tools/neural_avatar_validation_report.py": "77657c9f15ef5bd15adad171924a5dc2a661ca415a56e6fafd45fa9a09a310de",
         "tools/neural_head_export.py": "5399aa3e78b9adb6c8b6f4557e7279855fd5b2341a619016d6a5d8bdb0b68de9",
-        "tools/neural_head_reference.py": "7f153bf04a72785aa538a8acb9581ec3231f34683f43f8a62a7f79b8a3e848a2"
+        "tools/neural_head_reference.py": "69f4924a93ca128d7e0f71198e84e725907fad8de1073662c4cc691ce0b05ea3"
       },
       "provenance": {
         "schema": 1,
@@ -358,6 +379,9 @@
         ],
         "surface_extraction": "Marching tetrahedra with shared edge vertices",
         "component_filter": "Largest connected component by vertex count, before bounds normalization and surface-attribute inference",
+        "mesh_refinement": "Topology-only bilateral Taubin fairing with pinned boundaries, source-relative displacement cap and local triangle-foldover rejection; area-weighted normals plus band-limited learned detail",
+        "cloth_normal_bandwidth": "Body clothing uses a 25mm geodesic area-weighted compact normal filter, without learned normal residual; head, fingers and feet retain their separate learned-detail treatment",
+        "skinning_refinement": "Two neighbour-only regularization passes, top-four reselection and renormalization; body bind landmarks estimated from generated parent/child influence transitions",
         "normalization": "Uniform scale to 0.33 metres high; minimum Y translated to zero; X/Z origin retained",
         "up_axis": "+Y",
         "face_forward_axis": "+Z",
@@ -377,7 +401,8 @@
         "Learned RGB may contain photographic illumination; it is not verified relightable PBR albedo.",
         "Four learned expression directions retain a limited subspace; jaw/eye bone transforms are not applied and canonical normals are unchanged during expressions.",
         "Head is attached at body-local Y=1.42m, body clipped above Y=1.44m; this is an authored seam rather than learned body/head correspondence.",
-        "Five predicted head skin weights are verified but renderer follows the body's head bone as a whole."
+        "Learned root influence attaches the lower head crop to the torso; remaining head influences follow the head bone together, without full jaw/eye articulation.",
+        "A bounded lower-neck crop removes captured shoulder-base geometry below 1.49m; higher geometry is retained after the earlier 1.535m cutoff failed visual chin inspection."
       ],
       "morphology": {
         "measured_unique_vertices": 66672,
@@ -402,12 +427,12 @@
           1.5709539651870728
         ],
         "endpoint_maximum_difference": 0.0,
-        "normalization_scale_metres_per_model_unit": 0.18184983730316162,
-        "maximum_expression_displacement_metres": 0.012339049950242043,
+        "normalization_scale_metres_per_model_unit": 0.18185052275657654,
+        "maximum_expression_displacement_metres": 0.012320385314524174,
         "maximum_absolute_expression_displacement_xyz_metres": [
-          0.006773193366825581,
-          0.006607163697481155,
-          0.008678753860294819
+          0.006770059932023287,
+          0.006607453338801861,
+          0.008636071346700191
         ],
         "measurement_scope": "All stored coefficients times every generated vertex's learned four displacement directions, before global head articulation",
         "jaw_controls_applied_by_renderer": false,
@@ -625,42 +650,828 @@
       "timing_context": "CPU full-score synthesis during concurrent project validation; wall-clock timing is hardware/load dependent"
     }
   },
+  "audio_validation_scope": "Retained numerical and full-score evidence for byte-identical audio weights, orchestra source, neural audio source and header. This does not assert that the earlier audio probe used the current full application host.",
+  "material_reference": {
+    "path": "validation/neural-material.json",
+    "sha256": "14070b871b36fe03c57e484a437c02bcb7733a323df10a36779510263ec12f98",
+    "result": {
+      "schema": 1,
+      "model_sha256": "6d4706e0814ea7265e0f23b336c663ffbdcbaa47a893c2f8f96d7c6428e35257",
+      "source_checkpoints": {
+        "G_256.pkl": "4648af64714a59d3c6a40eef176935c6b8374d348fa10a40f40b6791a21b55ba",
+        "MatUnet_256.pt": "8e08510fdd91ce5004a2cd63fdbd37b7e1292c724474e24861760218a8e5fd1e"
+      },
+      "seed": 42,
+      "errors": [],
+      "operator_comparison": {
+        "latent_z": {
+          "max_absolute": 2.384185791015625e-07,
+          "rms": 2.1120319254980345e-08,
+          "reference_rms": 0.9999999996302349
+        },
+        "latent_w": {
+          "max_absolute": 1.6242265701293945e-06,
+          "rms": 3.8370340846096073e-07,
+          "reference_rms": 0.6824672009673974
+        },
+        "feature_4": {
+          "max_absolute": 1.862645149230957e-07,
+          "rms": 4.4907314429496375e-08,
+          "reference_rms": 0.07257288392530747
+        },
+        "feature_8": {
+          "max_absolute": 2.682209014892578e-07,
+          "rms": 5.937804256198222e-08,
+          "reference_rms": 0.1376599400865879
+        },
+        "feature_16": {
+          "max_absolute": 6.854534149169922e-07,
+          "rms": 1.064431636480653e-07,
+          "reference_rms": 0.26987793277429223
+        },
+        "feature_32": {
+          "max_absolute": 4.0531158447265625e-06,
+          "rms": 3.9454931112181423e-07,
+          "reference_rms": 0.5571950293355702
+        },
+        "feature_64": {
+          "max_absolute": 4.291534423828125e-06,
+          "rms": 6.010564715709374e-07,
+          "reference_rms": 1.0347368766863192
+        },
+        "feature_128": {
+          "max_absolute": 5.245208740234375e-06,
+          "rms": 7.177882341937488e-07,
+          "reference_rms": 1.746179928787724
+        },
+        "feature_256": {
+          "max_absolute": 2.765655517578125e-05,
+          "rms": 1.920333225463404e-06,
+          "reference_rms": 3.1106272233182155
+        },
+        "svbrdf_raw": {
+          "max_absolute": 4.4927000999450684e-05,
+          "rms": 1.9711894952343986e-06,
+          "reference_rms": 0.6501386102117892
+        }
+      },
+      "perceptual_indistinguishability_verified": false,
+      "source_sha256": {
+        "src/neural_material_runtime.cpp": "c65988bfc13367dd7b6209ff578ce38cc9d0f9ff59ace54eb4f216a543466015",
+        "src/neural_material_runtime.h": "1ca202567768fe24d426a9c45269fc07cf297bbb1bf05f95bbd25b55725b5d77",
+        "src/neural_material.hlsl": "a73710f07628742abe12d8905eee95d139d24f3f5f3e33903a00d10a019412a0",
+        "tools/neural_material_export.py": "aaae38bb935624e2728a887922fea5c8f1e057fffc0e634e47467efbd53ea2ab",
+        "tools/neural_material_validate.py": "697e6e5f9b774c72045dfc3d98679fad0422bc27964db4c0cda9c3a8c0425cc7"
+      },
+      "timing": {
+        "success": true,
+        "status": 0,
+        "seconds": 9.841403,
+        "seed": 42,
+        "width": 256,
+        "pump_calls": 1185,
+        "cancel_at": 0,
+        "reject_truncated": true,
+        "reject_bad_magic": true,
+        "reject_bad_offset": true
+      },
+      "reference_seconds": 2.577351500047371,
+      "maps": {
+        "diffuse_min": 0.01468050479888916,
+        "diffuse_max": 0.9999992847442627,
+        "diffuse_std": 0.1219390481710434,
+        "roughness_min": 0.24587294459342957,
+        "roughness_max": 0.712617039680481,
+        "normal_length_max_error": 1.1920928955078125e-07,
+        "specular_min": 8.991360664367676e-05,
+        "specular_max": 0.7576423287391663
+      },
+      "passed": true,
+      "limitations": [
+        "Float32 reference, runtime-generated noise, truncation0.7; no category conditioning.",
+        "No perceptual match-to-reality validation. Generated material appearance is not geometry generation.",
+        "Non-seamless zero-padded generator; world mapping must address seams."
+      ],
+      "output_sha256": {
+        "svbrdf_raw.f32": "77e2f66f2be5740d04cb585a3c2f3e7d705bf38af2507ebce9736ea74b5930ca",
+        "diffuse_roughness.f32": "07773ec503c9a02335b9f324bc9290f58e9da708e5b53919a8c5aca04c7d3f0b",
+        "normal_height.f32": "7287c23935ae66fa288a2577a797fb787b3be7f5ea442a4a6a85fb2f625f4868",
+        "specular.f32": "c035c585b0241dd17d283095e2ea08b993fbe69b4a5128b6aa31a31888498fb2"
+      },
+      "cancellation": {
+        "success": false,
+        "status": 2,
+        "seconds": 0.028116,
+        "seed": 42,
+        "width": 0,
+        "pump_calls": 3,
+        "cancel_at": 3,
+        "reject_truncated": true,
+        "reject_bad_magic": true,
+        "reject_bad_offset": true
+      },
+      "different_seed": {
+        "seed": 43,
+        "raw_rms_difference": 0.6599974891982151,
+        "sha256": "a6f8e259dd390cc135c208f55893934d90b84930875ef4e4bb9c52402d6e5cac"
+      },
+      "same_seed_repeat_identical": true
+    }
+  },
+  "geometry_refinement": {
+    "path": "validation/neural-geometry-refinement.json",
+    "sha256": "0f1b385dc5c245c3d0a60dae6f751b09f81aa319b74e82e38401c044ca117843",
+    "result": {
+      "schema": 2,
+      "scope": "Current-candidate neural GPU outputs reconstructed by the exact native CPU geometry postprocess; seed42",
+      "baseline_commit": "8d5e6e6e",
+      "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+      "body": {
+        "schema": 1,
+        "native": {
+          "cpu_only": true,
+          "kind": "body",
+          "unique_vertices": 25146,
+          "triangle_vertices": 150876,
+          "baseline_correspondence_max": 0,
+          "scale": 1.045889258,
+          "cancellation_passed": true,
+          "refined_position_runtime_max_error": 0,
+          "attributes_resampled_at_new_positions": true,
+          "note": "QA cache only. Fresh dumps use attributes inferred at refined coordinates; legacy dumps retain original attributes to isolate postprocessing."
+        },
+        "before": {
+          "finite": true,
+          "surface_area": 2.160435914993286,
+          "signed_volume": 0.10573270171880722,
+          "degenerate_triangles": 0,
+          "bounds_min": [
+            -0.8235136270523071,
+            -1.0618256330490112,
+            -0.1483275443315506
+          ],
+          "bounds_max": [
+            0.8444592952728271,
+            0.611445963382721,
+            0.18381957709789276
+          ],
+          "edge_length_median": 0.010992957279086113,
+          "laplacian_length_mean": 0.004393124021589756,
+          "laplacian_length_p95": 0.009795905090868473,
+          "laplacian_length_p99": 0.01350881066173315,
+          "neighbour_normal_angle_degrees_mean": 11.784835815429688,
+          "neighbour_normal_angle_degrees_p95": 37.62910461425781,
+          "neighbour_weight_l1_mean": 0.049364082515239716,
+          "neighbour_weight_l1_p95": 0.18778565526008606,
+          "weight_sum_max_error": 2.384185791015625e-07
+        },
+        "after": {
+          "finite": true,
+          "surface_area": 2.134139060974121,
+          "signed_volume": 0.10566785931587219,
+          "degenerate_triangles": 0,
+          "bounds_min": [
+            -0.823904275894165,
+            -1.0617438554763794,
+            -0.1485549658536911
+          ],
+          "bounds_max": [
+            0.8443949222564697,
+            0.6114733815193176,
+            0.18364647030830383
+          ],
+          "edge_length_median": 0.010391244664788246,
+          "laplacian_length_mean": 0.003230090020224452,
+          "laplacian_length_p95": 0.007806477136909962,
+          "laplacian_length_p99": 0.011171412654221058,
+          "neighbour_normal_angle_degrees_mean": 6.855604648590088,
+          "neighbour_normal_angle_degrees_p95": 18.90126609802246,
+          "neighbour_weight_l1_mean": 0.04898348078131676,
+          "neighbour_weight_l1_p95": 0.18124446272850037,
+          "weight_sum_max_error": 1.7881393432617188e-07
+        },
+        "displacement_metres": {
+          "mean": 0.0012314231134951115,
+          "p95": 0.0026639439165592194,
+          "maximum": 0.013727294281125069
+        },
+        "relative_signed_volume_change": -0.0006132672473221357,
+        "flipped_original_triangle_normals": 0,
+        "source_sha256": {
+          "src/neural_avatar_runtime.cpp": "9d33a881de5b62d2d60de161754ffc7aa04f2b454a94258ca539cdcff4d34c57",
+          "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
+          "tools/neural_geometry_probe.cpp": "c8121a94778a17c7eac9dd15ccf92e3de9be3ddbacb89b3d166852fa7e22bdba",
+          "tools/neural_geometry_metrics.py": "2acb2e78e56347a68dc39b81da80c96186c390281b5e352fc02c0d92827f9593"
+        },
+        "data_sha256": {
+          "after.attributes.f32": "9dc1bd3341a3c71ddff735589a2e533342df1e5b7385b471b3cb46effb4c5672",
+          "after.geometric_normals.f32": "07b52cf49577d36009d62f2e27b5b7adef056d434b7b781d8e38c97ac526b592",
+          "after.positions.f32": "69077976147c7203c3333bb90abba1789f14a90fe5eb741d06434ea4dae7a9b6",
+          "before.attributes.f32": "d33a16230abecd2c4d30f784d50334db1c0d3b2dacd81142e76c2f8bf70d6616",
+          "before.positions.f32": "0da1377cc1e4512960505c4b62e42979c3e60a0124668fac06a05db5e4ceebe8"
+        },
+        "limitations": [
+          "One seed; numerical smoothness is not anatomy or photorealism.",
+          "Attributes were inferred at refined coordinates.",
+          "No new fingers, eyes or teeth are invented."
+        ]
+      },
+      "head": {
+        "schema": 1,
+        "native": {
+          "cpu_only": true,
+          "kind": "head",
+          "unique_vertices": 66672,
+          "triangle_vertices": 400056,
+          "baseline_correspondence_max": 0,
+          "scale": 0.1818505228,
+          "cancellation_passed": true,
+          "refined_position_runtime_max_error": 0,
+          "attributes_resampled_at_new_positions": true,
+          "note": "QA cache only. Fresh dumps use attributes inferred at refined coordinates; legacy dumps retain original attributes to isolate postprocessing."
+        },
+        "before": {
+          "finite": true,
+          "surface_area": 8.444344520568848,
+          "signed_volume": 1.3070849180221558,
+          "degenerate_triangles": 6,
+          "bounds_min": [
+            -0.8872573971748352,
+            -0.9812520742416382,
+            -0.7479118704795837
+          ],
+          "bounds_max": [
+            0.9043278694152832,
+            0.8334320187568665,
+            0.6296589374542236
+          ],
+          "edge_length_median": 0.013570712879300117,
+          "laplacian_length_mean": 0.005048359744250774,
+          "laplacian_length_p95": 0.010863902978599072,
+          "laplacian_length_p99": 0.013984426856040955,
+          "neighbour_normal_angle_degrees_mean": 5.4508137702941895,
+          "neighbour_normal_angle_degrees_p95": 19.92253875732422,
+          "neighbour_weight_l1_mean": 0.009182319045066833,
+          "neighbour_weight_l1_p95": 0.04080856218934059,
+          "weight_sum_max_error": 2.384185791015625e-07
+        },
+        "after": {
+          "finite": true,
+          "surface_area": 8.370555877685547,
+          "signed_volume": 1.306250810623169,
+          "degenerate_triangles": 0,
+          "bounds_min": [
+            -0.8839268088340759,
+            -0.9812314510345459,
+            -0.7480111122131348
+          ],
+          "bounds_max": [
+            0.9044079184532166,
+            0.8334457278251648,
+            0.6297616958618164
+          ],
+          "edge_length_median": 0.01313113048672676,
+          "laplacian_length_mean": 0.00410666037350893,
+          "laplacian_length_p95": 0.00917112361639738,
+          "laplacian_length_p99": 0.012385181151330471,
+          "neighbour_normal_angle_degrees_mean": 5.381174564361572,
+          "neighbour_normal_angle_degrees_p95": 18.558958053588867,
+          "neighbour_weight_l1_mean": 0.009040715172886848,
+          "neighbour_weight_l1_p95": 0.03966323658823967,
+          "weight_sum_max_error": 1.7881393432617188e-07
+        },
+        "displacement_metres": {
+          "mean": 0.00016108050476759672,
+          "p95": 0.0003358426329214126,
+          "maximum": 0.001212338567711413
+        },
+        "relative_signed_volume_change": -0.000638143235750066,
+        "flipped_original_triangle_normals": 0,
+        "source_sha256": {
+          "src/neural_avatar_runtime.cpp": "9d33a881de5b62d2d60de161754ffc7aa04f2b454a94258ca539cdcff4d34c57",
+          "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
+          "tools/neural_geometry_probe.cpp": "c8121a94778a17c7eac9dd15ccf92e3de9be3ddbacb89b3d166852fa7e22bdba",
+          "tools/neural_geometry_metrics.py": "2acb2e78e56347a68dc39b81da80c96186c390281b5e352fc02c0d92827f9593"
+        },
+        "data_sha256": {
+          "after.attributes.f32": "f33fc3bbac3b92d6be5b0397ad52263c1cf3d12f46eeb15c9f223768c8b01692",
+          "after.geometric_normals.f32": "5ff6f2b2e2cc8194638a45ad47c6898fb0c73b31acfb5d1d7a4fdc13875d380a",
+          "after.positions.f32": "8ab0f5105ef0249c7d638b5514bd38827e6f1ba5902257c346d50864a73b1883",
+          "before.attributes.f32": "2f1ccf5a3911be41e7a77f4fc54db55970fcc581c33ff44875accf3facec3a44",
+          "before.positions.f32": "e7c551745dd07b5612e40b364488fcef100b9060c7ed1652f96166164679b4e4"
+        },
+        "limitations": [
+          "One seed; numerical smoothness is not anatomy or photorealism.",
+          "Attributes were inferred at refined coordinates.",
+          "No new fingers, eyes or teeth are invented."
+        ]
+      },
+      "geodesic_normal_equivalence": {
+        "diagnostic_only": true,
+        "normal_override": "Area-weighted compact kernel over shortest mesh-edge paths; clothing only",
+        "radius_metres": 0.025,
+        "filtered_unique_vertices": 20646,
+        "neighbourhood_median": 20.0,
+        "adjacent_normal_degrees_p95_before": 21.700674057006836,
+        "adjacent_normal_degrees_p95_after": 19.92295265197754,
+        "wall_seconds": 2.7357864999212325,
+        "geometry_unchanged": true,
+        "learned_residual_included": false,
+        "native_comparison": {
+          "eligible_vertex_instances": 123890,
+          "normal_max_abs_error": 1.7881393432617188e-07,
+          "normal_rms_error": 3.7114396889137424e-08,
+          "positions_unchanged": true,
+          "weights_and_ids_unchanged": true,
+          "native_vertex_sha256": "04220047d064f25a0d37cc267ff8011b18149ec35ad08aae0451285536908aed"
+        },
+        "passed": true,
+        "source_sha256": {
+          "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
+          "tools/neural_normal_bandwidth.py": "436af756f51fa927a1cb64a134b5a51c40642d957e50f277e3c165c2753bf7f7"
+        }
+      },
+      "runtime_equivalence": {
+        "body": {
+          "gpu_readback_path": "build/neural_generative_final_cache/200.vertices",
+          "cpu_reconstruction_path": "build/neural_final_body_cpu/200.vertices",
+          "gpu_vertex_sha256": "04220047d064f25a0d37cc267ff8011b18149ec35ad08aae0451285536908aed",
+          "cpu_vertex_sha256": "04220047d064f25a0d37cc267ff8011b18149ec35ad08aae0451285536908aed",
+          "vertices_byte_identical": true,
+          "attributes_resampled_at_refined_coordinates": true,
+          "rig_sha256": "6000040c114e32788b65dbd6c2084be681944f327183f661f3cfd04c64ac8e14",
+          "rig_byte_identical": true
+        },
+        "head": {
+          "gpu_readback_path": "build/neural_generative_final_cache/202.vertices",
+          "cpu_reconstruction_path": "build/neural_final_head_cpu/202.vertices",
+          "gpu_vertex_sha256": "3570e9cfd621ba88fc9f56535ad8ee33b839625c2b400e44a2e880af9aa6e085",
+          "cpu_vertex_sha256": "3570e9cfd621ba88fc9f56535ad8ee33b839625c2b400e44a2e880af9aa6e085",
+          "vertices_byte_identical": true,
+          "attributes_resampled_at_refined_coordinates": true
+        }
+      },
+      "passed": true,
+      "source_sha256": {
+        "src/neural_avatar_runtime.cpp": "9d33a881de5b62d2d60de161754ffc7aa04f2b454a94258ca539cdcff4d34c57",
+        "src/neural_avatar_runtime.h": "6a68a727c49fa855c81488549eb6f834e6824f142c24c2175266fdf76eee924c",
+        "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
+        "tools/neural_geometry_probe.cpp": "c8121a94778a17c7eac9dd15ccf92e3de9be3ddbacb89b3d166852fa7e22bdba",
+        "tools/neural_geometry_metrics.py": "2acb2e78e56347a68dc39b81da80c96186c390281b5e352fc02c0d92827f9593",
+        "tools/neural_normal_bandwidth.py": "436af756f51fa927a1cb64a134b5a51c40642d957e50f277e3c165c2753bf7f7"
+      },
+      "comparison_note": "Geometry statistics compare extracted versus refined coordinates; attribute statistics compare raw neural predictions evaluated at refined coordinates with the final filtered attributes. Both final vertex streams match actual runtime readback byte for byte."
+    }
+  },
+  "locomotion_reference": {
+    "path": "validation/neural-locomotion.json",
+    "sha256": "2986bd9523778791a36224d937a1fc26b4fe20fbebb6416f001b1556e8371208",
+    "result": {
+      "schema": 1,
+      "kind": "Independent CPU analytic contact reference, not GPU execution",
+      "rig_sha256": "6000040c114e32788b65dbd6c2084be681944f327183f661f3cfd04c64ac8e14",
+      "shader_sha256": "33a0801d473cda7576f5eab81f938924de7dea38df1d4e87c3573da5e6c6f610",
+      "foot_vertices": 992,
+      "terrains": {
+        "flat": {
+          "pose_samples": 1542,
+          "max_target_reach_error_metres": 6.206335383118183e-17,
+          "max_bone_length_error_metres": 2.220446049250313e-16,
+          "rotation_orthogonality_error": 4.440892098500626e-16,
+          "loop_transform_error": 8.215650382226158e-15,
+          "lowest_pelvis_offset_metres": -0.03535439961751019,
+          "max_contact_projection_metres": 0.01107213784210423,
+          "before_projection_lowest_stance_sole_error_metres": -0.01068714553323815,
+          "actual_skinned_stance_sole_error_metres": {
+            "minimum": 0.0,
+            "median": 0.0,
+            "p95": 0.0,
+            "maximum": 0.001718896430057678
+          }
+        },
+        "slope": {
+          "pose_samples": 1542,
+          "max_target_reach_error_metres": 6.206335383118183e-17,
+          "max_bone_length_error_metres": 2.220446049250313e-16,
+          "rotation_orthogonality_error": 4.440892098500626e-16,
+          "loop_transform_error": 8.049116928532385e-15,
+          "lowest_pelvis_offset_metres": -0.03713225862239067,
+          "max_contact_projection_metres": 0.01157276915722481,
+          "before_projection_lowest_stance_sole_error_metres": -0.011245059133308644,
+          "actual_skinned_stance_sole_error_metres": {
+            "minimum": -1.0658141036401503e-14,
+            "median": -3.552713678800501e-15,
+            "p95": 0.0,
+            "maximum": 0.0016659654401252055
+          }
+        },
+        "wave": {
+          "pose_samples": 1542,
+          "max_target_reach_error_metres": 6.206335383118183e-17,
+          "max_bone_length_error_metres": 2.220446049250313e-16,
+          "rotation_orthogonality_error": 4.440892098500626e-16,
+          "loop_transform_error": 8.326672684688674e-15,
+          "lowest_pelvis_offset_metres": -0.03263893900344361,
+          "max_contact_projection_metres": 0.01144934879091673,
+          "before_projection_lowest_stance_sole_error_metres": -0.01085416702747747,
+          "actual_skinned_stance_sole_error_metres": {
+            "minimum": -2.4010728972217316e-05,
+            "median": -1.9830227444249393e-06,
+            "p95": 5.0556681837281265e-06,
+            "maximum": 0.0016435314123670053
+          }
+        }
+      },
+      "limits": [
+        "Surface-derived bind landmarks approximate skeleton joints.",
+        "Contact IK is kinematic; no force, balance or muscle solver.",
+        "Sole measurements include learned skinning distortion; zero ankle-target error does not imply every foot vertex lies on the ground."
+      ],
+      "passed": true
+    }
+  },
+  "world_reference": {
+    "path": "validation/world-generation.json",
+    "sha256": "6375d892aca276edb082c55295f357563d594e995ffa17f86705d26236a48d62",
+    "result": {
+      "schema": 1,
+      "passed": true,
+      "acceptance_scope": "isolated closed-domain conservation/regression probe and final-candidate combined scene generation",
+      "source_sha256": {
+        "src/world_generation.cpp": "069a2348da2da2d1cecce50d1ff8959760fb1ba4f22e537722d10146ce2167a0",
+        "src/world_generation.h": "6c0134d13a8dd30d2144a64553745ad9d50bc747d6221750510ea513e33a30e7",
+        "src/geomorphology.hlsl": "af1d5ce1fe556232465f8790c52ad42779cf85443f3dcd239fe05c24e6ed0c3c",
+        "src/geomorph_common.hlsli": "3c84ca333dc55ab3bcc0fa0c662744ecec4e834baaa3032a9385a10e74f78b53",
+        "tools/world_probe.cpp": "b0264d6708fd15991b455155fc66e736fff1f3b65f70a845679e1cbdee780370",
+        "tools/build_world_probe.ps1": "cf302851ff417ce1c354061ee150d51ff7435e9ec0c0b962af47504388a62ced"
+      },
+      "probe": {
+        "path": "build/world_probe.json",
+        "sha256": "b50add0ee50859bc0e28eb5f86743530c6e42c34a6a4a2dd8762b05ee0934476",
+        "executable_sha256": "8aec5f2ac24a7aa5b2bfc91bcc9d1eb5c688b87cb6d5ccba10a5267e7e3376ee",
+        "shader_sha256": "3799eb321e01d03ccbf2476d3f3d1f06ce92253dc74205d9f189d3f14277cbdd",
+        "metrics": {
+          "passed": true,
+          "seconds": 6.1766,
+          "iterations": 96,
+          "height_nonfinite": 0,
+          "ecology_invalid": 0,
+          "mean_height_delta": 6.85068e-07,
+          "rms_height_delta": 1.15587,
+          "max_height_delta": 6.26849,
+          "protected_max_delta": 0,
+          "changed_texels": 16390549,
+          "debug_warnings": 0,
+          "debug_errors": 0,
+          "ecology_min": [
+            0.334229,
+            0.21521,
+            0,
+            0.974121
+          ],
+          "ecology_max": [
+            0.787109,
+            0.827148,
+            0.754883,
+            1
+          ],
+          "throughflow": {
+            "passed": true,
+            "standing_erosion": 0.00155301,
+            "east_erosion": 0.0188327,
+            "west_erosion": 0.0188327
+          },
+          "cancellation_passed": true,
+          "cancel_callbacks": 2
+        }
+      },
+      "regression": {
+        "problem": "Incoming flux had outgoing direction sign, cancelling velocity on sustained throughflow.",
+        "fix": "Sum direction * (outgoing - incoming).",
+        "fixture": "A sloping bed with identical initial water and sediment is evaluated with standing water, balanced eastward throughflow, and balanced westward throughflow.",
+        "assertions": [
+          "Throughflow erosion exceeds standing-water erosion by a factor greater than 5.",
+          "East and west erosion agree within 0.0001 m."
+        ],
+        "measured_ratio": 12.126579996265317
+      },
+      "conservation": {
+        "quantity": "Mean bed elevation before/after the complete authoring run including final sediment settling; proxy for solid volume on a uniform closed grid.",
+        "boundary": "No water/sediment/creep exchange beyond domain edges; incoming flux is taken only from valid adjacent cells.",
+        "final_settling": "Phase 7 returns all remaining suspended solid material to the bed before scratch buffers are freed.",
+        "maximum_abs_mean_height_drift_m": 0.0001,
+        "measured_mean_height_drift_m": 6.85068e-07,
+        "not_measured": "Water conservation is not asserted: rainfall and evaporation are explicit source/sink terms."
+      },
+      "review": {
+        "abi": "WorldGenerationResult32B; eight Win64 arguments; MASM shadow space and offsets checked. Material results64B; six texture/SRV references per result cleaned exactly once.",
+        "scratch_texture_bytes": 54525952,
+        "output_ecology_bytes": 8388608,
+        "dimensions": "State1024x1024 RGBA32F; final height4096x4096 R32F; ecology1024x1024 RGBA16F.",
+        "cancellation": "Callback cancellation after the first simulation dispatch returns failure with no transferred result references; final height write is not reached.",
+        "bindings": "Input SRVs and output UAVs are unbound between phases; MASM restores CS b0/s0 and binds t19 after success.",
+        "cleanup": "COM ownership transfer is explicit; partial failure uses RAII and application ClearState before final releases.",
+        "weathering": "Terrain and mortar now suppress exposed neural substrate under opaque coverage; F0 remains linear and no unsupported scale/gamma is introduced.",
+        "temporary_and_output_texture_bytes": 62914560,
+        "memory_scope": "Texture payloads only; excludes original height field, driver allocations and staging used by QA."
+      },
+      "combined_world_probe": {
+        "accepted": true,
+        "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+        "metrics_sha256": "ee3399ef252e8b9fd0089789b178153d57276e4d6baf499dc946e6a1eb9a6e70",
+        "metrics_path": "build/generative_final_timeline/world_generation_metrics.json",
+        "render_metrics_sha256": "f933b04c9254ae84d3d23c79c5ab994b4ee08d45179dee48e7660735658e48b8",
+        "render_metrics_path": "build/generative_final_timeline/metrics.json",
+        "shader_sha256": "3799eb321e01d03ccbf2476d3f3d1f06ce92253dc74205d9f189d3f14277cbdd",
+        "metrics": {
+          "algorithm": "virtual-pipe erosion, sediment transport and talus creep",
+          "shader_resource_id": 122,
+          "shader_sha256": "3799eb321e01d03ccbf2476d3f3d1f06ce92253dc74205d9f189d3f14277cbdd",
+          "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+          "source_kind": "candidate_resources",
+          "generation_executed": true,
+          "status": 1,
+          "iterations": 96,
+          "resolution": 1024,
+          "helper_seconds": 6.19893,
+          "field_float32_sha256": "7dcbe904716d1b05f3a4c0039b8e8f6116936a4dc82ab74c631300014dbc7391",
+          "nonfinite_values": 0,
+          "out_of_range_values": 0,
+          "height_samples": 65536,
+          "changed_height_samples": 64300,
+          "maximum_height_change_m": 73.7146,
+          "mean_signed_height_change_m": 0.00212269,
+          "channels": [
+            {
+              "name": "moisture",
+              "minimum": 0,
+              "maximum": 1,
+              "mean": 0.56136
+            },
+            {
+              "name": "soil_deposition",
+              "minimum": 0,
+              "maximum": 1,
+              "mean": 0.435435
+            },
+            {
+              "name": "drainage",
+              "minimum": 0,
+              "maximum": 1,
+              "mean": 0.5217
+            },
+            {
+              "name": "ambient_visibility",
+              "minimum": 0.611328,
+              "maximum": 1,
+              "mean": 0.961406
+            }
+          ]
+        },
+        "render_frame_count": 50,
+        "debug_errors": 0,
+        "debug_warnings": 0,
+        "scope": "The actual final executable resource122 ran on the generated Alpine terrain. Body/head and both neural materials were freshly generated in this timeline.",
+        "conservation_scope": "Combined mean_signed_height_change_m samples 65,536 locations of the nonuniform scene. It is not the full-grid closed-field conservation measure; that independent assertion remains in probe/conservation above."
+      },
+      "limitations": [
+        "Accelerated authoring erosion, sediment transport and talus creep; not a calibrated geological-time prediction.",
+        "Isolated probe uses a synthetic closed field, not the final Alpine scene.",
+        "No change to visual photorealism is certified by these numerical checks."
+      ],
+      "errors": [],
+      "shader_sha256": "3799eb321e01d03ccbf2476d3f3d1f06ce92253dc74205d9f189d3f14277cbdd"
+    }
+  },
+  "irradiance_reference": {
+    "path": "validation/irradiance-reference.json",
+    "sha256": "f377aa7888820e195aad84856cbb374afe5cfbdbba69140fdf5d5b32b182e557",
+    "result": {
+      "schema": 1,
+      "passed": true,
+      "errors": [],
+      "acceptance_scope": "CPU source-parsed SH projection against independent analytic Lambert moments",
+      "source_sha256": {
+        "src/atmosphere_sh.hlsli": "f936055609fa9ea4cf7d2c62691c5467d614dc529b84d14fd3936f0e805aeddb",
+        "src/atmosphere_compute.hlsl": "b925c117d8130ef455e81d70fc13f16473d52bcda14d971a3ae5529cd77e4705",
+        "src/atmosphere_common.hlsli": "c29df7239909ef46d2d7c4089408ba59cca16ebff37b32072eaebbb5902a2af0",
+        "src/alpine.asm": "cfe9c91ae155c9cf9b17e87cd046d78eff6104552c7247c5881dd2d7afb7e00e",
+        "tools/irradiance_reference.py": "0293f501c455a1ee72cb0a85c2bada71355915fb977e1433219a32d8e55df49e"
+      },
+      "primary_reference": "https://graphics.stanford.edu/papers/envmap/envmap.pdf",
+      "oracle": "For L(w)=a+b.w+w^T Q w, E(n)/pi=a+(2/3)b.n+(trace(Q)+n^T Q n)/4.",
+      "normal_count": 8454,
+      "threshold_pairs": 128,
+      "projection_directions": 128,
+      "lanes": 64,
+      "cosine_convolution_bands_over_pi": [
+        1.0,
+        0.6666666666666666,
+        0.25
+      ],
+      "orthonormal_gram_max_abs_error": 3.010838245387504e-10,
+      "cases": [
+        {
+          "name": "constant",
+          "exact_quadrature_max_abs_error": 1.8519963340679624e-10,
+          "fibonacci_128_max_abs_error": 0.001171800874832707,
+          "fibonacci_128_rms_error": 0.0005064925359890255,
+          "threshold_pair_delta_error": 1.1100242947037486e-09
+        },
+        {
+          "name": "linear_x",
+          "exact_quadrature_max_abs_error": 1.8918322464145376e-10,
+          "fibonacci_128_max_abs_error": 0.001591331976571242,
+          "fibonacci_128_rms_error": 0.0005536127238568295,
+          "threshold_pair_delta_error": 1.2683496475318634e-09
+        },
+        {
+          "name": "quadratic_x2",
+          "exact_quadrature_max_abs_error": 7.609124441643189e-11,
+          "fibonacci_128_max_abs_error": 0.000193432763371304,
+          "fibonacci_128_rms_error": 6.512140073147075e-05,
+          "threshold_pair_delta_error": 1.300715091190341e-10
+        },
+        {
+          "name": "linear_y",
+          "exact_quadrature_max_abs_error": 1.8918333566375622e-10,
+          "fibonacci_128_max_abs_error": 0.0017496540610550948,
+          "fibonacci_128_rms_error": 0.0005694904754924997,
+          "threshold_pair_delta_error": 1.5852812396133231e-09
+        },
+        {
+          "name": "quadratic_y2",
+          "exact_quadrature_max_abs_error": 7.609113339412943e-11,
+          "fibonacci_128_max_abs_error": 0.001213027929397481,
+          "fibonacci_128_rms_error": 0.0005118930693283412,
+          "threshold_pair_delta_error": 1.1269761790444477e-09
+        },
+        {
+          "name": "linear_z",
+          "exact_quadrature_max_abs_error": 1.8918255850763899e-10,
+          "fibonacci_128_max_abs_error": 0.0013584650782088037,
+          "fibonacci_128_rms_error": 0.0005464097302308854,
+          "threshold_pair_delta_error": 1.2258500881046075e-09
+        },
+        {
+          "name": "quadratic_z2",
+          "exact_quadrature_max_abs_error": 1.1191403359589458e-10,
+          "fibonacci_128_max_abs_error": 0.00021563875053909332,
+          "fibonacci_128_rms_error": 7.82511465495391e-05,
+          "threshold_pair_delta_error": 1.2287809658673154e-10
+        },
+        {
+          "name": "quadratic_xy",
+          "exact_quadrature_max_abs_error": 1.870115173829845e-10,
+          "fibonacci_128_max_abs_error": 0.0016837268975979924,
+          "fibonacci_128_rms_error": 0.0006223795221112532,
+          "threshold_pair_delta_error": 1.3634364748327243e-09
+        },
+        {
+          "name": "quadratic_yz",
+          "exact_quadrature_max_abs_error": 1.8701085124916972e-10,
+          "fibonacci_128_max_abs_error": 0.001770206026347143,
+          "fibonacci_128_rms_error": 0.0006277292703098385,
+          "threshold_pair_delta_error": 1.2671250715357019e-09
+        },
+        {
+          "name": "quadratic_xz",
+          "exact_quadrature_max_abs_error": 1.8701107329377464e-10,
+          "fibonacci_128_max_abs_error": 0.0012767562184339276,
+          "fibonacci_128_rms_error": 0.0005087781041690311,
+          "threshold_pair_delta_error": 1.1446963377181874e-09
+        },
+        {
+          "name": "mixed_rgb",
+          "exact_quadrature_max_abs_error": 2.293037981715429e-10,
+          "fibonacci_128_max_abs_error": 0.0017718287344274941,
+          "fibonacci_128_rms_error": 0.0007174022473686656,
+          "threshold_pair_delta_error": 1.6728582963310146e-09
+        }
+      ],
+      "tolerances": {
+        "gram": 2e-09,
+        "analytic": 3e-09,
+        "fibonacci_absolute": 0.006,
+        "threshold_pair_delta": 1e-08
+      },
+      "gpu_execution_performed": false,
+      "gpu_readback": {
+        "path": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\build\\generative_final_timeline\\sh_coefficients.f32",
+        "sha256": "c193ac5c3a3b6dc4ad4acc69bf6f3f3ba20519dfff99b8d1be41a85ebd4c6c5b",
+        "finite": true,
+        "alpha_zero": true,
+        "coefficients_rgb": [
+          [
+            0.40177640318870544,
+            0.5345191955566406,
+            0.5204389691352844
+          ],
+          [
+            -0.07994790375232697,
+            -0.05773681402206421,
+            0.09475301206111908
+          ],
+          [
+            -0.0169486366212368,
+            -0.021293414756655693,
+            -0.027881117537617683
+          ],
+          [
+            -0.018626486882567406,
+            -0.02227354794740677,
+            -0.028973905369639397
+          ],
+          [
+            -0.005245991051197052,
+            -0.007311781868338585,
+            -0.01114452350884676
+          ],
+          [
+            -0.00548734562471509,
+            -0.007566408719867468,
+            -0.011268631555140018
+          ],
+          [
+            0.012186354026198387,
+            0.017902469262480736,
+            0.020755307748913765
+          ],
+          [
+            0.012693609111011028,
+            0.016678975895047188,
+            0.02019495889544487
+          ],
+          [
+            0.024511216208338737,
+            0.03361410275101662,
+            0.037976302206516266
+          ]
+        ],
+        "note": "Readback integrity only; actual atmospheric coefficients are not an analytic polynomial environment.",
+        "render_probe": {
+          "path": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\build\\generative_final_timeline\\metrics.json",
+          "sha256": "f933b04c9254ae84d3d23c79c5ab994b4ee08d45179dee48e7660735658e48b8",
+          "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+          "debug_errors": 0,
+          "debug_warnings": 0
+        },
+        "reconstructed_unclamped_min_rgb": [
+          0.055058599646646215,
+          0.09567950202914631,
+          0.07322503925259748
+        ],
+        "reconstructed_unclamped_max_rgb": [
+          0.14757229286537749,
+          0.18832783546018497,
+          0.20629674423425107
+        ],
+        "negative_fraction": 0.0
+      },
+      "limitations": [
+        "128 equal-area samples are a numerical quadrature, not exact integration of arbitrary sky radiance.",
+        "Nine coefficients retain only SH orders zero through two; sharp sun and high-frequency sky energy need separate treatment.",
+        "This validates irradiance mathematics and source configuration, not appearance, GPU shader execution, or final scene quality.",
+        "Input shading normals must be unit length; truncated reconstruction is clamped to nonnegative RGB by the production shader."
+      ]
+    }
+  },
   "native": {
     "executable": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\dist\\AlpineDreaming.exe",
-    "sha256": "9F82E8EDA15EB1F679A6F757697969F5FA734EA5C42A9254E0229EFFB877BD00",
+    "sha256": "EE2991EF7E2EAF764FDE147848440201F1F54CE7640AF88CA5DB1F577F65FE38",
     "hold_seconds": 600,
     "window_was_visible": false,
     "responsive_before_close": true,
-    "close_latency_seconds": 1.1958,
+    "close_latency_seconds": 1.9152,
     "exit_code": 0,
     "forced_termination": false,
     "rendered_frames": 122,
     "minimum_rendered_frames": 120,
-    "first_frame_observed_seconds": 308.0472,
-    "observed_seconds": 320.0727,
-    "peak_working_set_bytes": 689217536
+    "first_frame_observed_seconds": 368.6164,
+    "observed_seconds": 385.4027,
+    "peak_working_set_bytes": 935833600
   },
   "startup_cancellation": {
-    "path": "build/native_cancel_400.json",
-    "sha256": "32cb59051a7399411d4ee1f6fe09073410cbfff4d5c4537877fe1ef8a2dc9296",
+    "path": "build/native_cancel_generative.json",
+    "sha256": "507eef45cf82636c05d0d04d960a306253522e30e1f0287c325540f4cf23d667",
     "result": {
       "executable": "C:\\Users\\yarik\\Documents\\New project\\AlpineDemoscene\\dist\\AlpineDreaming.exe",
-      "sha256": "9F82E8EDA15EB1F679A6F757697969F5FA734EA5C42A9254E0229EFFB877BD00",
+      "sha256": "EE2991EF7E2EAF764FDE147848440201F1F54CE7640AF88CA5DB1F577F65FE38",
       "hold_seconds": 3,
       "window_was_visible": false,
-      "responsive_before_close": false,
-      "close_latency_seconds": 1.9409,
+      "responsive_before_close": true,
+      "close_latency_seconds": 0.8456,
       "exit_code": 0,
       "forced_termination": false,
       "rendered_frames": 0,
       "minimum_rendered_frames": 0,
       "first_frame_observed_seconds": null,
-      "observed_seconds": 3.6289,
-      "peak_working_set_bytes": 137175040
+      "observed_seconds": 3.1168,
+      "peak_working_set_bytes": 173723648
     }
   },
-  "startup_responsiveness_target_met": false,
-  "startup_responsiveness_issue": "The 500 ms message-response target was missed during neural startup. Cancellation was orderly within three seconds; this does not pass the responsiveness target.",
+  "startup_responsiveness_target_met": true,
+  "startup_responsiveness_issue": null,
   "hardware": {
     "path": "build/gpu_capabilities.json",
     "sha256": "c3f97af97e0a89152d6cb110ccbefc1838dd38d0981008d92a2418edac0ce547",
@@ -774,8 +1585,8 @@
   },
   "render_sequences": [
     {
-      "directory": "build/neural_final_timeline",
-      "metrics_sha256": "f2aed5c3854c5c392780c1c0fdd3ac6f4ba06a9c9f6f0c95d9d6b81311a46f52",
+      "directory": "build/generative_final_timeline",
+      "metrics_sha256": "f933b04c9254ae84d3d23c79c5ab994b4ee08d45179dee48e7660735658e48b8",
       "frames": 50,
       "start": 0,
       "end": 128,
@@ -846,59 +1657,59 @@
         "model_resource_id": 200,
         "model_bytes": 8695856,
         "model_sha256": "cbda91973caba80d1adfdcf64b6cdd9e47c08d5542a7cffc182300b28fb5dd92",
-        "candidate_sha256": "9f82e8eda15eb1f679a6f757697969f5fa734ea5c42a9254e0229effb877bd00",
+        "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
         "source_kind": "candidate_resources",
         "inference_executed": true,
         "seed": 42,
         "vertex_count": 150876,
         "vertex_stride_bytes": 64,
         "status": 1,
-        "startup_wall_seconds": 98.1477,
-        "helper_seconds": 98.1454,
-        "feature_ms": 7109,
-        "field_ms": 78125,
-        "geometry_fnv1a64": "a1d0dd3d734e1fb",
+        "startup_wall_seconds": 76.5975,
+        "helper_seconds": 76.5951,
+        "feature_ms": 6109,
+        "field_ms": 57219,
+        "geometry_fnv1a64": "d661f4bcc610c9e2",
         "invalid_values": 0,
         "invalid_joint_ids": 0,
-        "max_weight_sum_error": 1.98372e-07,
+        "max_weight_sum_error": 1.41561e-07,
         "normal_length_min": 1,
         "normal_length_max": 1,
         "active_joint_count": 24,
         "joint_influence_counts": [
-          61624,
-          62507,
-          63926,
-          48416,
-          32168,
-          23754,
-          43336,
-          17911,
-          13605,
-          55936,
-          14128,
-          14927,
-          16389,
-          22495,
-          16227,
-          19399,
-          15754,
-          13480,
-          8757,
-          7521,
-          4068,
-          4324,
-          5533,
-          6440
+          61634,
+          62509,
+          63973,
+          48401,
+          32184,
+          23766,
+          43310,
+          17888,
+          13592,
+          55991,
+          14114,
+          14920,
+          16430,
+          22544,
+          16206,
+          19377,
+          15735,
+          13479,
+          8742,
+          7516,
+          4077,
+          4320,
+          5530,
+          6436
         ],
         "bounds_min": [
-          -0.861276,
+          -0.861713,
           0,
-          -0.155129
+          -0.155372
         ],
         "bounds_max": [
-          0.883182,
+          0.883144,
           1.75,
-          0.192249
+          0.192074
         ],
         "invalid_color_values": 0,
         "invalid_morph_values": 0,
@@ -906,88 +1717,322 @@
         "motion_frames": 0,
         "motion_duration_seconds": 0,
         "invalid_motion_values": 0,
-        "motion_max_difference_from_first": 0
+        "motion_max_difference_from_first": 0,
+        "rig_bytes": 512,
+        "rig_sha256": "6000040c114e32788b65dbd6c2084be681944f327183f661f3cfd04c64ac8e14",
+        "invalid_rig_values": 0
       },
       "neural_head": {
         "model": "GANHead FaceVerse",
         "model_resource_id": 202,
         "model_bytes": 12330948,
         "model_sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
-        "candidate_sha256": "9f82e8eda15eb1f679a6f757697969f5fa734ea5c42a9254e0229effb877bd00",
+        "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
         "source_kind": "candidate_resources",
         "inference_executed": true,
         "seed": 42,
         "vertex_count": 400056,
         "vertex_stride_bytes": 144,
         "status": 1,
-        "startup_wall_seconds": 203.817,
-        "helper_seconds": 203.812,
-        "feature_ms": 6484,
-        "field_ms": 104328,
-        "geometry_fnv1a64": "8f32735a157081c6",
+        "startup_wall_seconds": 174.194,
+        "helper_seconds": 174.189,
+        "feature_ms": 6687,
+        "field_ms": 91938,
+        "geometry_fnv1a64": "a80ecaaac7ba6dde",
         "invalid_values": 0,
         "invalid_joint_ids": 0,
-        "max_weight_sum_error": 2.16649e-07,
+        "max_weight_sum_error": 1.49012e-07,
         "normal_length_min": 1,
         "normal_length_max": 1,
         "active_joint_count": 5,
         "joint_influence_counts": [
-          399959,
+          399947,
           400056,
           400056,
-          12943,
-          387210
+          12949,
+          387216
         ],
         "bounds_min": [
-          -0.161348,
+          -0.160743,
           0,
-          -0.136008
+          -0.136026
         ],
         "bounds_max": [
-          0.164452,
+          0.164467,
           0.33,
-          0.114503
+          0.114522
         ],
         "invalid_color_values": 0,
         "invalid_morph_values": 0,
-        "max_abs_morph_delta": 0.00329753,
+        "max_abs_morph_delta": 0.00328875,
         "motion_frames": 1825,
         "motion_duration_seconds": 128,
         "invalid_motion_values": 0,
-        "motion_max_difference_from_first": 2.49728
+        "motion_max_difference_from_first": 2.49728,
+        "rig_bytes": 0,
+        "rig_sha256": "",
+        "invalid_rig_values": 0
+      },
+      "neural_material": {
+        "stone": {
+          "model": "PhotoMat real-flash-photo SVBRDF",
+          "model_resource_id": 203,
+          "model_bytes": 115774612,
+          "model_sha256": "6d4706e0814ea7265e0f23b336c663ffbdcbaa47a893c2f8f96d7c6428e35257",
+          "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+          "source_kind": "candidate_resources",
+          "inference_executed": true,
+          "seed": 42,
+          "status": 0,
+          "helper_seconds": 9.95236,
+          "shader_resource_id": 121,
+          "shader_sha256": "94c42632f7e95fe0170f85af37d331b17989e820f6f4fc701f99c4709addb8e8",
+          "raw_svbrdf_sha256": "77e2f66f2be5740d04cb585a3c2f3e7d705bf38af2507ebce9736ea74b5930ca",
+          "width": 256,
+          "mips": 9,
+          "maps": [
+            {
+              "name": "diffuse_roughness",
+              "base_level_sha256": "07773ec503c9a02335b9f324bc9290f58e9da708e5b53919a8c5aca04c7d3f0b",
+              "all_mips_sha256": "fd2f6e35c0f7ed247947e9a076441e68d4a0fe01c32e061a31ab3541b6462a90",
+              "nonfinite_values": 0,
+              "out_of_range_values": 0,
+              "invalid_base_normals": 0,
+              "max_base_normal_length_error": 0,
+              "minimum": [
+                0.0189212,
+                0.0146805,
+                0.0201564,
+                0.245873
+              ],
+              "maximum": [
+                0.999999,
+                0.999988,
+                0.999039,
+                0.712617
+              ]
+            },
+            {
+              "name": "normal_height",
+              "base_level_sha256": "7287c23935ae66fa288a2577a797fb787b3be7f5ea442a4a6a85fb2f625f4868",
+              "all_mips_sha256": "29284fc602c6a5a4defb17380a9fa6cd385261623410499ecf85ee3573e6f3d2",
+              "nonfinite_values": 0,
+              "out_of_range_values": 0,
+              "invalid_base_normals": 0,
+              "max_base_normal_length_error": 1.1536e-07,
+              "minimum": [
+                -0.183613,
+                -0.213458,
+                0.9702,
+                0.901503
+              ],
+              "maximum": [
+                0.170469,
+                0.24041,
+                1,
+                0.970716
+              ]
+            },
+            {
+              "name": "specular",
+              "base_level_sha256": "c035c585b0241dd17d283095e2ea08b993fbe69b4a5128b6aa31a31888498fb2",
+              "all_mips_sha256": "d05449218d023df496c535c0e8159ce6d0cb2bb9a269bf043c7dcdf3fe1fd456",
+              "nonfinite_values": 0,
+              "out_of_range_values": 0,
+              "invalid_base_normals": 0,
+              "max_base_normal_length_error": 0,
+              "minimum": [
+                8.99136e-05,
+                0.00239712,
+                0.0114874,
+                1
+              ],
+              "maximum": [
+                0.709181,
+                0.757642,
+                0.727828,
+                1
+              ]
+            }
+          ]
+        },
+        "wood": {
+          "model": "PhotoMat real-flash-photo SVBRDF",
+          "model_resource_id": 203,
+          "model_bytes": 115774612,
+          "model_sha256": "6d4706e0814ea7265e0f23b336c663ffbdcbaa47a893c2f8f96d7c6428e35257",
+          "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+          "source_kind": "candidate_resources",
+          "inference_executed": true,
+          "seed": 43,
+          "status": 0,
+          "helper_seconds": 9.8978,
+          "shader_resource_id": 121,
+          "shader_sha256": "94c42632f7e95fe0170f85af37d331b17989e820f6f4fc701f99c4709addb8e8",
+          "raw_svbrdf_sha256": "a6f8e259dd390cc135c208f55893934d90b84930875ef4e4bb9c52402d6e5cac",
+          "width": 256,
+          "mips": 9,
+          "maps": [
+            {
+              "name": "diffuse_roughness",
+              "base_level_sha256": "f76abee741dd2231c71a0b401504d21c0ffa355352d3fd5273ba6cb2e227907f",
+              "all_mips_sha256": "2ae1169d9416d67ee4d540fb8390372ea9e49f98ba3e14a41747e3cd075fd07d",
+              "nonfinite_values": 0,
+              "out_of_range_values": 0,
+              "invalid_base_normals": 0,
+              "max_base_normal_length_error": 0,
+              "minimum": [
+                0.00703287,
+                0.00447613,
+                0.00503144,
+                0.2
+              ],
+              "maximum": [
+                0.999903,
+                0.997674,
+                0.968621,
+                0.83136
+              ]
+            },
+            {
+              "name": "normal_height",
+              "base_level_sha256": "bf62c5918ed90f2ae9abb91ccdab3caa15903e655ee9c3fd36ca71489f8a2bab",
+              "all_mips_sha256": "9166435fc5dee67c246ab10a2e2a94501409137981499561d000f37ceef125b8",
+              "nonfinite_values": 0,
+              "out_of_range_values": 0,
+              "invalid_base_normals": 0,
+              "max_base_normal_length_error": 1.15851e-07,
+              "minimum": [
+                -0.589968,
+                -0.457458,
+                0.774557,
+                0.606081
+              ],
+              "maximum": [
+                0.585188,
+                0.535166,
+                1,
+                0.936849
+              ]
+            },
+            {
+              "name": "specular",
+              "base_level_sha256": "2e759f25afc0c7cb6d68e50b2379fda596934e1601ab5e1b023f6a79023fb23f",
+              "all_mips_sha256": "a262a8416eec015c45ff72dfe8c0a2e100e77fc32f74e23fed1acc95a4efb1e7",
+              "nonfinite_values": 0,
+              "out_of_range_values": 0,
+              "invalid_base_normals": 0,
+              "max_base_normal_length_error": 0,
+              "minimum": [
+                1.40071e-06,
+                0.000250787,
+                0.000660449,
+                1
+              ],
+              "maximum": [
+                0.192141,
+                0.266472,
+                0.307339,
+                1
+              ]
+            }
+          ]
+        }
+      },
+      "world_generation": {
+        "algorithm": "virtual-pipe erosion, sediment transport and talus creep",
+        "shader_resource_id": 122,
+        "shader_sha256": "3799eb321e01d03ccbf2476d3f3d1f06ce92253dc74205d9f189d3f14277cbdd",
+        "candidate_sha256": "ee2991ef7e2eaf764fde147848440201f1f54ce7640af88ca5db1f577f65fe38",
+        "source_kind": "candidate_resources",
+        "generation_executed": true,
+        "status": 1,
+        "iterations": 96,
+        "resolution": 1024,
+        "helper_seconds": 6.19893,
+        "field_float32_sha256": "7dcbe904716d1b05f3a4c0039b8e8f6116936a4dc82ab74c631300014dbc7391",
+        "nonfinite_values": 0,
+        "out_of_range_values": 0,
+        "height_samples": 65536,
+        "changed_height_samples": 64300,
+        "maximum_height_change_m": 73.7146,
+        "mean_signed_height_change_m": 0.00212269,
+        "channels": [
+          {
+            "name": "moisture",
+            "minimum": 0,
+            "maximum": 1,
+            "mean": 0.56136
+          },
+          {
+            "name": "soil_deposition",
+            "minimum": 0,
+            "maximum": 1,
+            "mean": 0.435435
+          },
+          {
+            "name": "drainage",
+            "minimum": 0,
+            "maximum": 1,
+            "mean": 0.5217
+          },
+          {
+            "name": "ambient_visibility",
+            "minimum": 0.611328,
+            "maximum": 1,
+            "mean": 0.961406
+          }
+        ]
+      },
+      "world_generation_metrics_sha256": "ee3399ef252e8b9fd0089789b178153d57276e4d6baf499dc946e6a1eb9a6e70",
+      "irradiance_sh": {
+        "first_frame_readback": "build/generative_final_timeline/sh_coefficients.f32",
+        "sha256": "c193ac5c3a3b6dc4ad4acc69bf6f3f3ba20519dfff99b8d1be41a85ebd4c6c5b",
+        "coefficients": 9,
+        "all_frame_coefficients_finite": true,
+        "first_frame_minimum": -0.07994790375232697,
+        "first_frame_maximum": 0.5345191955566406
       },
       "unique_frame_hashes": 49,
       "render_ms_excluding_physics_and_first_when_multiple": {
-        "median": 131.0332385,
-        "mean": 125.6956892312653,
-        "maximum": 195.5147121666
+        "median": 122.359904,
+        "mean": 125.95613371936939,
+        "maximum": 226.1804351666
       }
     }
   ],
   "inherited_checks": [],
   "source_sha256": {
-    "src/alpine.asm": "66afe7de01f1dbc64dacdfffc44debfd5d5a6d06039517d655c7f41743860cec",
-    "src/atmosphere_common.hlsli": "75254f9cdfb29034f702afd8edebb2b7fbf82e7280db6f0fabf6e685b686965a",
-    "src/atmosphere_compute.hlsl": "c36874d78341b4414ffd5e71d7c79d10e404d9e6db6404a0f07cfb97b44e8a81",
-    "src/cinematic_lighting.hlsli": "8ad5d7f51e0c43792016ccba05f78eb45da3f2ec898290ed024f5fcbd3e1e4aa",
-    "src/cinematic_mesh.hlsl": "24e7e28c5ef22bdfa69357aee40d68088a25ca085f13d103b3802cabf95e4d24",
+    "src/alpine.asm": "cfe9c91ae155c9cf9b17e87cd046d78eff6104552c7247c5881dd2d7afb7e00e",
+    "src/atmosphere_common.hlsli": "c29df7239909ef46d2d7c4089408ba59cca16ebff37b32072eaebbb5902a2af0",
+    "src/atmosphere_compute.hlsl": "b925c117d8130ef455e81d70fc13f16473d52bcda14d971a3ae5529cd77e4705",
+    "src/atmosphere_sh.hlsli": "f936055609fa9ea4cf7d2c62691c5467d614dc529b84d14fd3936f0e805aeddb",
+    "src/cinematic_lighting.hlsli": "995976963774f8cc1509f2b9c458ee2a5245ca6883d8fc2fb2a5259dbdd5cb23",
+    "src/cinematic_mesh.hlsl": "5721e4e98a00d67aa1612113774bc3451cec1174d1e0edacad61b3f74de8da88",
     "src/cloud_post.hlsl": "194591d992fcfe6343246e14a3ad690433fa1f23f5a5dc8accb8d1fc63b835c4",
     "src/cloud_render.hlsli": "05f26c1a7fc756c80c19e529b8ba869073a1370fdac8f930362630ee7a4d09ec",
     "src/cloud_volume.hlsl": "99b679cf8df551b16fdc53a69961c90284ca9917c893d718f6027704405295a5",
     "src/detail_common.hlsli": "8aefe535de1f9989825cdbdecbd6a0f7ecbe054e88cbefe78247e3de06365de8",
+    "src/ecology_generation.hlsli": "168c4b0db2eff6442b965978fa372d71ffadea3b98d9d77987268ccc90ca23aa",
+    "src/ecology_geometry.hlsli": "96189a6b9a8ae6b457cc1c86f67b2c6fb9a103fd9f6d0f4c1256890201979e1e",
     "src/frame_vertex.hlsli": "7041e8f08dc5ced0ac0f98b99f39ffd1beb7e1c1dacdacf51dddd1ef1860e72c",
+    "src/geomorph_common.hlsli": "3c84ca333dc55ab3bcc0fa0c662744ecec4e834baaa3032a9385a10e74f78b53",
+    "src/geomorphology.hlsl": "af1d5ce1fe556232465f8790c52ad42779cf85443f3dcd239fe05c24e6ed0c3c",
     "src/human_pass.hlsl": "bfe19fe7b5326df891be730198db53bc48ff624315c96fac4edff39d87f679b3",
     "src/human_procedural.hlsli": "5f460f21501414b57485a9655af9eafae4010bee0a88c4f8d61b29bbeccec1a9",
     "src/loading.inc": "79bd46d5166fe60a3101424241a01a9ebdd16cbfa7316b5e36154f850e2f9a98",
-    "src/material_common.hlsli": "fea7a4727fc3bd17bdac752f5aa9647c56098b57027163916bf0a5ecd8ff80f2",
+    "src/material_common.hlsli": "e1211d6010de602b08bc80ff39dfec07f2b7fd6b984067b3e7891142a5bd0618",
     "src/material_compute.hlsl": "9ae0bc66f04f5f4aad8b38bbd38d4f53698c49d8c13854a31e1573fd2b5424f2",
     "src/neural_audio.cpp": "0dd50a15b9d12f3996645f89f9aea39ef6d073c28838177be0c57e5a61250517",
     "src/neural_audio.h": "c2b9497b0327b246b3623f3e1630de68b7ad0e64db3a07f411cee207d69d3130",
     "src/neural_avatar.hlsl": "31a9a7cfec71d4030eda820a34006b20784722a7b421a45eeb3c1bfedfe05901",
-    "src/neural_avatar_runtime.cpp": "6ac5965a54fd976404ec5a4f563c550d0a6fb6e0e6d2a251172c7c5c79759def",
-    "src/neural_avatar_runtime.h": "52055736d6ac267a750c12c01f2a0831037db0a6e87540da3a89d3124b4f1456",
-    "src/neural_mesh_cleanup.h": "42b32e7f92cd91f0818ee0dc2ee43a7b3ee460b1af7c563c690df3444c777478",
-    "src/neural_resident.hlsli": "6a2a5916597e24fbfbebfa4ce0e5d49b6fc247526bfe7b4bab8c9586ec558fc9",
+    "src/neural_avatar_runtime.cpp": "9d33a881de5b62d2d60de161754ffc7aa04f2b454a94258ca539cdcff4d34c57",
+    "src/neural_avatar_runtime.h": "6a68a727c49fa855c81488549eb6f834e6824f142c24c2175266fdf76eee924c",
+    "src/neural_material.hlsl": "a73710f07628742abe12d8905eee95d139d24f3f5f3e33903a00d10a019412a0",
+    "src/neural_material_runtime.cpp": "c65988bfc13367dd7b6209ff578ce38cc9d0f9ff59ace54eb4f216a543466015",
+    "src/neural_material_runtime.h": "1ca202567768fe24d426a9c45269fc07cf297bbb1bf05f95bbd25b55725b5d77",
+    "src/neural_mesh_cleanup.h": "ac57d452e06b04cb797e58454a4b7f0dd70def44da95ebeccf2fbe61711e4f43",
+    "src/neural_resident.hlsli": "33a0801d473cda7576f5eab81f938924de7dea38df1d4e87c3573da5e6c6f610",
     "src/orchestra.inc": "8efb0d3fc43cd17695c55a3824eadd488c57925603ba2e81c404e854b14714dc",
     "src/people_motion.hlsli": "ca95d99c5be7be29cec6bc1bb60a461533372c3c27c585c5e075650411b29ab6",
     "src/physics_common.hlsli": "f3a8abd285bc8b386822a76ffcd3b7cbe982aba711206b381acabdd1014ed7b1",
@@ -997,11 +2042,13 @@
     "src/scene.hlsl": "b034f5d0a33d2559de5c96c146f49c017e872cc7c4b01620767ac0a045d43b1b",
     "src/scene_common.hlsli": "7a4661bff180b0ef5c24a6043785b7cc8cbbe79ba4b406ffaf8587f549a0e7b4",
     "src/settlement_geometry.hlsli": "76b54cfee8ef1c891dfa5c5c53ca3f103398cf585c593b6708cc4e414aa68322",
-    "src/shaders.rc": "23b776c2c98cc692c3fd804341a94f443600df5ea69abfce59d4fe2db2495b05",
+    "src/shaders.rc": "17a546d073e72c5b8acce596f9994afa5e91c9a9c96cf1b2a29f6ff60c8a7827",
     "src/terrain_bounds.hlsl": "c2564e45ddc8e342677e5083c14f6d900c81b9657859b26183370baf0c5afbcd",
     "src/terrain_compute.hlsl": "487dc84c4416ca5f8e164838a900726f005567bde0ef29d011ec930a758bb67b",
-    "src/terrain_material.hlsli": "98ac4e6be27d8d3ac4c403cf2cc8c6334e967a2f1657722724662fc8bbe23308",
-    "src/terrain_trace.hlsli": "09bf3e2ce7edd55c9035b1382d97a0f0b311dc0aa5b89723c820fdff790a8a2f"
+    "src/terrain_material.hlsli": "42a435cfed5414492c79b2e6d112efc45c103458b4a77a26dcc23fb4d66d45d5",
+    "src/terrain_trace.hlsli": "09bf3e2ce7edd55c9035b1382d97a0f0b311dc0aa5b89723c820fdff790a8a2f",
+    "src/world_generation.cpp": "069a2348da2da2d1cecce50d1ff8959760fb1ba4f22e537722d10146ce2167a0",
+    "src/world_generation.h": "6c0134d13a8dd30d2144a64553745ad9d50bc747d6221750510ea513e33a30e7"
   },
   "quality": {
     "photorealism_achieved": false,

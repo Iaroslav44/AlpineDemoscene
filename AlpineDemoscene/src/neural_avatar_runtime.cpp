@@ -225,6 +225,8 @@ bool FinishMesh(Runner& r,Mesh& mesh,NeuralAvatarResult* result){
     float* attr=r.Read(attributes);if(!attr)return false;
     r.timing[2]=(float)(GetTickCount64()-begin)*0.001f;
     if(diagnosticSink){diagnosticSink("positions",(const float*)mesh.positions,mesh.vertexCount*3);diagnosticSink("attributes",attr,mesh.vertexCount*attributeStride);}
+    if(!RefineNeuralAttributes(mesh,attr,r.head,r.pump)||!FilterNeuralClothingNormals(mesh,attr,r.head,r.pump)){Free(attr);return false;}
+    if(diagnosticSink)diagnosticSink("refined_attributes",attr,mesh.vertexCount*attributeStride);
     F3 lo={1e20f,1e20f,1e20f},hi={-1e20f,-1e20f,-1e20f};
     for(uint32_t i=0;i<mesh.vertexCount;++i){F3 p=mesh.positions[i];lo={Minimum(lo.x,p.x),Minimum(lo.y,p.y),Minimum(lo.z,p.z)};hi={Maximum(hi.x,p.x),Maximum(hi.y,p.y),Maximum(hi.z,p.z)};}
     float height=r.head?0.33f:1.75f;float scale=height/Maximum(hi.y-lo.y,0.1f);float* verts=Allocate<float>(mesh.indexCount*vertexStride);if(!verts){Free(attr);r.error=6;return false;}
@@ -262,6 +264,16 @@ bool FinishMesh(Runner& r,Mesh& mesh,NeuralAvatarResult* result){
             if(valid){result->motionFrames=motion->shape[0];result->motionDuration=*duration;if(diagnosticSink)diagnosticSink("motion",(const float*)source.pSysMem,motion->bytes/4);}
         }
     }
+    if(valid&&!r.head){
+        float rig[128]={};valid=NeuralBindLandmarks(mesh,attr,scale,lo.y,rig,r.pump);
+        if(valid){
+            D3D11_BUFFER_DESC b={};b.ByteWidth=sizeof(rig);b.Usage=D3D11_USAGE_IMMUTABLE;b.BindFlags=D3D11_BIND_SHADER_RESOURCE;b.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;b.StructureByteStride=16;
+            D3D11_SUBRESOURCE_DATA source={};source.pSysMem=rig;valid=SUCCEEDED(r.device->CreateBuffer(&b,&source,&result->rigBuffer));
+            if(valid){D3D11_SHADER_RESOURCE_VIEW_DESC s={};s.Format=DXGI_FORMAT_UNKNOWN;s.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;s.Buffer.NumElements=32;
+                valid=SUCCEEDED(r.device->CreateShaderResourceView(result->rigBuffer,&s,&result->rigSRV));}
+            if(valid&&diagnosticSink)diagnosticSink("rig",rig,128);
+        }
+    }
     Free(verts);Free(attr);return valid;
 }
 } // namespace
@@ -288,8 +300,11 @@ extern "C" int NeuralAvatarCreate(ID3D11Device* device,ID3D11DeviceContext* cont
     result->reserved[1]=(uint32_t)(GetTickCount64()-stage);r.timing[1]=result->reserved[1]*0.001f;
     float* values=r.Read(field);field.Clear();if(!values){result->status=6;return 0;}
     if(diagnosticSink)diagnosticSink("field",values,nx*ny*nz);
-    Mesh mesh(values,nx,ny,nz,minimum,step);bool ok=mesh.valid&&mesh.Build(pump)&&KeepLargestSurface(mesh,pump)&&FinishMesh(r,mesh,result);Free(values);
-    if(!ok){Release(result->vertexSRV);Release(result->vertexBuffer);Release(result->motionSRV);Release(result->motionBuffer);result->vertexCount=0;result->status=r.error;return 0;}
+    Mesh mesh(values,nx,ny,nz,minimum,step);
+    bool ok=mesh.valid&&mesh.Build(pump)&&KeepLargestSurface(mesh,pump);
+    if(ok&&diagnosticSink)diagnosticSink("extracted_positions",(const float*)mesh.positions,mesh.vertexCount*3);
+    ok=ok&&RefineNeuralGeometry(mesh,r.head,pump)&&FinishMesh(r,mesh,result);Free(values);
+    if(!ok){Release(result->vertexSRV);Release(result->vertexBuffer);Release(result->motionSRV);Release(result->motionBuffer);Release(result->rigSRV);Release(result->rigBuffer);result->vertexCount=0;result->status=r.error;return 0;}
     if(diagnosticSink)diagnosticSink("timings",r.timing,3);
     QueryPerformanceCounter(&end);result->seconds=(float)((double)(end.QuadPart-begin.QuadPart)/(double)freq.QuadPart);result->status=1;return 1;
 }
