@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "date": "2026-10-29",
+  "scope": "Full 128-second production MASM score with embedded pretrained MIDI-DDSP timbre resource 201",
+  "passed": true,
+  "errors": [],
+  "model_sha256": "807425787be973d97639d11010f9f84d0022a822fc66af35e420bc70cc0d4f92",
+  "model_bytes": 9395768,
+  "source_sha256": {
+    "src/orchestra.inc": "8efb0d3fc43cd17695c55a3824eadd488c57925603ba2e81c404e854b14714dc",
+    "src/neural_audio.cpp": "0dd50a15b9d12f3996645f89f9aea39ef6d073c28838177be0c57e5a61250517",
+    "src/neural_audio.h": "c2b9497b0327b246b3623f3e1630de68b7ad0e64db3a07f411cee207d69d3130",
+    "tools/audio_probe.cpp": "c83ccef94e464221a376c1ae6e680992e3f5e937ae5d1cd7ed7f9ceec413a873",
+    "tools/verify_audio.py": "5f2aee888d00bb19a2622310f21304afb7f3d609ba31b29532d6be57a9c939df"
+  },
+  "host_source_sha256_at_probe_build": "66afe7de01f1dbc64dacdfffc44debfd5d5a6d06039517d655c7f41743860cec",
+  "host_source_unchanged_after_probe_build": true,
+  "probe_executable_sha256": "ce46fc3b06ba2c2d89fc6f5c9d76909fa5aae7a2a9db0fb23e96357f86fe5972",
+  "masm_object_sha256": "eea14605f5f2a04eda6c99d2a4fd74f55f33d9eb52eeae3ca6574c607226c7a7",
+  "metrics_artifact": "build/neural_audio_fullscore/audio_metrics.json",
+  "metrics_sha256": "a5650cba9288a5a19ffdb9687c435c9612f7cd33e8f29c34b2f75737c6aa1c6b",
+  "generation": {
+    "seed": 1243184189,
+    "seconds": 21.045669,
+    "bank_nonfinite": 0,
+    "bank_peak": 0.819999993,
+    "mix_peak_before_master_gain": 0.581806242,
+    "master_gain": 1.55,
+    "bank_bytes": 14288400,
+    "frames": 5644800,
+    "sample_rate": 44100
+  },
+  "audio_metrics": {
+    "quality_claim": "URMP-trained MIDI-DDSP timbre decoder with authored pitch and expression; perceptual indistinguishability is not established by these numerical checks.",
+    "files": {
+      "orchestral_house_full.wav": {
+        "seconds": 128.0,
+        "channels": 2,
+        "sample_peak_dbfs": -1.3104871580695558,
+        "rms_dbfs": -17.959312935931003,
+        "dc": [
+          3.914714129873955e-08,
+          9.85030954927544e-08
+        ],
+        "fullscale_samples": 0,
+        "sha256": "71ddb97c123173186a579e75ed35f6c37c674bfb0bd1b8f543ed2d6e4732e118",
+        "stereo_correlation": 0.8685077024846564,
+        "side_mid_db": -11.512170164144141,
+        "boundary_first_last": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ],
+        "max_sample_step": 0.368438720703125
+      },
+      "violin_C4.wav": {
+        "seconds": 3.0,
+        "channels": 1,
+        "sample_peak_dbfs": -1.7242919066612568,
+        "rms_dbfs": -8.139359088044042,
+        "dc": [
+          -0.0008636137831868858
+        ],
+        "fullscale_samples": 0,
+        "sha256": "c135fdc04b613c3885dd15ed0cc9084e25b77d4a43cd9cd2bf824e9d698101a7",
+        "fundamental_hz": 261.5947723388672,
+        "expected_hz": 261.625565,
+        "pitch_error_cents": -0.20377382021190146,
+        "spectral_centroid_hz": 332.23620956934417
+      },
+      "double_bass_A1.wav": {
+        "seconds": 2.0,
+        "channels": 1,
+        "sample_peak_dbfs": -1.7242919066612568,
+        "rms_dbfs": -9.05025353860033,
+        "dc": [
+          3.349598302862812e-05
+        ],
+        "fullscale_samples": 0,
+        "sha256": "8d66e772dee66b786264cdc08d5042dfbe12ccac248244f46293342c0957a048",
+        "fundamental_hz": 55.01060485839844,
+        "expected_hz": 55.0,
+        "pitch_error_cents": 0.33377676680195606,
+        "spectral_centroid_hz": 72.01839759720835
+      },
+      "trumpet_A4.wav": {
+        "seconds": 3.0,
+        "channels": 1,
+        "sample_peak_dbfs": -1.7242919066612568,
+        "rms_dbfs": -11.772809152933972,
+        "dc": [
+          -4.2676168774801585e-05
+        ],
+        "fullscale_samples": 0,
+        "sha256": "e4fea5fe67cdf828b7d815616b02a79bbdec18ab3d2f63e8c31a9f693ffcc084",
+        "fundamental_hz": 440.00072479248047,
+        "expected_hz": 440.0,
+        "pitch_error_cents": 0.002851782698262237,
+        "spectral_centroid_hz": 1363.5692703571813
+      }
+    },
+    "generation": {
+      "seed": 1243184189,
+      "seconds": 21.045669,
+      "bank_nonfinite": 0,
+      "bank_peak": 0.819999993,
+      "mix_peak_before_master_gain": 0.581806242,
+      "master_gain": 1.55,
+      "bank_bytes": 14288400,
+      "frames": 5644800,
+      "sample_rate": 44100
+    },
+    "loudness_summary": "Summary:\n\n  Integrated loudness:\n    I:         -16.6 LUFS\n    Threshold: -26.7 LUFS\n\n  Loudness range:\n    LRA:         3.8 LU\n    Threshold: -36.6 LUFS\n    LRA low:   -19.1 LUFS\n    LRA high:  -15.3 LUFS\n\n  True peak:\n    Peak:       -1.3 dBFS\n[out#0/null @ 000002c8cdd83480] video:0KiB audio:22050KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\nsize=N/A time=00:02:08.00 bitrate=N/A speed= 291x elapsed=0:00:00.43",
+    "errors": [],
+    "passed": true
+  },
+  "source_sample_rate_hz": 16000,
+  "output_sample_rate_hz": 44100,
+  "runtime_neural_scope": "Trained timbre decoder; authored MIDI pitch, vibrato, expression, arrangement and reverb",
+  "perceptual_indistinguishability_verified": false,
+  "timing_context": "CPU full-score synthesis during concurrent project validation; wall-clock timing is hardware/load dependent"
+}

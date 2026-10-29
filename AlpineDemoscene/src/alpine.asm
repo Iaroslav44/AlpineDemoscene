@@ -15,6 +15,9 @@ EXTERN  FindResourceA:PROC
 EXTERN  LoadResource:PROC
 EXTERN  LockResource:PROC
 EXTERN  SizeofResource:PROC
+EXTERN  NeuralAvatarCreate:PROC
+EXTERN  NeuralAudioInit:PROC
+EXTERN  NeuralAudioMakeSample:PROC
 
 EXTERN  RegisterClassExA:PROC
 EXTERN  CreateWindowExA:PROC
@@ -29,6 +32,7 @@ EXTERN  TranslateMessage:PROC
 EXTERN  DispatchMessageA:PROC
 EXTERN  GetSystemMetrics:PROC
 EXTERN  MessageBoxA:PROC
+EXTERN  SetWindowTextA:PROC
 
 EXTERN  D3D11CreateDeviceAndSwapChain:PROC
 
@@ -105,11 +109,14 @@ QA_TIME_BITS                    EQU 00000000h
 ENDIF
 
 .data
+PUBLIC _fltused
+_fltused dd 0                       ; MSVC no-CRT neural kernels use SSE floats
 align 8
 className       db "AlpineDreamingClass",0
-windowTitle     db "ALPINE DREAMING - cinematic x64 assembly / Direct3D 11 / deep house / ESC exits",0
+windowTitle     db "ALPINE DREAMING - pretrained neural geometry and instrument synthesis / ESC exits",0
+loadingTitle    db "ALPINE DREAMING - generating neural geometry and instruments / ESC cancels",0
 errorTitle      db "Alpine Dreaming",0
-errorText       db "Direct3D 11 initialization failed. A feature-level 11 GPU or WARP is required.",0
+errorText       db "Initialization failed (Direct3D 11 or embedded neural model). No procedural substitute was used.",0
 
 ; WNDCLASSEXA, 80 bytes on Win64.
 align 8
@@ -293,7 +300,8 @@ meshDrawBatches:
     dd 20000, 0, 0, 0, 240, 384, 0, 0
     dd 30000, 0, 0, 0, 12288, 4, 0, 0
     dd 40000, 0, 0, 0, 288, 6144, 0, 0
-    dd 50000, 0, 0, 0, 432, 6, 0, 0    ; shadow-only residents
+    dd 60000, 0, 0, 0, 0, 6, 0, 0      ; runtime neural mesh; vertex count filled after inference
+    dd 70000, 0, 0, 0, 0, 6, 0, 0      ; learned head geometry/colour/expression modes
 ; At 3.516m/texel individual blades and residents are subpixel. Near trees use
 ; their 288-vertex crown envelope only in this far shadow pass.
 farMeshDrawBatches:
@@ -362,6 +370,15 @@ physicsTargetStep       dd ?
 physicsBinding          dq ?
 startupCancelled        dd ?
 startupHidden           dd ?
+runtimeExitCode         dd ?
+align 8
+neuralAvatarResult      db 96 dup (?)   ; NeuralAvatarResult ABI; generated GPU geometry only
+neuralHeadResult        db 96 dup (?)
+neuralModelPtr          dq ?
+neuralModelBytes        dd ?
+neuralShaderPtr         dq ?
+neuralShaderBytes       dd ?
+neuralSeed              dd ?
 startupInfo             db 104 dup (?) ; STARTUPINFOA, native x64 layout
 terrainTexture          dq ?
 terrainSRV              dq ?
@@ -490,6 +507,10 @@ sineTable               dw SINE_SIZE dup (?)
 ; unfolds without UI, as a demoscene intro should.
 ; -----------------------------------------------------------------------------
 WndProc PROC
+    ; Read-only QA probe: distinguish actual presented frames from a process
+    ; that is merely alive during neural generation. No state is changed.
+    cmp edx, 8001h
+    je wnd_frame_count
     cmp edx, WM_DESTROY
     je  wnd_destroy
     cmp edx, WM_KEYDOWN
@@ -500,6 +521,9 @@ WndProc PROC
     call DestroyWindow
     add rsp, 28h
     xor eax, eax
+    ret
+wnd_frame_count:
+    mov eax, frameCounter
     ret
 wnd_destroy:
     sub rsp, 28h
@@ -653,6 +677,169 @@ embedded_shader_done:
     pop rbx
     ret
 LoadEmbeddedShader ENDP
+
+; Compiler-generated aggregate initialization in the native kernels uses this
+; MASM implementation, keeping the executable independent of a C runtime DLL.
+PUBLIC memset
+memset PROC
+    push rdi
+    mov r9, rcx
+    mov rdi, rcx
+    mov rcx, r8
+    mov al, dl
+    cld
+    rep stosb
+    mov rax, r9
+    pop rdi
+    ret
+memset ENDP
+
+; ecx=RCDATA id; rax=read-only bytes, edx=length, or both zero on failure.
+; Model bytes are embedded in this PE, with their hashes checked during build.
+LoadEmbeddedBlob PROC
+    push rbx
+    push rsi
+    sub rsp, 28h
+    mov edx, ecx
+    mov rcx, hInstance
+    mov r8d, 10
+    call FindResourceA
+    test rax, rax
+    jz embedded_blob_failed
+    mov rsi, rax
+    mov rcx, hInstance
+    mov rdx, rsi
+    call SizeofResource
+    test eax, eax
+    jz embedded_blob_failed
+    mov ebx, eax
+    mov rcx, hInstance
+    mov rdx, rsi
+    call LoadResource
+    test rax, rax
+    jz embedded_blob_failed
+    mov rcx, rax
+    call LockResource
+    test rax, rax
+    jz embedded_blob_failed
+    mov edx, ebx
+    jmp embedded_blob_done
+embedded_blob_failed:
+    xor eax, eax
+    xor edx, edx
+embedded_blob_done:
+    add rsp, 28h
+    pop rsi
+    pop rbx
+    ret
+LoadEmbeddedBlob ENDP
+
+include loading.inc
+
+; Native inference helpers expect 1=continue, 0=cancel.
+NeuralPump PROC
+    sub rsp, 28h
+    call DrawStartupProgress
+    call PumpInitializationMessages
+    test eax, eax
+    setz al
+    movzx eax, al
+    add rsp, 28h
+    ret
+NeuralPump ENDP
+
+InitializeNeuralModels PROC
+    sub rsp, 68h
+    call DrawStartupProgress
+    mov rcx, hWindow
+    lea rdx, loadingTitle
+    call SetWindowTextA
+    mov ecx, 201
+    call LoadEmbeddedBlob
+    test rax, rax
+    jz neural_models_failed
+    mov rcx, rax
+    call NeuralAudioInit
+    test eax, eax
+    jz neural_models_failed
+    mov ecx, 200
+    call LoadEmbeddedBlob
+    test rax, rax
+    jz neural_models_failed
+    mov neuralModelPtr, rax
+    mov neuralModelBytes, edx
+    mov ecx, 120
+    call LoadEmbeddedBlob
+    test rax, rax
+    jz neural_models_failed
+    mov neuralShaderPtr, rax
+    mov neuralShaderBytes, edx
+    lea rcx, qpcNow
+    call QueryPerformanceCounter
+    mov eax, dword ptr qpcNow
+    xor eax, 06D2B79F5h
+IFDEF QA_NEURAL_SEED
+    mov eax, QA_NEURAL_SEED
+ENDIF
+    mov neuralSeed, eax
+    mov rcx, d3dDevice
+    mov rdx, d3dContext
+    mov r8, neuralModelPtr
+    mov r9d, neuralModelBytes
+    mov rax, neuralShaderPtr
+    mov qword ptr [rsp+20h], rax
+    mov eax, neuralShaderBytes
+    mov dword ptr [rsp+28h], eax
+    mov eax, neuralSeed
+    mov dword ptr [rsp+30h], eax
+    lea rax, neuralAvatarResult
+    mov qword ptr [rsp+38h], rax
+    lea rax, NeuralPump
+    mov qword ptr [rsp+40h], rax
+    call NeuralAvatarCreate
+    test eax, eax
+    jz neural_models_failed
+    mov eax, dword ptr neuralAvatarResult[16]
+    test eax, eax
+    jz neural_models_failed
+    mov dword ptr meshDrawBatches[6*32+16], eax
+    mov ecx, 202
+    call LoadEmbeddedBlob
+    test rax, rax
+    jz neural_models_failed
+    mov r8, rax
+    mov r9d, edx
+    mov rcx, d3dDevice
+    mov rdx, d3dContext
+    mov rax, neuralShaderPtr
+    mov qword ptr [rsp+20h], rax
+    mov eax, neuralShaderBytes
+    mov dword ptr [rsp+28h], eax
+    mov eax, neuralSeed
+    mov dword ptr [rsp+30h], eax
+    lea rax, neuralHeadResult
+    mov qword ptr [rsp+38h], rax
+    lea rax, NeuralPump
+    mov qword ptr [rsp+40h], rax
+    call NeuralAvatarCreate
+    test eax, eax
+    jz neural_models_failed
+    mov eax, dword ptr neuralHeadResult[16]
+    test eax, eax
+    jz neural_models_failed
+    mov dword ptr meshDrawBatches[7*32+16], eax
+    mov eax, dword ptr neuralHeadResult[80]
+    mov dword ptr meshDrawBatches[7*32+8], eax
+    mov eax, dword ptr neuralHeadResult[88]
+    mov dword ptr meshDrawBatches[7*32+12], eax
+    mov eax, 1
+    jmp neural_models_done
+neural_models_failed:
+    xor eax, eax
+neural_models_done:
+    add rsp, 68h
+    ret
+InitializeNeuralModels ENDP
 
 ; rcx = depth texture descriptor, rdx = texture slot, r8 = DSV slot.
 CreateDepthSurface PROC
@@ -1575,7 +1762,7 @@ GenerateSineTable ENDP
 
 ; -----------------------------------------------------------------------------
 ; 128-second 120 BPM score: a restrained integer-DSP rhythm section followed
-; by runtime modal violin-section, double-bass and trumpet sample synthesis.
+; by pretrained neural violin, double-bass and trumpet sample synthesis.
 ; Long bowed phrases and sparse brass answers replace the former sine stabs.
 ; -----------------------------------------------------------------------------
 GenerateAudio PROC
@@ -1586,6 +1773,17 @@ GenerateAudio PROC
     push r13
     push r14
     push r15
+    sub rsp, 20h
+    mov orchGenerated, 0
+    mov ecx, 201
+    call LoadEmbeddedBlob
+    test rax, rax
+    jz audio_model_failed
+    mov rcx, rax
+    call NeuralAudioInit
+    test eax, eax
+    jz audio_model_failed
+    add rsp, 20h
 
     mov rdi, audioBuffer
     mov r14d, AUDIO_FRAMES
@@ -1934,7 +2132,11 @@ clip_right_done:
     sub rsp, 20h
     call GenerateOrchestra
     add rsp, 20h
-
+    jmp audio_generation_done
+audio_model_failed:
+    mov runtimeExitCode, 1
+    add rsp, 20h
+audio_generation_done:
     pop r15
     pop r14
     pop r13
@@ -1946,7 +2148,7 @@ clip_right_done:
 GenerateAudio ENDP
 
 ; -----------------------------------------------------------------------------
-; Process entry point: no CRT, no C/C++ helper layer.
+; Process entry point: MASM host with statically linked no-CRT neural kernels.
 ; -----------------------------------------------------------------------------
 start PROC
     sub rsp, 28h
@@ -2087,6 +2289,13 @@ window_visibility_ready:
     js init_failed
 
 d3d_created:
+    ; Inference runs before persistent scene bindings are installed. Temporary
+    ; feature fields are freed by the helper; only the generated mesh survives.
+    call InitializeNeuralModels
+    cmp startupCancelled, 0
+    jne clean_exit
+    test eax, eax
+    jz init_failed
     ; Locate the fullscreen DXBC programs in the executable resources.
     mov rcx, hInstance
     mov edx, 101
@@ -2602,6 +2811,25 @@ d3d_created:
     lea r8, clearHistoryColour
     call rax
 
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 16
+    mov r8d, 1
+    lea r9, neuralAvatarResult[8]
+    call qword ptr [rax+200]             ; generated neural vertices, VS t16
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 17
+    mov r8d, 1
+    lea r9, neuralHeadResult[8]
+    call qword ptr [rax+200]
+    mov rcx, d3dContext
+    mov rax, [rcx]
+    mov edx, 18
+    mov r8d, 1
+    lea r9, neuralHeadResult[72]
+    call qword ptr [rax+200]             ; numeric expression controls, VS t18
+
     ; ID3D11Device::CreateBuffer for Frame constants.
     mov rcx, d3dDevice
     mov rax, [rcx]
@@ -2921,13 +3149,15 @@ seed_nonzero:
     mov r9d, PAGE_READWRITE
     call VirtualAlloc
     test rax, rax
-    jz audio_skipped
+    jz init_failed
     mov audioBuffer, rax
     call GenerateSineTable
     call GenerateAudio
     call PumpInitializationMessages
     test eax, eax
     jnz clean_exit
+    cmp orchGenerated, 0
+    je init_failed
 
     ; A hidden diagnostic launch still synthesizes the score but uses QPC
     ; instead of playing it through the user's speakers.
@@ -2987,6 +3217,9 @@ audio_skipped:
     mov audioEnabled, 0
 
 timer_start:
+    mov rcx, hWindow
+    lea rdx, windowTitle
+    call SetWindowTextA
     lea rcx, qpcStart
     call QueryPerformanceCounter
     mov frameCounter, 0
@@ -3183,7 +3416,7 @@ pass_mode_ready:
     xor r8d, r8d
     xor r9d, r9d
     call qword ptr [rax+72]
-    mov ecx, 7
+    mov ecx, 8
     call DrawSceneBatches
 
     cmp reflectionEnabled, 0
@@ -3258,7 +3491,7 @@ pass_mode_ready:
     xor r8d, r8d
     xor r9d, r9d
     call qword ptr [rax+72]
-    mov ecx, 6
+    mov ecx, 8
     call DrawSceneBatches
     mov rcx, reflectionSRV
     mov rdx, reflectionCloudRTV
@@ -3352,7 +3585,7 @@ main_reflection_bound:
     xor r8d, r8d
     xor r9d, r9d
     call qword ptr [rax+72]
-    mov ecx, 6
+    mov ecx, 8
     call DrawSceneBatches
     mov rcx, d3dContext
     mov rax, [rcx]
@@ -3526,6 +3759,9 @@ temporal_targets_ready:
     jmp main_message_loop
 
 init_failed:
+    mov runtimeExitCode, 1
+    cmp startupHidden, 0
+    jne clean_exit
     xor ecx, ecx
     lea rdx, errorText
     lea r8, errorTitle
@@ -3562,6 +3798,22 @@ release_graphics:
     mov rax, [rcx]
     call qword ptr [rax+880]            ; ID3D11DeviceContext::ClearState
 release_graphics_objects:
+    mov rcx, qword ptr neuralHeadResult[72]
+    call ReleaseObject
+    mov rcx, qword ptr neuralHeadResult[64]
+    call ReleaseObject
+    mov rcx, qword ptr neuralHeadResult[8]
+    call ReleaseObject
+    mov rcx, qword ptr neuralHeadResult[0]
+    call ReleaseObject
+    mov rcx, qword ptr neuralAvatarResult[72]
+    call ReleaseObject
+    mov rcx, qword ptr neuralAvatarResult[64]
+    call ReleaseObject
+    mov rcx, qword ptr neuralAvatarResult[8]
+    call ReleaseObject
+    mov rcx, qword ptr neuralAvatarResult[0]
+    call ReleaseObject
     mov rcx, materialComputeShader
     call ReleaseObject
     mov rcx, materialUAVs[0]
@@ -3749,7 +4001,7 @@ release_graphics_objects:
     call ReleaseObject
     mov rcx, swapChain
     call ReleaseObject
-    xor ecx, ecx
+    mov ecx, runtimeExitCode
     call ExitProcess
 start ENDP
 

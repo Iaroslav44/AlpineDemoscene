@@ -68,7 +68,7 @@ void CameraCS(uint3 id:SV_DispatchThreadID)
     FrameOutput[13]=float4(sr,farExtent);FrameOutput[14]=float4(su,4000.0);
 }
 
-struct Geometry { float3 p; float3 n; float2 uv; float3 local; float material; float seed; float moving; };
+struct Geometry { float3 p; float3 n; float2 uv; float3 local; float material; float seed; float moving; float3 learnedColor; };
 struct MeshOut
 {
     float4 position:SV_POSITION;
@@ -77,6 +77,7 @@ struct MeshOut
     float2 uv:TEXCOORD2;
     float3 local:TEXCOORD3;
     nointerpolation float3 tag:TEXCOORD4; // material, seed, dynamic
+    float3 learnedColor:TEXCOORD5;
     float clipDistance:SV_ClipDistance0;
 };
 float2 Corner(uint i)
@@ -523,10 +524,13 @@ Geometry PersonShadowGeometry(uint v,uint id)
     g.local=g.p;g.p=PeopleRoot(id,G.z)+(right*g.p.x+float3(0,g.p.y,0)+forward*g.p.z)*PeopleScale(id);
     g.n=right*g.n.x+float3(0,g.n.y,0)+forward*g.n.z;return g;
 }
+#include "neural_resident.hlsli"
 Geometry BuildGeometry(uint vertex,uint instance)
 {
     Geometry g=(Geometry)0;
-    if(instance>=50000)g=PersonShadowGeometry(vertex,instance-50000);
+    if(instance>=70000)g=NeuralHeadGeometry(vertex,instance-70000);
+    else if(instance>=60000)g=NeuralPersonGeometry(vertex,instance-60000);
+    else if(instance>=50000)g=PersonShadowGeometry(vertex,instance-50000);
     else if(instance>=40000)g=ForestGeometry(vertex,instance-40000);
     else if(instance>=30000)g=GliderGeometry(vertex,instance-30000);
     else if(instance>=20000)g=RockGeometry(vertex,instance-20000);
@@ -541,7 +545,7 @@ Geometry BuildGeometry(uint vertex,uint instance)
 }
 MeshOut PackGeometry(Geometry g)
 {
-    MeshOut o;o.world=g.p;o.normal=g.n;o.uv=g.uv;o.local=g.local;o.tag=float3(g.material,g.seed,g.moving);o.position=0;o.clipDistance=1;return o;
+    MeshOut o;o.world=g.p;o.normal=g.n;o.uv=g.uv;o.local=g.local;o.tag=float3(g.material,g.seed,g.moving);o.learnedColor=g.learnedColor;o.position=0;o.clipDistance=1;return o;
 }
 bool OutsideMeshBounds(float3 center,float radius,bool shadowPass)
 {
@@ -572,7 +576,15 @@ bool OutsideMeshBounds(float3 center,float radius,bool shadowPass)
 }
 bool CullMeshGroup(uint vertex,uint instance,bool shadowPass)
 {
-    float3 center;float height,seed;
+    float3 center=0;float height=0,seed=0;
+    if(instance>=60000)
+    {
+        bool head=instance>=70000;
+        uint person=head?instance-70000:instance-60000;
+        center=PeopleRoot((int)(person%6u),G.z);
+        center.y+=head?1.57:.9;
+        return OutsideMeshBounds(center,head?.45:1.6,shadowPass);
+    }
     if(instance>=50000)return !shadowPass;
     if(instance>=40000)
     {
@@ -619,7 +631,7 @@ MeshOut MeshVS(uint vertex:SV_VertexID,uint instance:SV_InstanceID)
     float2 xy=float2(dot(d,camera.right)/CinematicFrame[2].w,dot(d,camera.up))*lens;
     float2 jitter=TemporalJitter(((int)G.w)&7)*float2(-2.0/G.x,2.0/G.y);
     o.position=float4(xy+jitter*z,z*(MAX_DIST/(MAX_DIST-0.1))-0.1*MAX_DIST/(MAX_DIST-0.1),z);
-    if(instance>=50000)o.position=float4(0,0,-1,1);
+    if(instance>=50000&&instance<60000)o.position=float4(0,0,-1,1);
     o.clipDistance=PassMode.x>0.5?g.p.y-LAKE_Y:1.0;
     return o;
 }
@@ -632,6 +644,7 @@ MeshOut ShadowVS(uint vertex:SV_VertexID,uint instance:SV_InstanceID)
 }
 void FoliageCoverage(MeshOut i)
 {
+    if(i.tag.x==50)clip(1.44-i.local.y); // separate pretrained head replaces the body's coarse head
     if(i.tag.x==21)
     {
         float2 uv=i.uv;float seed=i.tag.y;
@@ -707,6 +720,21 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
 {
     FoliageCoverage(i);float mat=i.tag.x,seed=i.tag.y;
     float3 n=normalize(i.normal),view=normalize(CinematicViewOrigin()-i.world);
+    float3 neuralReceiverNormal=n;
+    if(mat==50||mat==51)
+    {
+        // The shadow filter extrapolates a receiver plane across its PCF taps.
+        // Learned detail normals describe shading, not that triangle's plane;
+        // using them here turns fine normal variation into patchy self-shadow.
+        // Keep learned BRDF normals, but derive the receiver from posed geometry.
+        float3 geometric=cross(ddy(i.world),ddx(i.world));
+        float magnitudeSquared=dot(geometric,geometric);
+        if(magnitudeSquared>1e-20)
+        {
+            geometric*=rsqrt(magnitudeSquared);
+            neuralReceiverNormal=dot(geometric,n)<0.0?-geometric:geometric;
+        }
+    }
     if(mat==21||mat==22||mat==24)n=dot(n,view)>=0.0?n:-n;
     float3 color=float3(0.65,0.61,0.51);float rough=0.78,metal=0,ao=1;
     float mottling=Noise2(i.world.xz*0.57+i.world.y*0.37);
@@ -815,7 +843,35 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
             (1.0-smoothstep(.018,.035,abs(q.y-.45*q.x)))*step(0,q.x)*(1.0-smoothstep(.40,.5,r)));
         color=lerp(float3(.58,.52,.38),float3(.018,.019,.015),saturate(ring+minuteMark+hands));rough=.65;
     }
-    float sunVisibility=CinematicShadow(i.world,n);
+    else if(mat==50)
+    {
+        // gDNA predicts geometry/normal/skinning, not albedo. These explicitly
+        // authored prototype materials must not be advertised as neural skin.
+        float skin=smoothstep(1.47,1.56,i.local.y);
+        float hands=smoothstep(.68,.78,abs(i.local.x));
+        skin=max(skin,hands);
+        float trousers=1.0-smoothstep(.82,.96,i.local.y);
+        float3 shirt=NeuralResidentShirtColor(seed);
+        color=lerp(shirt,float3(.032,.039,.043),trousers);
+        color=lerp(color,float3(.38,.205,.135),skin);
+        rough=lerp(.86,.55,skin);
+        float micro=Noise2(i.local.xy*370.0+i.local.z*119.0);
+        color*=.97+.06*micro;
+    }
+    else if(mat==51)
+    {
+        // GANHead predicts scanner appearance in sRGB. Its learned surface
+        // colour is converted to linear light; it is not a recovered PBR set.
+        float3 srgb=saturate(i.learnedColor);
+        color=float3(srgb.x<=.04045?srgb.x/12.92:pow((srgb.x+.055)/1.055,2.4),
+                     srgb.y<=.04045?srgb.y/12.92:pow((srgb.y+.055)/1.055,2.4),
+                     srgb.z<=.04045?srgb.z/12.92:pow((srgb.z+.055)/1.055,2.4));
+        rough=lerp(.78,.53,smoothstep(.05,.3,dot(srgb,float3(.3,.59,.11))));
+        float clothing=NeuralHeadClothingCoverage(i.local);
+        color=lerp(color,NeuralResidentShirtColor(seed),clothing);
+        rough=lerp(rough,.86,clothing);
+    }
+    float sunVisibility=CinematicShadow(i.world,(mat==50||mat==51)?neuralReceiverNormal:n);
     float3 lit=CinematicLightingVisible(n,view,color,rough,metal,ao,sunVisibility);
     if(mat==21||mat==22||mat==24)
     {

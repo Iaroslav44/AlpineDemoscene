@@ -8,7 +8,7 @@ float2 PeopleCentre(int id,float seconds)
 {
     float a=fmod(seconds,128.0)*(TAU/128.0);
     if(id==0)return float2(1.2*sin(2.0*a),1750.0+10.0*sin(a));
-    float2 base;
+    float2 base=float2(-2.0,1804.0);
     if(id==1)base=float2(-2.0,1737.0);
     else if(id==2)base=float2(2.0,1768.0);
     else if(id==3)base=float2(-1.7,1781.0);

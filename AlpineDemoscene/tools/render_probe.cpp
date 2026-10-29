@@ -8,10 +8,13 @@
 #include <d3d11.h>
 #include <d3d11sdklayers.h>
 #include <dxgi.h>
+#include <bcrypt.h>
+#pragma comment(lib,"bcrypt.lib")
 #include <wrl/client.h>
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -22,6 +25,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "../src/neural_avatar_runtime.h"
 using Microsoft::WRL::ComPtr;
 // Match the ABI sizes used by the hand-written x64 host, against the SDK.
 static_assert(sizeof(MMTIME)==12, "MMTIME ABI differs from MASM host");
@@ -34,12 +38,37 @@ static_assert(sizeof(D3D11_UNORDERED_ACCESS_VIEW_DESC)==20, "UAV descriptor ABI 
 static_assert(sizeof(D3D11_RASTERIZER_DESC)==40, "Rasterizer descriptor ABI differs");
 static_assert(sizeof(D3D11_DEPTH_STENCIL_DESC)==52, "Depth state descriptor ABI differs");
 namespace fs = std::filesystem;
+static fs::path neuralDumpDirectory;
+static bool neuralDumpFailed=false;
+static void dumpNeuralStage(const char* name,const float* values,uint32_t count) {
+    std::ofstream out(neuralDumpDirectory/(std::string(name)+".f32"),std::ios::binary);
+    out.write(reinterpret_cast<const char*>(values),size_t(count)*sizeof(float));
+    if(!out)neuralDumpFailed=true;
+}
 constexpr UINT TerrainSize=4096,WaterSize=256,FlightSamples=3841,FlightElements=4*FlightSamples*4;
 constexpr UINT MaterialSize=1024,MaterialLayers=8,MaterialMips=11,CameraFloats=15*4;
 constexpr UINT InstanceElements=81152,InstanceGroups=778;
 constexpr UINT CloudSize=128,BoundsMips=13;
 void check(HRESULT h, const char* context) {
     if (FAILED(h)) { std::ostringstream s; s << context << " HRESULT=0x" << std::hex << unsigned(h); throw std::runtime_error(s.str()); }
+}
+struct Sha256 {
+    BCRYPT_ALG_HANDLE algorithm=nullptr;BCRYPT_HASH_HANDLE hash=nullptr;
+    Sha256(){
+        if(BCryptOpenAlgorithmProvider(&algorithm,BCRYPT_SHA256_ALGORITHM,nullptr,0)<0)
+            throw std::runtime_error("Cannot open SHA256 provider.");
+        if(BCryptCreateHash(algorithm,&hash,nullptr,0,nullptr,0,0)<0){BCryptCloseAlgorithmProvider(algorithm,0);algorithm=nullptr;throw std::runtime_error("Cannot create SHA256 hash.");}
+    }
+    ~Sha256(){if(hash)BCryptDestroyHash(hash);if(algorithm)BCryptCloseAlgorithmProvider(algorithm,0);}
+    void update(const void* bytes,size_t count){if(count>ULONG_MAX||BCryptHashData(hash,(PUCHAR)bytes,ULONG(count),0)<0)throw std::runtime_error("SHA256 input failed.");}
+    std::string finish(){unsigned char digest[32];if(BCryptFinishHash(hash,digest,32,0)<0)throw std::runtime_error("SHA256 finish failed.");
+        std::ostringstream text;text<<std::hex<<std::setfill('0');for(unsigned char c:digest)text<<std::setw(2)<<unsigned(c);return text.str();}
+};
+static std::string sha256File(const fs::path& path){
+    std::ifstream file(path,std::ios::binary);if(!file)throw std::runtime_error("Cannot hash candidate EXE.");
+    Sha256 hash;std::array<char,65536> block;
+    while(file){file.read(block.data(),block.size());const auto n=file.gcount();if(n)hash.update(block.data(),size_t(n));}
+    if(!file.eof())throw std::runtime_error("Candidate EXE hash read failed.");return hash.finish();
 }
 std::vector<char> read(const fs::path& p) {
     std::ifstream f(p, std::ios::binary | std::ios::ate);
@@ -257,8 +286,9 @@ template<class T> T query(ID3D11DeviceContext* c, ID3D11Query* q) {
     }
 }
 int main(int argc,char** argv) try {
-    fs::path shaderDir="build", outDir="build/probe", executable,rawProbe;
+    fs::path shaderDir="build", outDir="build/probe", executable,rawProbe,writeNeuralCache,replayNeuralCache,timesFile;
     UINT w=1280,h=720,frames=3,startFrame=0;float time=8,dt=1.f/60,seed=.375f;double scale=1;bool warp=false,debug=true,diagnostic=false,loopTime=false,validateInstances=false,physicsOnly=false,dumpWorld=false,waterDiagnostic=false;
+    UINT avatarSeed=42;bool neuralOnly=false,dumpNeural=false,headOnly=false;
     float diagnosticStart=0,diagnosticSpan=128;
     for(int i=1;i<argc;i++) {
         std::string a=argv[i];
@@ -271,6 +301,12 @@ int main(int argc,char** argv) try {
             scale=slash==std::string::npos?std::stod(s):std::stod(s.substr(0,slash))/std::stod(s.substr(slash+1));
         }
         else if(a=="--frames")frames=std::stoul(value());else if(a=="--start-frame")startFrame=std::stoul(value());
+        else if(a=="--avatar-seed")avatarSeed=std::stoul(value());else if(a=="--neural-only")neuralOnly=true;
+        else if(a=="--dump-neural")dumpNeural=true;
+        else if(a=="--neural-head")headOnly=true;
+        else if(a=="--write-neural-cache")writeNeuralCache=value();
+        else if(a=="--replay-neural-cache")replayNeuralCache=value();
+        else if(a=="--times-file")timesFile=value();
         else if(a=="--time")time=std::stof(value());else if(a=="--dt")dt=std::stof(value());else if(a=="--seed")seed=std::stof(value());
         else if(a=="--warp")warp=true;else if(a=="--no-debug")debug=false;else if(a=="--diagnostic")diagnostic=true;else if(a=="--loop-time")loopTime=true;
         else if(a=="--validate-instances")validateInstances=true;
@@ -279,6 +315,15 @@ int main(int argc,char** argv) try {
         else if(a=="--diagnostic-water")waterDiagnostic=true;
         else if(a=="--diagnostic-start")diagnosticStart=std::stof(value());else if(a=="--diagnostic-span")diagnosticSpan=std::stof(value());
         else throw std::runtime_error("Unknown option: "+a);
+    }
+    if(headOnly&&!neuralOnly)throw std::runtime_error("--neural-head is an isolated test; use --neural-only with it.");
+    if(!replayNeuralCache.empty()&&(dumpNeural||!writeNeuralCache.empty()))throw std::runtime_error("QA cache replay cannot produce neural inference dumps or overwrite its cache.");
+    std::vector<float> frameTimes;
+    if(!timesFile.empty()) {
+        std::ifstream input(timesFile);if(!input)throw std::runtime_error("Cannot read QA frame times.");
+        float value;while(input>>value){if(!std::isfinite(value)||value<0||value>128||frameTimes.size()>=4096)throw std::runtime_error("Invalid QA frame time.");frameTimes.push_back(value);}
+        if(!input.eof()||frameTimes.empty())throw std::runtime_error("Invalid or empty QA frame-time file.");
+        frames=UINT(frameTimes.size());time=frameTimes.front();
     }
     if(w<16||h<16||w>7680||h>4320||!frames||frames>4096||!std::isfinite(time)||!std::isfinite(dt)||!std::isfinite(seed))
         throw std::runtime_error("Invalid dimensions, frame count, or time/seed.");
@@ -306,6 +351,7 @@ int main(int argc,char** argv) try {
         module.value=LoadLibraryExW(fs::absolute(executable).c_str(),nullptr,LOAD_LIBRARY_AS_DATAFILE|LOAD_LIBRARY_AS_IMAGE_RESOURCE);
         if(!module.value)throw std::runtime_error("Cannot load candidate EXE resources.");
     }
+    const std::string candidateSha256=executable.empty()?"":sha256File(executable);
     auto shaderBytes=[&](int id,const char* file){
         if(!module.value)return read(shaderDir/file);
         HRSRC resource=FindResourceW(module.value,MAKEINTRESOURCEW(id),MAKEINTRESOURCEW(10));
@@ -315,6 +361,173 @@ int main(int argc,char** argv) try {
         if(!data||size<32||std::string(data,4)!="DXBC")throw std::runtime_error("Invalid candidate shader resource.");
         return std::vector<char>(data,data+size);
     };
+    auto neuralModelBytes=[&](UINT id,const char* relativePath,const char* magic){
+        if(module.value) {
+            HRSRC resource=FindResourceW(module.value,MAKEINTRESOURCEW(id),MAKEINTRESOURCEW(10));
+            if(!resource)throw std::runtime_error("Candidate lacks required neural resource"+std::to_string(id));
+            DWORD size=SizeofResource(module.value,resource);
+            const char* data=static_cast<const char*>(LockResource(LoadResource(module.value,resource)));
+            if(!data||size<32||std::string(data,4)!=magic)throw std::runtime_error("Invalid candidate neural model.");
+            return std::vector<char>(data,data+size);
+        }
+        const fs::path modelPath=shaderDir.parent_path()/relativePath;
+        std::ifstream file(modelPath,std::ios::binary|std::ios::ate);
+        if(!file)throw std::runtime_error("Cannot read pretrained model: "+modelPath.string());
+        const auto length=file.tellg();
+        if(length<32||length>=400000000)throw std::runtime_error("Invalid neural model length.");
+        std::vector<char> data(static_cast<size_t>(length));file.seekg(0);file.read(data.data(),length);
+        if(!file||std::string(data.data(),4)!=magic)throw std::runtime_error("Invalid neural model header.");
+        return data;
+    };
+    const auto avatarShader=shaderBytes(120,"neural_avatar_cs.cso");
+    struct NeuralProduct {
+        NeuralAvatarResult result{};
+        ComPtr<ID3D11Buffer> vertices,motion;
+        ComPtr<ID3D11ShaderResourceView> srv,motionSRV;
+        std::string json;
+    };
+    auto generateNeural=[&](bool isHead){
+        NeuralProduct product;
+        const UINT id=isHead?202:200,jointCount=isHead?5:24,expectedStride=isHead?144:64;
+        auto model=neuralModelBytes(id,isHead?"models/head/ganhead-faceverse.nah":"models/avatar/gdna-thuman.nav",isHead?"NAH1":"NAV1");
+        Sha256 modelHasher;modelHasher.update(model.data(),model.size());const std::string modelSha=modelHasher.finish();
+        const fs::path dumpDirectory=isHead&&!neuralOnly?outDir/"head":outDir;
+        fs::create_directories(dumpDirectory);
+        if(dumpNeural){neuralDumpDirectory=dumpDirectory;NeuralAvatarSetDiagnosticSink(dumpNeuralStage);}
+        const bool cached=!replayNeuralCache.empty();
+        std::cout<<(cached?"Replaying QA-only generated geometry: ":"Generating pretrained ")<<(isHead?"GANHead":"gDNA")<<", seed="<<avatarSeed<<"..."<<std::endl;
+        const auto started=std::chrono::steady_clock::now();
+        auto& result=product.result;
+        int success=0;
+        if(cached) {
+            const fs::path base=replayNeuralCache/std::to_string(id);
+            std::ifstream metadata(base.string()+".meta");std::string format,cachedSha;UINT cachedId=0,cachedSeed=0;
+            metadata>>format>>cachedId>>cachedSeed>>cachedSha>>result.vertexStrideBytes>>result.vertexCount>>result.motionFrames>>result.motionDuration;
+            for(float& value:result.boundsMin)metadata>>value;for(float& value:result.boundsMax)metadata>>value;
+            if(!metadata||format!="ALPINE_NEURAL_QA_CACHE_1"||cachedId!=id||cachedSeed!=avatarSeed||cachedSha!=modelSha||result.vertexStrideBytes!=expectedStride
+                ||!result.vertexCount||uint64_t(result.vertexCount)*expectedStride>=400000000||result.motionFrames>100000)
+                throw std::runtime_error("Missing, stale or invalid QA-only generated geometry cache.");
+            auto uploadCached=[&](const std::string& suffix,size_t count,ComPtr<ID3D11Buffer>& buffer,ComPtr<ID3D11ShaderResourceView>& srv){
+                const fs::path cachePath=base.string()+suffix;
+                if(fs::file_size(cachePath)!=count)throw std::runtime_error("QA cache length mismatch.");
+                std::ifstream file(cachePath,std::ios::binary);std::vector<uint8_t> data(count);file.read(reinterpret_cast<char*>(data.data()),count);
+                if(!file)throw std::runtime_error("QA cache read failed.");
+                D3D11_BUFFER_DESC desc{};desc.ByteWidth=UINT(count);desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+                desc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;desc.StructureByteStride=16;
+                D3D11_SUBRESOURCE_DATA initial{};initial.pSysMem=data.data();check(device->CreateBuffer(&desc,&initial,&buffer),"Upload QA-only cached geometry");
+                D3D11_SHADER_RESOURCE_VIEW_DESC view{};view.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;view.Buffer.NumElements=UINT(count/16);
+                check(device->CreateShaderResourceView(buffer.Get(),&view,&srv),"Create QA-only cache view");
+            };
+            uploadCached(".vertices",size_t(result.vertexCount)*expectedStride,product.vertices,product.srv);
+            if(isHead)uploadCached(".motion",size_t(result.motionFrames)*32,product.motion,product.motionSRV);
+            result.vertexBuffer=product.vertices.Get();result.vertexSRV=product.srv.Get();result.motionBuffer=product.motion.Get();result.motionSRV=product.motionSRV.Get();
+            result.status=1;result.seed=avatarSeed;success=1;
+        } else {
+            success=NeuralAvatarCreate(device.Get(),context.Get(),model.data(),UINT(model.size()),
+                avatarShader.data(),UINT(avatarShader.size()),avatarSeed,&result,nullptr);
+            product.vertices.Attach(result.vertexBuffer);product.srv.Attach(result.vertexSRV);
+            product.motion.Attach(result.motionBuffer);product.motionSRV.Attach(result.motionSRV);
+        }
+        NeuralAvatarSetDiagnosticSink(nullptr);
+        const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+        if(!success||!product.vertices||!product.srv||!result.vertexCount||result.vertexCount%3||result.vertexStrideBytes!=expectedStride)
+            throw std::runtime_error("Neural generation failed, resource="+std::to_string(id)+",status="+std::to_string(result.status));
+        if(neuralDumpFailed)throw std::runtime_error("Cannot write neural diagnostic dump.");
+        context->ClearState();
+        auto readBuffer=[&](ID3D11Buffer* buffer,size_t expected){
+            D3D11_BUFFER_DESC desc{};buffer->GetDesc(&desc);
+            if(expected>desc.ByteWidth)throw std::runtime_error("Neural result exceeds its buffer.");
+            desc.BindFlags=desc.MiscFlags=desc.StructureByteStride=0;
+            desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+            ComPtr<ID3D11Buffer> staging;check(device->CreateBuffer(&desc,nullptr,&staging),"Create neural readback");
+            context->CopyResource(staging.Get(),buffer);D3D11_MAPPED_SUBRESOURCE map{};
+            check(context->Map(staging.Get(),0,D3D11_MAP_READ,0,&map),"Read neural data");
+            std::vector<uint8_t> bytes(expected);memcpy(bytes.data(),map.pData,expected);
+            context->Unmap(staging.Get(),0);return bytes;
+        };
+        const auto vertices=readBuffer(product.vertices.Get(),size_t(result.vertexCount)*expectedStride);
+        size_t invalidValues=0,invalidJoints=0,invalidColor=0,invalidMorph=0;
+        std::array<uint64_t,24> jointUse{};
+        double weightSumError=0,minNormalLength=1e30,maxNormalLength=0,maxMorph=0;
+        std::array<float,3> lo={1e30f,1e30f,1e30f},hi={-1e30f,-1e30f,-1e30f};
+        uint64_t geometryHash=14695981039346656037ULL;
+        for(auto byte:vertices)geometryHash=(geometryHash^byte)*1099511628211ULL;
+        for(UINT i=0;i<result.vertexCount;++i) {
+            const auto* v=reinterpret_cast<const float*>(vertices.data()+size_t(i)*expectedStride);
+            const auto* joints=reinterpret_cast<const uint32_t*>(v+8);
+            for(unsigned j=0;j<8;++j)invalidValues+=!std::isfinite(v[j]);
+            double totalWeight=0;
+            for(unsigned j=0;j<4;++j){invalidJoints+=joints[j]>=jointCount;invalidValues+=!std::isfinite(v[12+j])||v[12+j]<0;totalWeight+=v[12+j];
+                if(joints[j]<jointCount&&v[12+j]>1e-4f)jointUse[joints[j]]++;}
+            weightSumError=std::max(weightSumError,std::abs(totalWeight-1));
+            const double length=std::sqrt(double(v[4])*v[4]+double(v[5])*v[5]+double(v[6])*v[6]);
+            minNormalLength=std::min(minNormalLength,length);maxNormalLength=std::max(maxNormalLength,length);
+            for(unsigned j=0;j<3;++j){lo[j]=std::min(lo[j],v[j]);hi[j]=std::max(hi[j],v[j]);}
+            if(isHead) {
+                for(unsigned j=16;j<20;++j)invalidColor+=!std::isfinite(v[j])||v[j]<0||v[j]>1;
+                for(unsigned j=20;j<36;++j){invalidMorph+=!std::isfinite(v[j]);maxMorph=std::max(maxMorph,std::abs(double(v[j])));}
+            }
+        }
+        const size_t activeJoints=std::count_if(jointUse.begin(),jointUse.end(),[](uint64_t count){return count!=0;});
+        std::vector<uint8_t> motionBytes;
+        size_t invalidMotion=0;double motionDifference=0;
+        if(isHead) {
+            if(!product.motion||!product.motionSRV||result.motionFrames<2||!std::isfinite(result.motionDuration)||result.motionDuration<=0)
+                throw std::runtime_error("GANHead has no valid expression motion.");
+            motionBytes=readBuffer(product.motion.Get(),size_t(result.motionFrames)*32);
+            const float* values=reinterpret_cast<const float*>(motionBytes.data());
+            for(size_t i=0;i<motionBytes.size()/4;++i){invalidMotion+=!std::isfinite(values[i]);if(i>=8)motionDifference=std::max(motionDifference,std::abs(double(values[i])-values[i%8]));}
+        }
+        std::ostringstream description;
+        description<<"{\"model\":\""<<(isHead?"GANHead FaceVerse":"gDNA THuman2.0")<<"\",\"model_resource_id\":"<<id<<",\"model_bytes\":"<<model.size()
+            <<",\"model_sha256\":\""<<modelSha<<"\",\"candidate_sha256\":\""<<candidateSha256<<"\""
+            <<",\"source_kind\":\""<<(cached?"qa_generated_cache":module.value?"candidate_resources":"development_files")<<"\",\"inference_executed\":"<<(cached?"false":"true")
+            <<",\"seed\":"<<avatarSeed<<",\"vertex_count\":"<<result.vertexCount<<",\"vertex_stride_bytes\":"<<expectedStride<<",\"status\":"<<result.status
+            <<",\"startup_wall_seconds\":"<<seconds<<",\"helper_seconds\":"<<result.seconds
+            <<",\"feature_ms\":"<<result.reserved[0]<<",\"field_ms\":"<<result.reserved[1]
+            <<",\"geometry_fnv1a64\":\""<<std::hex<<geometryHash<<std::dec<<"\",\"invalid_values\":"<<invalidValues
+            <<",\"invalid_joint_ids\":"<<invalidJoints<<",\"max_weight_sum_error\":"<<weightSumError
+            <<",\"normal_length_min\":"<<minNormalLength<<",\"normal_length_max\":"<<maxNormalLength
+            <<",\"active_joint_count\":"<<activeJoints<<",\"joint_influence_counts\":[";
+        for(UINT joint=0;joint<jointCount;++joint)description<<(joint?",":"")<<jointUse[joint];
+        description<<"],\"bounds_min\":["<<lo[0]<<","<<lo[1]<<","<<lo[2]<<"],\"bounds_max\":["<<hi[0]<<","<<hi[1]<<","<<hi[2]<<"]"
+            <<",\"invalid_color_values\":"<<invalidColor<<",\"invalid_morph_values\":"<<invalidMorph<<",\"max_abs_morph_delta\":"<<maxMorph
+            <<",\"motion_frames\":"<<result.motionFrames<<",\"motion_duration_seconds\":"<<result.motionDuration
+            <<",\"invalid_motion_values\":"<<invalidMotion<<",\"motion_max_difference_from_first\":"<<motionDifference<<"}";
+        product.json=description.str();
+        std::ofstream(outDir/(isHead?"neural_head_metrics.json":"neural_avatar_metrics.json"))<<product.json<<"\n";
+        if(isHead&&dumpNeural)std::ofstream(dumpDirectory/"neural_avatar_metrics.json")<<product.json<<"\n";
+        if(invalidValues||invalidJoints||activeJoints<(isHead?1u:8u)||weightSumError>.005||minNormalLength<.5||maxNormalLength>1.5
+            ||invalidColor||invalidMorph||invalidMotion||(isHead&&(maxMorph<=1e-7||motionDifference<=1e-7)))
+            throw std::runtime_error("Neural vertex/material/motion validation failed; resource="+std::to_string(id));
+        if(!writeNeuralCache.empty()) {
+            fs::create_directories(writeNeuralCache);
+            const fs::path base=writeNeuralCache/std::to_string(id);
+            std::ofstream mesh(base.string()+".vertices",std::ios::binary);mesh.write(reinterpret_cast<const char*>(vertices.data()),vertices.size());
+            std::ofstream motion(base.string()+".motion",std::ios::binary);if(!motionBytes.empty())motion.write(reinterpret_cast<const char*>(motionBytes.data()),motionBytes.size());
+            std::ofstream metadata(base.string()+".meta");metadata<<std::setprecision(9)<<"ALPINE_NEURAL_QA_CACHE_1\n"<<id<<" "<<avatarSeed<<" "<<modelSha<<"\n"
+                <<expectedStride<<" "<<result.vertexCount<<" "<<result.motionFrames<<" "<<result.motionDuration<<"\n";
+            for(float value:result.boundsMin)metadata<<value<<" ";for(float value:result.boundsMax)metadata<<value<<" ";metadata<<"\n";
+            if(!mesh||!motion||!metadata)throw std::runtime_error("Cannot write QA-only generated geometry cache.");
+        }
+        std::cout<<"Neural "<<(isHead?"head":"body")<<": "<<result.vertexCount<<" vertices in "<<seconds<<" s"<<std::endl;
+        return product;
+    };
+    NeuralProduct body,head;
+    if(!headOnly)body=generateNeural(false);
+    if(!neuralOnly||headOnly)head=generateNeural(true);
+    auto& avatar=body.result;
+    const std::string neuralJson=body.json,headJson=head.json;
+    if(neuralOnly) {
+        UINT64 messages=info?info->GetNumStoredMessages():0;size_t warnings=0;
+        for(UINT64 i=0;i<messages;++i){SIZE_T size=0;info->GetMessage(i,nullptr,&size);std::vector<uint8_t> data(size);
+            auto* message=reinterpret_cast<D3D11_MESSAGE*>(data.data());check(info->GetMessage(i,message,&size),"Read neural diagnostics");
+            if(message->Severity<=D3D11_MESSAGE_SEVERITY_WARNING){warnings++;std::cerr<<message->pDescription<<"\n";}}
+        std::ofstream(outDir/"neural_debug.json")<<"{\"debug_layer\":"<<(debug?"true":"false")<<",\"warnings_errors\":"<<warnings<<"}\n";
+        return warnings?2:0;
+    }
+    ID3D11ShaderResourceView* neuralViews[]={body.srv.Get(),head.srv.Get(),head.motionSRV.Get()};
+    context->VSSetShaderResources(16,3,neuralViews);
     auto vb=shaderBytes(101,"scene_vs.cso");ComPtr<ID3D11VertexShader> vs;check(device->CreateVertexShader(vb.data(),vb.size(),nullptr,&vs),"CreateVS");
     std::array<ComPtr<ID3D11PixelShader>,4> ps;
     const char* files[]={"scene_ps.cso","human_ps.cso","temporal_ps.cso","display_ps.cso"};
@@ -628,10 +841,12 @@ int main(int argc,char** argv) try {
         context->VSSetShaderResources(12,1,instanceSRV.GetAddressOf());context->PSSetShaderResources(12,1,instanceSRV.GetAddressOf());
     };
     auto drawMeshes=[&](bool shadowPass,bool farPass=false){
-        constexpr UINT batches[][3]={{11520,64,0},{15624,192,1000},{48,12288,2000},{240,384,20000},{12288,4,30000},{288,6144,40000},{432,6,50000}};
-        for(size_t i=0;i<(shadowPass?7u:6u);i++) {
-            if(farPass&&(i==2||i==6))continue;
-            const UINT batchConstants[]={batches[i][2],0,0,0};
+        const UINT batches[][3]={{11520,64,0},{15624,192,1000},{48,12288,2000},{240,384,20000},{12288,4,30000},{288,6144,40000},{avatar.vertexCount,6,60000},{head.result.vertexCount,6,70000}};
+        (void)shadowPass;
+        for(size_t i=0;i<8;i++) {
+            if(farPass&&(i==2||i>=6))continue;
+            UINT durationBits=0;memcpy(&durationBits,&head.result.motionDuration,4);
+            const UINT batchConstants[]={batches[i][2],0,i==7?head.result.motionFrames:0,i==7?durationBits:0};
             context->UpdateSubresource(batchCB.Get(),0,nullptr,batchConstants,0,0);
             context->DrawInstanced(farPass&&i==1?288:batches[i][0],batches[i][1],0,0);
         }
@@ -747,9 +962,11 @@ int main(int argc,char** argv) try {
     std::array<ComPtr<ID3D11Query>,18> timestamps;qd.Query=D3D11_QUERY_TIMESTAMP;
     for(auto& q:timestamps)check(device->CreateQuery(&qd,&q),"CreateTimestamp");
     std::ofstream metrics(outDir/"metrics.json");metrics<<"{\"adapter\":\""<<gpu<<"\",\"debug_layer\":"<<(debug?"true":"false")
+        <<",\"candidate_sha256\":\""<<candidateSha256<<"\""
+        <<",\"neural_avatar\":"<<neuralJson<<",\"neural_head\":"<<headJson
         <<",\"width\":"<<w<<",\"height\":"<<h<<",\"low_width\":"<<lowWidth<<",\"low_height\":"<<lowHeight<<",\"scale\":"<<scale
         <<",\"terrain_startup_gpu_ms\":"<<terrainMS<<",\"flight_startup_gpu_ms\":"<<flightMS<<",\"material_startup_gpu_ms\":"<<materialMS<<",\"terrain_bounds_startup_gpu_ms\":"<<boundsMS<<",\"cloud_startup_gpu_ms\":"<<cloudMS
-        <<",\"seed\":"<<seed<<",\"dt\":"<<dt<<",\"loop_time\":"<<(loopTime?"true":"false")
+        <<",\"seed\":"<<seed<<",\"dt\":"<<(frameTimes.empty()?std::to_string(dt):"null")<<",\"custom_frame_times\":"<<(frameTimes.empty()?"false":"true")<<",\"loop_time\":"<<(loopTime?"true":"false")
         <<",\"reflection_width\":"<<reflectionWidth<<",\"reflection_height\":"<<reflectionHeight
         <<",\"stage_names\":[\"physics\",\"camera\",\"instances\",\"atmosphere\",\"far_shadow\",\"shadow\",\"reflection_world\",\"reflection_mesh\",\"reflection_clouds\",\"world\",\"mesh\",\"human\",\"cloud_composite\",\"temporal\",\"display\"],\"frames\":[\n";
     auto compositeClouds=[&](Surface& target,ID3D11ShaderResourceView* source){
@@ -759,7 +976,7 @@ int main(int argc,char** argv) try {
     };
     std::vector<uint8_t> previous; bool failed=false; float previousSeconds=time;
     for(UINT f=0;f<frames;f++) {
-        float t=time+f*dt;if(loopTime)t=std::fmod(t,128.f);
+        float t=frameTimes.empty()?time+f*dt:frameTimes[f];if(loopTime)t=std::fmod(t,128.f);
         const float constants[]={float(lowWidth),float(lowHeight),t,float(startFrame+f),float(w),float(h),seed,f?previousSeconds:t};
         const float phase=std::fmod(t,128.f);const bool reflectionEnabled=phase>=40&&phase<=108;
         const float mainPass[]={0,reflectionEnabled?1.f:0.f,0,0},reflectionPass[]={1,1,0,0};

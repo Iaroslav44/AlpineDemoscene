@@ -10,25 +10,28 @@ $assetDir = Join-Path $projectRoot 'assets'
 $buildDir = Join-Path $projectRoot 'build'
 $distDir = Join-Path $projectRoot 'dist'
 New-Item -ItemType Directory -Force -Path $buildDir, $distDir | Out-Null
+. (Join-Path $projectRoot 'tools\model_manifest.ps1')
+$neuralModels = @(Get-NeuralResourceManifest -ProjectRoot $projectRoot -ValidateFiles)
 
 # A runtime build must remain genuinely procedural.  Look-development images
 # live under reference/, which is intentionally outside this check and outside
 # the resource script.  Any raster accidentally placed in assets/ or src/ makes
 # the build fail instead of silently turning the intro back into a slideshow.
-$rasterExtensions = @('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.tif', '.tiff', '.dds')
+$rasterExtensions = @('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.tif', '.tiff', '.dds',
+    '.mp4', '.webm', '.avi', '.mov', '.wav', '.mp3', '.ogg', '.flac', '.glb', '.gltf', '.fbx', '.obj', '.ply')
 $runtimeRasters = @(
-    Get-ChildItem -LiteralPath $sourceDir, $assetDir -Recurse -File -ErrorAction SilentlyContinue |
+    Get-ChildItem -LiteralPath $sourceDir, $assetDir, (Join-Path $projectRoot 'models') -Recurse -File -ErrorAction SilentlyContinue |
         Where-Object { $rasterExtensions -contains $_.Extension.ToLowerInvariant() }
 )
 if ($runtimeRasters.Count -ne 0) {
     $paths = ($runtimeRasters.FullName -join [Environment]::NewLine)
-    throw "Procedural-only contract violated by runtime raster assets:`n$paths"
+    throw "Runtime-generation contract violated by baked image/video/audio/mesh assets:`n$paths"
 }
 
 $resourceScript = Join-Path $sourceDir 'shaders.rc'
 $resourceText = Get-Content -LiteralPath $resourceScript -Raw
-if ($resourceText -match '(?i)\.(jpe?g|png|webp|bmp|gif|tiff?|dds)') {
-    throw 'Procedural-only contract violated: shaders.rc references a raster image.'
+if ($resourceText -match '(?i)\.(jpe?g|png|webp|bmp|gif|tiff?|dds|mp4|webm|avi|mov|wav|mp3|ogg|flac|glb|gltf|fbx|obj|ply)\b') {
+    throw 'Runtime-generation contract violated: shaders.rc references a baked media/mesh asset.'
 }
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
@@ -46,6 +49,7 @@ $toolset = Get-ChildItem -LiteralPath $msvcRoot -Directory |
 $toolBin = Join-Path $toolset.FullName 'bin\Hostx64\x64'
 $ml64 = Join-Path $toolBin 'ml64.exe'
 $link = Join-Path $toolBin 'link.exe'
+$cl = Join-Path $toolBin 'cl.exe'
 
 $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10'
 $sdkLibVersion = Get-ChildItem -LiteralPath (Join-Path $sdkRoot 'Lib') -Directory |
@@ -90,6 +94,7 @@ $atmosphereBytecode = Join-Path $buildDir 'atmosphere_cs.cso'
 $cloudBytecode = Join-Path $buildDir 'cloud_cs.cso'
 $boundsBytecode = Join-Path $buildDir 'terrain_bounds_cs.cso'
 $cloudCompositeBytecode = Join-Path $buildDir 'cloud_composite_ps.cso'
+$neuralAvatarBytecode = Join-Path $buildDir 'neural_avatar_cs.cso'
 $resource = Join-Path $buildDir 'shaders.res'
 $object = Join-Path $buildDir 'alpine.obj'
 $candidateDir = Join-Path $buildDir 'candidate'
@@ -139,6 +144,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Cloud volume generator compilation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Terrain bounds hierarchy compilation failed.' }
 & $fxc /nologo /T ps_5_0 /E CloudCompositePS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $cloudCompositeBytecode (Join-Path $sourceDir 'cloud_post.hlsl')
 if ($LASTEXITCODE -ne 0) { throw 'Cloud composite shader compilation failed.' }
+if (200 -in $neuralModels.ResourceId) {
+    & $fxc /nologo /T cs_5_0 /E NeuralAvatarCS /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv /Fo $neuralAvatarBytecode (Join-Path $sourceDir 'neural_avatar.hlsl')
+    if ($LASTEXITCODE -ne 0) { throw 'Pretrained neural avatar compute shader compilation failed.' }
+}
 
 Write-Host 'Embedding compact procedural DXBC shaders...'
 Push-Location $sourceDir
@@ -154,16 +163,32 @@ Write-Host 'Assembling the no-CRT x64 host and procedural instrument synthesizer
 & $ml64 /nologo /c "/I$sourceDir" "/Fo$object" (Join-Path $sourceDir 'alpine.asm')
 if ($LASTEXITCODE -ne 0) { throw 'MASM compilation failed.' }
 
+# Explicit native inference helpers only. The shipped host remains MASM; these
+# kernels must not pull in a CRT, Python, an ML framework, or a dependent DLL.
+$inferenceObjects = @()
+$includes = @("/I$($toolset.FullName)\include", "/I$sourceDir")
+foreach ($part in @('ucrt','shared','um','winrt')) { $includes += "/I$sdkRoot\Include\$sdkVersion\$part" }
+foreach ($name in @('neural_avatar_runtime', 'neural_audio')) {
+    $nativeSource = Join-Path $sourceDir "$name.cpp"
+    if (Test-Path -LiteralPath $nativeSource) {
+        if (-not (Test-Path -LiteralPath $cl)) { throw 'C++ compiler is required for native inference helpers.' }
+        $nativeObject = Join-Path $buildDir "$name.obj"
+        & $cl /nologo /c /std:c++17 /O2 /Oi /GS- /GR- /EHs-c- /Zl /utf-8 @includes "/Fo$nativeObject" $nativeSource
+        if ($LASTEXITCODE -ne 0) { throw "Native inference helper compilation failed: $name" }
+        $inferenceObjects += $nativeObject
+    }
+}
+
 Write-Host 'Linking compact Windows PE...'
 & $link /nologo /machine:x64 /subsystem:windows /entry:start /nodefaultlib /incremental:no `
     /opt:ref /opt:icf /dynamicbase /nxcompat /largeaddressaware:no /manifest:no /filealign:512 `
-    "/libpath:$sdkLib" "/out:$executable" $object $resource `
+    "/libpath:$sdkLib" "/out:$executable" $object $resource @inferenceObjects `
     kernel32.lib user32.lib d3d11.lib winmm.lib
 if ($LASTEXITCODE -ne 0) { throw 'Linking failed.' }
 
 $verification = & (Join-Path $projectRoot 'tools\verify.ps1') -Executable $executable
 $file = Get-Item -LiteralPath $executable
-$limit = 88000000
+$limit = 400000000
 $hash = $verification.SHA256
 $percent = [math]::Round(100.0 * $file.Length / $limit, 2)
 
@@ -180,9 +205,11 @@ if (Test-Path -LiteralPath $published) {
 
 Write-Host ''
 Write-Host "Built:  $published"
-Write-Host "Size:   $($file.Length) bytes ($percent% of the strict 88,000,000-byte limit)"
+Write-Host "Size:   $($file.Length) bytes ($percent% of the strict 400,000,000-byte limit)"
+Write-Host "Models: $($neuralModels.Count) embedded neural weight packages"
 Write-Host "SHA256: $hash"
 
 if (-not $KeepIntermediates) {
-    Remove-Item -LiteralPath $vsBytecode, $psBytecode, $humanBytecode, $temporalBytecode, $displayBytecode, $meshVSBytecode, $meshPSBytecode, $shadowVSBytecode, $shadowPSBytecode, $cameraBytecode, $instancesBytecode, $terrainBytecode, $flightBytecode, $waterBytecode, $materialBytecode, $atmosphereBytecode, $cloudBytecode, $boundsBytecode, $cloudCompositeBytecode, $resource, $object -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $vsBytecode, $psBytecode, $humanBytecode, $temporalBytecode, $displayBytecode, $meshVSBytecode, $meshPSBytecode, $shadowVSBytecode, $shadowPSBytecode, $cameraBytecode, $instancesBytecode, $terrainBytecode, $flightBytecode, $waterBytecode, $materialBytecode, $atmosphereBytecode, $cloudBytecode, $boundsBytecode, $cloudCompositeBytecode, $neuralAvatarBytecode, $resource, $object -Force -ErrorAction SilentlyContinue
+    foreach ($nativeObject in $inferenceObjects) { Remove-Item -LiteralPath $nativeObject -Force -ErrorAction SilentlyContinue }
 }

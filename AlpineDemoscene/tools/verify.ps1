@@ -1,8 +1,21 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$Executable)
+param(
+    [Parameter(Mandatory)][string]$Executable,
+    [string]$ModelManifest,
+    [switch]$AsJson
+)
 $ErrorActionPreference = 'Stop'
 $file = Get-Item -LiteralPath $Executable
-if ($file.Length -ge 88000000) { throw "EXE is $($file.Length) bytes; limit is strictly below 88,000,000 bytes." }
+if ($file.Length -ge 400000000) { throw "EXE is $($file.Length) bytes; limit is strictly below 400,000,000 bytes." }
+$projectRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'model_manifest.ps1')
+$manifestArguments = @{ProjectRoot=$projectRoot}
+if ($ModelManifest) { $manifestArguments.ManifestPath = $ModelManifest }
+$models = @(Get-NeuralResourceManifest @manifestArguments)
+$modelMap = @{}
+foreach ($model in $models) { $modelMap[$model.ResourceId] = $model }
+$shaderIds = @(101..119)
+if ($modelMap.ContainsKey(200)) { $shaderIds += 120 }
 $bytes = [IO.File]::ReadAllBytes($file.FullName)
 function U16([int]$p) { [BitConverter]::ToUInt16($bytes, $p) }
 function U32([int]$p) { [BitConverter]::ToUInt32($bytes, $p) }
@@ -47,6 +60,7 @@ $resourceRva = U32 ($optional+128)
 if ($resourceRva -eq 0) { throw 'Missing shader resources.' }
 $resourceBase = Rva $resourceRva
 $script:found = @()
+$script:foundModels = @()
 function WalkResources([int]$relative, [int[]]$keys) {
     $directory = $resourceBase + $relative
     $named = U16 ($directory+12)
@@ -61,11 +75,24 @@ function WalkResources([int]$relative, [int[]]$keys) {
             if ($path.Count -gt 2) { throw 'Unexpected resource directory depth.' }
             WalkResources ([int]($target -band 0x7FFFFFFF)) $path
         } else {
-            if ($path.Count -ne 3 -or $path[0] -ne 10 -or $path[1] -notin @(101..119)) { throw "Unexpected resource: $($path -join '/')." }
+            if ($path.Count -ne 3 -or $path[0] -ne 10 -or ($path[1] -notin $shaderIds -and -not $modelMap.ContainsKey($path[1]))) { throw "Unexpected resource: $($path -join '/')." }
             $dataEntry = $resourceBase + $target
             $data = Rva (U32 $dataEntry)
             $length = U32 ($dataEntry+4)
             if ([uint64]$data + $length -gt $bytes.Length) { throw 'Resource extends beyond executable.' }
+            if ($modelMap.ContainsKey($path[1])) {
+                $model = $modelMap[$path[1]]
+                if ($length -ne $model.Bytes) { throw "Model $($path[1]) embedded byte length mismatch." }
+                for ($m = 0; $m -lt $model.Magic.Length; $m++) {
+                    if ($bytes[$data+$m] -ne $model.Magic[$m]) { throw "Model $($path[1]) embedded header mismatch." }
+                }
+                $hasher = [Security.Cryptography.SHA256]::Create()
+                try { $hash = [BitConverter]::ToString($hasher.ComputeHash($bytes, $data, $length)).Replace('-', '') }
+                finally { $hasher.Dispose() }
+                if ($hash -ne $model.SHA256) { throw "Model $($path[1]) embedded SHA-256 mismatch." }
+                $script:foundModels += $path[1]
+                continue
+            }
             if ($length -lt 32 -or [Text.Encoding]::ASCII.GetString($bytes,$data,4) -ne 'DXBC') { throw "Resource $($path[1]) is not DXBC bytecode." }
             if ((U32 ($data+24)) -ne $length) { throw "DXBC size mismatch in resource $($path[1])." }
             # A valid DXBC container must hold the expected shader stage, not
@@ -82,7 +109,7 @@ function WalkResources([int]$relative, [int[]]$keys) {
                 if ($tag -in @('SHDR','SHEX')) {
                     if ($chunkLength -lt 8) { throw 'Invalid shader program chunk.' }
                     $version=U32 ($data+$offset+8)
-                    $expected=if($path[1] -in @(101,106,108)){1}elseif($path[1] -in @(110,111,112,113,114,115,116,117,118)){5}else{0}
+                    $expected=if($path[1] -in @(101,106,108)){1}elseif($path[1] -in @(110,111,112,113,114,115,116,117,118,120)){5}else{0}
                     if (($version -shr 16) -ne $expected -or (($version -shr 4) -band 15) -ne 5 -or ($version -band 15) -ne 0) {
                         throw "Resource $($path[1]) does not contain its expected Shader Model 5.0 stage."
                     }
@@ -95,5 +122,11 @@ function WalkResources([int]$relative, [int[]]$keys) {
     }
 }
 WalkResources 0 @()
-if (($found | Sort-Object) -join ',' -ne '101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119') { throw "Expected exactly nineteen shader resources; found $($found -join ',')." }
-[pscustomobject]@{ Path=$file.FullName; Bytes=$file.Length; SHA256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash; ShaderResources=($found -join ','); Imports=($imports -join ',') }
+if ((($found | Sort-Object) -join ',') -ne (($shaderIds | Sort-Object) -join ',')) { throw "Expected shader resources $($shaderIds -join ','); found $($found -join ',')." }
+$actualModels = ($foundModels | Sort-Object) -join ','
+$expectedModels = ($models.ResourceId | Sort-Object) -join ','
+if ($actualModels -ne $expectedModels) {
+    throw "Expected exactly the manifest's neural resources; found $($foundModels -join ',')."
+}
+$result = [pscustomobject]@{ Path=$file.FullName; Bytes=$file.Length; LimitBytesExclusive=400000000; SHA256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash; ShaderResources=($found -join ','); ModelResources=($foundModels -join ','); Imports=($imports -join ',') }
+if ($AsJson) { $result | ConvertTo-Json -Depth 4 } else { $result }

@@ -1,0 +1,1130 @@
+{
+  "schema": 1,
+  "name": "MIDI-DDSP URMP controlled timbre decoder",
+  "source_repository": "https://github.com/magenta/midi-ddsp",
+  "checkpoint_url": "https://raw.githubusercontent.com/magenta/midi-ddsp/models/midi_ddsp_model_weights_urmp_9_10.zip",
+  "checkpoint_archive_sha256": "46bae44c16c3399c24f8f0ba2557fc0432bc12aa23088606d465b22fec2cd05e",
+  "checkpoint_data_sha256": "781cf09aebfb28c176b566c5290d953814759b7bc63f417df6bba0c2619991cd",
+  "checkpoint_index_sha256": "d1529b405eac9a9d365edb6451a946f8e943d2bcffbeda45da4ece9ea25506e4",
+  "training_data": "URMP recordings of real acoustic instrument performances",
+  "runtime_inputs": [
+    "authored MIDI pitch",
+    "six authored expression controls",
+    "onset",
+    "offset",
+    "relative note position",
+    "instrument ID"
+  ],
+  "selected_instrument_ids": {
+    "violin": 0,
+    "double_bass": 3,
+    "trumpet": 9
+  },
+  "precision": "float32 unchanged trained values",
+  "sample_rate_hz": 16000,
+  "control_rate_hz": 250,
+  "excluded": [
+    "audio analysis encoder",
+    "autoregressive f0 predictor",
+    "expression generator",
+    "recorded audio",
+    "trained reverb"
+  ],
+  "limitations": [
+    "Not the complete MIDI-DDSP pipeline",
+    "16 kHz source synthesis; resampling cannot restore absent bandwidth",
+    "No claim of perceptual indistinguishability"
+  ],
+  "file": "models/audio/midi_ddsp_timbre.nad",
+  "bytes": 9395768,
+  "sha256": "807425787be973d97639d11010f9f84d0022a822fc66af35e420bc70cc0d4f92",
+  "float_count": 2348926,
+  "tensors": [
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-0/layer_with_weights-0/kernel",
+      "shape": [
+        10,
+        512
+      ],
+      "offset": 64,
+      "bytes": 20480
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-0/layer_with_weights-0/bias",
+      "shape": [
+        512
+      ],
+      "offset": 20544,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-0/layer_with_weights-1/gamma",
+      "shape": [
+        512
+      ],
+      "offset": 22592,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-0/layer_with_weights-1/beta",
+      "shape": [
+        512
+      ],
+      "offset": 24640,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-1/layer_with_weights-0/kernel",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 26688,
+      "bytes": 1048576
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-1/layer_with_weights-0/bias",
+      "shape": [
+        512
+      ],
+      "offset": 1075264,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-1/layer_with_weights-1/gamma",
+      "shape": [
+        512
+      ],
+      "offset": 1077312,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-1/layer_with_weights-1/beta",
+      "shape": [
+        512
+      ],
+      "offset": 1079360,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-2/layer_with_weights-0/kernel",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 1081408,
+      "bytes": 1048576
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-2/layer_with_weights-0/bias",
+      "shape": [
+        512
+      ],
+      "offset": 2129984,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-2/layer_with_weights-1/gamma",
+      "shape": [
+        512
+      ],
+      "offset": 2132032,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-2/layer_with_weights-1/beta",
+      "shape": [
+        512
+      ],
+      "offset": 2134080,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-3/layer_with_weights-0/kernel",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 2136128,
+      "bytes": 1048576
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-3/layer_with_weights-0/bias",
+      "shape": [
+        512
+      ],
+      "offset": 3184704,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-3/layer_with_weights-1/gamma",
+      "shape": [
+        512
+      ],
+      "offset": 3186752,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-3/layer_with_weights-1/beta",
+      "shape": [
+        512
+      ],
+      "offset": 3188800,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-4/layer_with_weights-0/kernel",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 3190848,
+      "bytes": 1048576
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-4/layer_with_weights-0/bias",
+      "shape": [
+        512
+      ],
+      "offset": 4239424,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-4/layer_with_weights-1/gamma",
+      "shape": [
+        512
+      ],
+      "offset": 4241472,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/stack/layer_with_weights-4/layer_with_weights-1/beta",
+      "shape": [
+        512
+      ],
+      "offset": 4243520,
+      "bytes": 2048
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/dense_out/kernel",
+      "shape": [
+        512,
+        256
+      ],
+      "offset": 4245568,
+      "bytes": 524288
+    },
+    {
+      "name": "midi_decoder/z_preconditioning_stack/dense_out/bias",
+      "shape": [
+        256
+      ],
+      "offset": 4769856,
+      "bytes": 1024
+    },
+    {
+      "name": "midi_decoder/instrument_emb/embeddings",
+      "shape": [
+        20,
+        64
+      ],
+      "offset": 4770880,
+      "bytes": 5120
+    },
+    {
+      "name": "midi_decoder/decoder/q_pitch_emb/kernel",
+      "shape": [
+        1,
+        64
+      ],
+      "offset": 4776000,
+      "bytes": 256
+    },
+    {
+      "name": "midi_decoder/decoder/q_pitch_emb/bias",
+      "shape": [
+        64
+      ],
+      "offset": 4776256,
+      "bytes": 256
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/conv_in/kernel",
+      "shape": [
+        3,
+        1,
+        384,
+        128
+      ],
+      "offset": 4776512,
+      "bytes": 589824
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/conv_in/bias",
+      "shape": [
+        128
+      ],
+      "offset": 5366336,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/0/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 5366848,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/0/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 5563456,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/0/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 5563968,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/0/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 5564480,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/1/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 5564992,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/1/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 5761600,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/1/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 5762112,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/1/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 5762624,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/2/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 5763136,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/2/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 5959744,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/2/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 5960256,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/2/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 5960768,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/3/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 5961280,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/3/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 6157888,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/3/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 6158400,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/3/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 6158912,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/4/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 6159424,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/4/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 6356032,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/4/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 6356544,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/4/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 6357056,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/5/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 6357568,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/5/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 6554176,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/5/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 6554688,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/5/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 6555200,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/6/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 6555712,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/6/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 6752320,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/6/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 6752832,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/6/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 6753344,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/7/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 6753856,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/7/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 6950464,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/7/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 6950976,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/7/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 6951488,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/8/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 6952000,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/8/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 7148608,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/8/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 7149120,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/8/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 7149632,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/9/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 7150144,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/9/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 7346752,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/9/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 7347264,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/9/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 7347776,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/10/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 7348288,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/10/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 7544896,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/10/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 7545408,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/10/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 7545920,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/11/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 7546432,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/11/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 7743040,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/11/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 7743552,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/11/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 7744064,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/12/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 7744576,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/12/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 7941184,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/12/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 7941696,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/12/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 7942208,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/13/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 7942720,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/13/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 8139328,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/13/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 8139840,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/13/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 8140352,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/14/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 8140864,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/14/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 8337472,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/14/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 8337984,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/14/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 8338496,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/15/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 8339008,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/15/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 8535616,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/15/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 8536128,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/15/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 8536640,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/16/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 8537152,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/16/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 8733760,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/16/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 8734272,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/16/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 8734784,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/17/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 8735296,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/17/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 8931904,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/17/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 8932416,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/17/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 8932928,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/18/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 8933440,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/18/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 9130048,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/18/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 9130560,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/18/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 9131072,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/19/layer_with_weights-0/kernel",
+      "shape": [
+        3,
+        1,
+        128,
+        128
+      ],
+      "offset": 9131584,
+      "bytes": 196608
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/layers/19/layer_with_weights-0/bias",
+      "shape": [
+        128
+      ],
+      "offset": 9328192,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/19/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 9328704,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/net/norms/19/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 9329216,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/norm/scale",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 9329728,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/norm/shift",
+      "shape": [
+        1,
+        1,
+        1,
+        128
+      ],
+      "offset": 9330240,
+      "bytes": 512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/dense_out/kernel",
+      "shape": [
+        128,
+        126
+      ],
+      "offset": 9330752,
+      "bytes": 64512
+    },
+    {
+      "name": "midi_decoder/decoder/midi_f0_to_harmonic/dense_out/bias",
+      "shape": [
+        126
+      ],
+      "offset": 9395264,
+      "bytes": 504
+    }
+  ]
+}

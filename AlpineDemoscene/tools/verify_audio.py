@@ -16,7 +16,7 @@ def read(path):
         return np.frombuffer(f.readframes(f.getnframes()),'<i2').reshape(-1,f.getnchannels()).astype(np.float64)/32768
 
 def db(value):return float(20*np.log10(max(float(value),1e-15)))
-report={'quality_claim':'Modal instrument approximation; listening realism is not established by these numerical checks.','files':{}}
+report={'quality_claim':'URMP-trained MIDI-DDSP timbre decoder with authored pitch and expression; perceptual indistinguishability is not established by these numerical checks.','files':{}}
 errors=[]
 for name in ['orchestral_house_full.wav','violin_C4.wav','double_bass_A1.wav','trumpet_A4.wav']:
     path=args.directory/name

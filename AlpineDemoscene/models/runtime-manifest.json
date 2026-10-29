@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "models": [
+    {
+      "resource_id": 200,
+      "path": "models/avatar/gdna-thuman.nav",
+      "bytes": 8695856,
+      "sha256": "cbda91973caba80d1adfdcf64b6cdd9e47c08d5542a7cffc182300b28fb5dd92",
+      "magic_hex": "4e41563101000000"
+    },
+    {
+      "resource_id": 201,
+      "path": "models/audio/midi_ddsp_timbre.nad",
+      "bytes": 9395768,
+      "sha256": "807425787be973d97639d11010f9f84d0022a822fc66af35e420bc70cc0d4f92",
+      "magic_hex": "4e41443101000000"
+    },
+    {
+      "resource_id": 202,
+      "path": "models/head/ganhead-faceverse.nah",
+      "bytes": 12330948,
+      "sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
+      "magic_hex": "4e41483101000000"
+    }
+  ]
+}

@@ -1,0 +1,193 @@
+{
+  "seed": 42,
+  "model_sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
+  "model_bytes": 12330948,
+  "gpu_dir": "build/neural_head_probe42",
+  "gpu_dump_sha256": {
+    "latent": "fd8f880f380575e1fbd1f8cf3232037bc167d2b67ec7c28d81e8a866f1ff10fc",
+    "feature": "5f2acfccef277254aa8a7aae8ecbd35b8bb0732141570602fd9bd668ea259fc0",
+    "field": "3c8f4d98aa0cb20e8f84c2b76aeb0e838c1301d09f21f51ffe6c0beb09be7b2a",
+    "positions": "e7c551745dd07b5612e40b364488fcef100b9060c7ed1652f96166164679b4e4",
+    "attributes": "02b871454574b431c0e245e12b55d4dfcdb7f5faa9b11d6bffce370fa5ac4e48",
+    "motion": "64ad1c015763e2ddaa741d6ad6bc85049b78d44bd8a727c9d4aa3098cccf28c8"
+  },
+  "gpu_metrics_sha256": "bac2c6f6563aca755d168c9d0e3204106b42122ee60c84aafacf454cc4789fce",
+  "gpu_metrics": {
+    "model": "GANHead FaceVerse",
+    "model_resource_id": 202,
+    "model_bytes": 12330948,
+    "model_sha256": "0817585c579fbc8bf00630b42ea9fe0303e25591dfe9179cb6f75a2b9d7ceeee",
+    "candidate_sha256": "",
+    "source_kind": "development_files",
+    "inference_executed": true,
+    "seed": 42,
+    "vertex_count": 400056,
+    "vertex_stride_bytes": 144,
+    "status": 1,
+    "startup_wall_seconds": 226.506,
+    "helper_seconds": 226.502,
+    "feature_ms": 13547,
+    "field_ms": 107969,
+    "geometry_fnv1a64": "8f32735a157081c6",
+    "invalid_values": 0,
+    "invalid_joint_ids": 0,
+    "max_weight_sum_error": 2.16649e-07,
+    "normal_length_min": 1,
+    "normal_length_max": 1,
+    "active_joint_count": 5,
+    "joint_influence_counts": [
+      399959,
+      400056,
+      400056,
+      12943,
+      387210
+    ],
+    "bounds_min": [
+      -0.161348,
+      0,
+      -0.136008
+    ],
+    "bounds_max": [
+      0.164452,
+      0.33,
+      0.114503
+    ],
+    "invalid_color_values": 0,
+    "invalid_morph_values": 0,
+    "max_abs_morph_delta": 0.00329753,
+    "motion_frames": 1825,
+    "motion_duration_seconds": 128,
+    "invalid_motion_values": 0,
+    "motion_max_difference_from_first": 2.49728
+  },
+  "latent_max_abs_error": 0.0,
+  "feature_max_abs_error": 0.000148773193359375,
+  "occupancy_max_abs_error": 0.00023651123046875,
+  "normal_max_abs_error": 7.659196853637695e-05,
+  "color_max_abs_error": 2.2530555725097656e-05,
+  "joint_ids_equal": true,
+  "weights_max_abs_error": 7.152557373046875e-07,
+  "morph_max_abs_error": 6.51925802230835e-09,
+  "motion_max_abs_error": 0.0,
+  "passed": true,
+  "schema": 1,
+  "validation_scope": "Independent NumPy versus actual D3D11 compute output; numerical graph correctness for one seed, not a perceptual realism claim",
+  "reference_report": "build/neural_head_reference/report-42.json",
+  "reference_report_sha256": "e985a5b8d9b8beaf5cd0aeb605d35501bcdd271aa218d249608bef40269e3e85",
+  "model_path": "models/head/ganhead-faceverse.nah",
+  "model_metadata_sha256": "21e0d13b54cbc4a97f83b03e2f4a621ba335680bacb8f9701d39e9240d546761",
+  "source_sha256": {
+    "src/neural_avatar_runtime.cpp": "6ac5965a54fd976404ec5a4f563c550d0a6fb6e0e6d2a251172c7c5c79759def",
+    "src/neural_avatar_runtime.h": "52055736d6ac267a750c12c01f2a0831037db0a6e87540da3a89d3124b4f1456",
+    "src/neural_avatar.hlsl": "31a9a7cfec71d4030eda820a34006b20784722a7b421a45eeb3c1bfedfe05901",
+    "src/neural_mesh_cleanup.h": "42b32e7f92cd91f0818ee0dc2ee43a7b3ee460b1af7c563c690df3444c777478",
+    "tools/neural_avatar_export.py": "12b9a35a8c59f1be88f90e2e957e3587e8190c167856deae3dedac9cf120e368",
+    "tools/neural_avatar_reference.py": "6edae3d00c0b46f572d4cecfb53cf8281f9d6cfde902cdbfc45aaf164fbf0f9a",
+    "tools/neural_avatar_validation_report.py": "26e69c4cb245736b279c0b448516af8f4ba085cb3a0ad0d79c24e24c7f8c7281",
+    "tools/neural_head_export.py": "5399aa3e78b9adb6c8b6f4557e7279855fd5b2341a619016d6a5d8bdb0b68de9",
+    "tools/neural_head_reference.py": "7f153bf04a72785aa538a8acb9581ec3231f34683f43f8a62a7f79b8a3e848a2"
+  },
+  "provenance": {
+    "schema": 1,
+    "model": "GANHead FaceVerse pretrained stage2 (CVPR2023)",
+    "source_repository": "https://github.com/wsj-sjtu/GANHead",
+    "source_repository_commit": "76c98ce18f940caf6aec4cf620df8f8d2bc788b6",
+    "source_checkpoint_url": "https://drive.google.com/file/d/1ztHGU9GdCoMkAlQB7ynoztIFewVaILlQ/view",
+    "source_checkpoint_member": "model_and_data/stage2_model/checkpoints/last.ckpt",
+    "source_checkpoint_sha256": "03ef6010ee1b2a81d64c0728d32b578eb1170a05aabc672a4b2f60a5d10e86ce",
+    "source_checkpoint_bytes": 82158734,
+    "training_data": "FaceVerse textured scans of real people",
+    "license_status": "No explicit code/weights license found in the public repository or model archive; local research evaluation only; redistribution rights not established",
+    "export": "Learned inference tensors only; no FLAME template vertices, faces, regressors or landmark tables; no photographs, scans or training-example latent tables",
+    "runtime_input": "Seed-derived shape256/detail128/color256 latent codes and 3D coordinates; canonical appearance uses zero pose controls; four captured-expression PCA curves deform the generated surface each frame",
+    "limitations": [
+      "Cinematic photorealism is not established by numerical graph validation",
+      "Surface color is learned RGB, not independently verified relightable PBR albedo",
+      "Four expression modes retain 86.2354% of source variation; canonical normals are not corrected per expression",
+      "Accurate jaw/eye transforms and physical facial tissues are not implemented"
+    ],
+    "resource_id": 202,
+    "motion": {
+      "source": "IMavatar yufeng_1812 fitted sequence distributed with GANHead",
+      "source_numeric_array_sha256": "80a048a1abc7340612e84691e358cc8723d1c9091234e0623713a06c78254a76",
+      "frames": 1825,
+      "pca_modes": 4,
+      "retained_expression_variance": 0.8623538613319397,
+      "endpoint_blend_frames": 24,
+      "playback_seconds": 128,
+      "interpretation": "Centered captured expression variations projected onto four PCA modes; source identity-fitting mean omitted; no invented semantic meaning assigned to PCA modes",
+      "jaw": "relative axis-angle stored separately; not included in expression PCA"
+    }
+  },
+  "comparison_sample_counts": {
+    "latent_scalars": 640,
+    "feature_scalars": 4194304,
+    "occupancy_coordinates": 1024,
+    "surface_attribute_coordinates": 1024,
+    "motion_scalars": 14600
+  },
+  "geometry_pipeline": {
+    "runtime_input": "Seed and generated 3D coordinates; embedded learned network parameters",
+    "occupancy_grid_xyz": [
+      81,
+      97,
+      81
+    ],
+    "surface_extraction": "Marching tetrahedra with shared edge vertices",
+    "component_filter": "Largest connected component by vertex count, before bounds normalization and surface-attribute inference",
+    "normalization": "Uniform scale to 0.33 metres high; minimum Y translated to zero; X/Z origin retained",
+    "up_axis": "+Y",
+    "face_forward_axis": "+Z",
+    "runtime_images_or_source_meshes": false,
+    "generation_occurs_at_startup": true,
+    "network_evaluated_every_animation_frame": false
+  },
+  "quality": {
+    "photographic_indistinguishability_established": false,
+    "physical_face_or_muscle_simulation": false,
+    "independent_held_out_seed_validation": false
+  },
+  "integration_limits": [
+    "Largest-component filtering can remove real disconnected parts as well as generated floaters.",
+    "Uniform bounds normalization is not a fitted skeletal registration.",
+    "Numerical correctness does not establish anatomical realism or artifact-free pose deformation.",
+    "Learned RGB may contain photographic illumination; it is not verified relightable PBR albedo.",
+    "Four learned expression directions retain a limited subspace; jaw/eye bone transforms are not applied and canonical normals are unchanged during expressions.",
+    "Head is attached at body-local Y=1.42m, body clipped above Y=1.44m; this is an authored seam rather than learned body/head correspondence.",
+    "Five predicted head skin weights are verified but renderer follows the body's head bone as a whole."
+  ],
+  "morphology": {
+    "measured_unique_vertices": 66672,
+    "measured_control_frames": 1825,
+    "expression_modes": 4,
+    "control_duration_seconds": 128.0,
+    "control_keyframes_per_second": 14.2578125,
+    "control_format": "Two float4 records per frame: four expression coefficients; relative jaw axis-angle XYZ plus padding",
+    "packed_control_bytes": 58400,
+    "expression_control_bytes": 29200,
+    "interpolation": "Linear in the vertex shader; whole loop duration is authored, not a claim about source capture frame rate",
+    "coefficient_minimum": [
+      -2.2528722286224365,
+      -1.7639292478561401,
+      -0.9583161473274231,
+      -1.5494121313095093
+    ],
+    "coefficient_maximum": [
+      2.351773977279663,
+      1.477323293685913,
+      1.4981287717819214,
+      1.5709539651870728
+    ],
+    "endpoint_maximum_difference": 0.0,
+    "normalization_scale_metres_per_model_unit": 0.18184983730316162,
+    "maximum_expression_displacement_metres": 0.012339049950242043,
+    "maximum_absolute_expression_displacement_xyz_metres": [
+      0.006773193366825581,
+      0.006607163697481155,
+      0.008678753860294819
+    ],
+    "measurement_scope": "All stored coefficients times every generated vertex's learned four displacement directions, before global head articulation",
+    "jaw_controls_applied_by_renderer": false,
+    "expression_normals_recomputed_by_renderer": false
+  }
+}

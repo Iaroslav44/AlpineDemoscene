@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "model_sha256": "807425787be973d97639d11010f9f84d0022a822fc66af35e420bc70cc0d4f92",
+  "source_sha256": {
+    "src/neural_audio.cpp": "0dd50a15b9d12f3996645f89f9aea39ef6d073c28838177be0c57e5a61250517",
+    "src/neural_audio.h": "c2b9497b0327b246b3623f3e1630de68b7ad0e64db3a07f411cee207d69d3130",
+    "tools/neural_audio_checkpoint.py": "40d9c1bd697a2b658e50d366e91a58df01eaf216f8f99a1a4f12c7a9ce8c5d85",
+    "tools/neural_audio_export.py": "0846182063e38126d1049dc66fca119668035fd9e0b72bc03810fc43ee9f75dd",
+    "tools/neural_audio_validate.py": "f723a850a5a5255ca412d8c7a353798bca37d3c4fc7cea9c735e99c85a54e800"
+  },
+  "checkpoint_data_sha256": "781cf09aebfb28c176b566c5290d953814759b7bc63f417df6bba0c2619991cd",
+  "checkpoint_archive_sha256": "46bae44c16c3399c24f8f0ba2557fc0432bc12aa23088606d465b22fec2cd05e",
+  "model_bytes": 9395768,
+  "trained_parameter_count": 2348926,
+  "reference": "Independent NumPy graph using original TensorFlow checkpoint tensors, not the exported blob",
+  "raw_max_absolute_error": 6.4373016357421875e-06,
+  "raw_rms_error": 1.0144435691472609e-06,
+  "instrument_control_rms_distance": 0.4578922390937805,
+  "instruments": [
+    {
+      "name": "violin_C4",
+      "midi": 60,
+      "frames": 198450,
+      "peak": 0.8199999928474426,
+      "rms": 0.36465877294540405,
+      "fundamental_hz": 261.66666666666663,
+      "pitch_error_cents": 0.2719554398080802,
+      "fraction_energy_above8khz": 2.1495606144832443e-09
+    },
+    {
+      "name": "double_bass_A1",
+      "midi": 33,
+      "frames": 198450,
+      "peak": 0.8199999928474426,
+      "rms": 0.18148398399353027,
+      "fundamental_hz": 55.0,
+      "pitch_error_cents": 0.0,
+      "fraction_energy_above8khz": 2.3047239293834243e-10
+    },
+    {
+      "name": "trumpet_A4",
+      "midi": 69,
+      "frames": 198450,
+      "peak": 0.8199999928474426,
+      "rms": 0.25368601083755493,
+      "fundamental_hz": 440.0,
+      "pitch_error_cents": 0.0,
+      "fraction_energy_above8khz": 2.476371791095962e-08
+    }
+  ],
+  "perceptual_indistinguishability_verified": false,
+  "source_sample_rate_hz": 16000,
+  "output_sample_rate_hz": 44100,
+  "runtime_dependencies": [
+    "Windows kernel32",
+    "SSE2 CPU"
+  ],
+  "timing_and_input_checks": {
+    "sample_duration_seconds": 4.5,
+    "sample_generation_seconds": [
+      0.408105,
+      0.623409,
+      0.441722
+    ],
+    "truncated_model_rejected": true,
+    "invalid_magic_rejected": true,
+    "cancellation_callbacks_before_abort": 3
+  },
+  "temporary_memory_upper_bound_bytes": 14500000,
+  "notes": [
+    "Authored pitch and expression; trained timbre subnetwork only",
+    "Output resampling does not extend source bandwidth",
+    "Double-bass timbre derives from URMP, not a separately verified pizzicato model"
+  ]
+}

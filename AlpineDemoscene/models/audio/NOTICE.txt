@@ -1,0 +1,28 @@
+MIDI-DDSP URMP controlled timbre decoder
+
+Upstream: https://github.com/magenta/midi-ddsp
+Paper: https://openreview.net/forum?id=UseMOjWENv
+Copyright 2022 The MIDI-DDSP Authors.
+Architecture and trained tensors are adapted from the official Apache-2.0
+repository. The accompanying LICENSE-MIDI-DDSP.txt retains the license.
+
+The shipped NAD1 resource contains 2,348,926 unchanged float32 learned
+parameters selected from the published URMP checkpoint. They run at startup
+to predict harmonic and noise spectra. No recorded waveform is embedded.
+The networks were trained on recordings of real acoustic performances.
+
+This integration uses authored pitch, vibrato and note-expression controls;
+it does not execute the original autoregressive pitch/expression generators.
+Source synthesis runs at 16,000 Hz, followed by bandlimited resampling to
+44,100 Hz. It cannot reconstruct missing high-frequency content. The
+double-bass output is not claimed to be a separately trained pizzicato voice.
+Perceptual indistinguishability from orchestral recordings is unverified.
+
+Reproduce with Python + NumPy (developer tools only):
+  python tools/neural_audio_fetch.py
+  python tools/neural_audio_export.py
+  powershell -File tools/neural_audio_build_probe.ps1
+  python tools/neural_audio_validate.py
+
+Full source hashes, tensor names/shapes and byte offsets: provenance.json.
+Native independent-reference validation: validation/neural-audio.json.

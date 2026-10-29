@@ -1,0 +1,587 @@
+{
+  "schema": 1,
+  "model": "gDNA THuman2.0 pretrained (CVPR 2022)",
+  "source_repository": "https://github.com/xuchen-ethz/gdna",
+  "source_checkpoint_url": "https://dataset.ait.ethz.ch/downloads/gdna/trained_models.zip",
+  "source_checkpoint_member": "outputs/thuman/checkpoints/last.ckpt",
+  "source_checkpoint_sha256": "23386f2ff110a305e9fe78a7003b9252307c2a75103413f83d74156c05c0d3a4",
+  "training_data": "THuman2.0 scans of real clothed people",
+  "code_license": "MIT; model/data/SMPL conditions are separate",
+  "export": "Only inference neural tensors; weight_norm folded; no SMPL templates, training examples, discriminator or optimiser",
+  "runtime_input": "64D sampled shape/detail latent codes and 3D query positions; no input photograph",
+  "limitations": [
+    "No learned albedo/PBR material generator",
+    "Not photorealistic face generation",
+    "Canonical-shape mode does not implement full SMPL body deformation"
+  ],
+  "resource_id": 200,
+  "path": "models/avatar/gdna-thuman.nav",
+  "bytes": 8695856,
+  "sha256": "cbda91973caba80d1adfdcf64b6cdd9e47c08d5542a7cffc182300b28fb5dd92",
+  "magic_hex": "4e415631",
+  "tensors": [
+    {
+      "name": "network.lin0.bias",
+      "shape": [
+        256
+      ],
+      "offset": 8336,
+      "bytes": 1024
+    },
+    {
+      "name": "network.lin0.weight",
+      "shape": [
+        256,
+        91
+      ],
+      "offset": 9360,
+      "bytes": 93184
+    },
+    {
+      "name": "network.lin1.bias",
+      "shape": [
+        256
+      ],
+      "offset": 102544,
+      "bytes": 1024
+    },
+    {
+      "name": "network.lin1.weight",
+      "shape": [
+        256,
+        256
+      ],
+      "offset": 103568,
+      "bytes": 262144
+    },
+    {
+      "name": "network.lin2.bias",
+      "shape": [
+        256
+      ],
+      "offset": 365712,
+      "bytes": 1024
+    },
+    {
+      "name": "network.lin2.weight",
+      "shape": [
+        256,
+        256
+      ],
+      "offset": 366736,
+      "bytes": 262144
+    },
+    {
+      "name": "network.lin3.bias",
+      "shape": [
+        229
+      ],
+      "offset": 628880,
+      "bytes": 916
+    },
+    {
+      "name": "network.lin3.weight",
+      "shape": [
+        229,
+        256
+      ],
+      "offset": 629808,
+      "bytes": 234496
+    },
+    {
+      "name": "network.lin4.bias",
+      "shape": [
+        1
+      ],
+      "offset": 864304,
+      "bytes": 4
+    },
+    {
+      "name": "network.lin4.weight",
+      "shape": [
+        1,
+        256
+      ],
+      "offset": 864320,
+      "bytes": 1024
+    },
+    {
+      "name": "deformer.lbs_network.lin0.bias",
+      "shape": [
+        128
+      ],
+      "offset": 865344,
+      "bytes": 512
+    },
+    {
+      "name": "deformer.lbs_network.lin0.weight",
+      "shape": [
+        128,
+        67
+      ],
+      "offset": 865856,
+      "bytes": 34304
+    },
+    {
+      "name": "deformer.lbs_network.lin1.bias",
+      "shape": [
+        128
+      ],
+      "offset": 900160,
+      "bytes": 512
+    },
+    {
+      "name": "deformer.lbs_network.lin1.weight",
+      "shape": [
+        128,
+        128
+      ],
+      "offset": 900672,
+      "bytes": 65536
+    },
+    {
+      "name": "deformer.lbs_network.lin2.bias",
+      "shape": [
+        128
+      ],
+      "offset": 966208,
+      "bytes": 512
+    },
+    {
+      "name": "deformer.lbs_network.lin2.weight",
+      "shape": [
+        128,
+        128
+      ],
+      "offset": 966720,
+      "bytes": 65536
+    },
+    {
+      "name": "deformer.lbs_network.lin3.bias",
+      "shape": [
+        128
+      ],
+      "offset": 1032256,
+      "bytes": 512
+    },
+    {
+      "name": "deformer.lbs_network.lin3.weight",
+      "shape": [
+        128,
+        128
+      ],
+      "offset": 1032768,
+      "bytes": 65536
+    },
+    {
+      "name": "deformer.lbs_network.lin4.bias",
+      "shape": [
+        24
+      ],
+      "offset": 1098304,
+      "bytes": 96
+    },
+    {
+      "name": "deformer.lbs_network.lin4.weight",
+      "shape": [
+        24,
+        128
+      ],
+      "offset": 1098400,
+      "bytes": 12288
+    },
+    {
+      "name": "deformer.disp_network.lin0.bias",
+      "shape": [
+        128
+      ],
+      "offset": 1110688,
+      "bytes": 512
+    },
+    {
+      "name": "deformer.disp_network.lin0.weight",
+      "shape": [
+        128,
+        13
+      ],
+      "offset": 1111200,
+      "bytes": 6656
+    },
+    {
+      "name": "deformer.disp_network.lin1.bias",
+      "shape": [
+        128
+      ],
+      "offset": 1117856,
+      "bytes": 512
+    },
+    {
+      "name": "deformer.disp_network.lin1.weight",
+      "shape": [
+        128,
+        128
+      ],
+      "offset": 1118368,
+      "bytes": 65536
+    },
+    {
+      "name": "deformer.disp_network.lin2.bias",
+      "shape": [
+        128
+      ],
+      "offset": 1183904,
+      "bytes": 512
+    },
+    {
+      "name": "deformer.disp_network.lin2.weight",
+      "shape": [
+        128,
+        128
+      ],
+      "offset": 1184416,
+      "bytes": 65536
+    },
+    {
+      "name": "deformer.disp_network.lin3.bias",
+      "shape": [
+        128
+      ],
+      "offset": 1249952,
+      "bytes": 512
+    },
+    {
+      "name": "deformer.disp_network.lin3.weight",
+      "shape": [
+        128,
+        128
+      ],
+      "offset": 1250464,
+      "bytes": 65536
+    },
+    {
+      "name": "deformer.disp_network.lin4.bias",
+      "shape": [
+        3
+      ],
+      "offset": 1316000,
+      "bytes": 12
+    },
+    {
+      "name": "deformer.disp_network.lin4.weight",
+      "shape": [
+        3,
+        128
+      ],
+      "offset": 1316016,
+      "bytes": 1536
+    },
+    {
+      "name": "generator.shape_code",
+      "shape": [
+        1,
+        256,
+        2,
+        8,
+        8
+      ],
+      "offset": 1317552,
+      "bytes": 131072
+    },
+    {
+      "name": "generator.lin_code.weight",
+      "shape": [
+        512,
+        64
+      ],
+      "offset": 1448624,
+      "bytes": 131072
+    },
+    {
+      "name": "generator.lin_code.bias",
+      "shape": [
+        512
+      ],
+      "offset": 1579696,
+      "bytes": 2048
+    },
+    {
+      "name": "generator.enc0.weight",
+      "shape": [
+        128,
+        256,
+        3,
+        3,
+        3
+      ],
+      "offset": 1581744,
+      "bytes": 3538944
+    },
+    {
+      "name": "generator.enc0.bias",
+      "shape": [
+        128
+      ],
+      "offset": 5120688,
+      "bytes": 512
+    },
+    {
+      "name": "generator.lin0.weight",
+      "shape": [
+        256,
+        64
+      ],
+      "offset": 5121200,
+      "bytes": 65536
+    },
+    {
+      "name": "generator.lin0.bias",
+      "shape": [
+        256
+      ],
+      "offset": 5186736,
+      "bytes": 1024
+    },
+    {
+      "name": "generator.enc1.weight",
+      "shape": [
+        64,
+        128,
+        3,
+        3,
+        3
+      ],
+      "offset": 5187760,
+      "bytes": 884736
+    },
+    {
+      "name": "generator.enc1.bias",
+      "shape": [
+        64
+      ],
+      "offset": 6072496,
+      "bytes": 256
+    },
+    {
+      "name": "generator.lin1.weight",
+      "shape": [
+        128,
+        64
+      ],
+      "offset": 6072752,
+      "bytes": 32768
+    },
+    {
+      "name": "generator.lin1.bias",
+      "shape": [
+        128
+      ],
+      "offset": 6105520,
+      "bytes": 512
+    },
+    {
+      "name": "generator.enc2.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3,
+        3
+      ],
+      "offset": 6106032,
+      "bytes": 442368
+    },
+    {
+      "name": "generator.enc2.bias",
+      "shape": [
+        64
+      ],
+      "offset": 6548400,
+      "bytes": 256
+    },
+    {
+      "name": "norm_network.lin0.bias",
+      "shape": [
+        256
+      ],
+      "offset": 6548656,
+      "bytes": 1024
+    },
+    {
+      "name": "norm_network.lin0.weight",
+      "shape": [
+        256,
+        332
+      ],
+      "offset": 6549680,
+      "bytes": 339968
+    },
+    {
+      "name": "norm_network.lin1.bias",
+      "shape": [
+        256
+      ],
+      "offset": 6889648,
+      "bytes": 1024
+    },
+    {
+      "name": "norm_network.lin1.weight",
+      "shape": [
+        256,
+        256
+      ],
+      "offset": 6890672,
+      "bytes": 262144
+    },
+    {
+      "name": "norm_network.lin2.bias",
+      "shape": [
+        256
+      ],
+      "offset": 7152816,
+      "bytes": 1024
+    },
+    {
+      "name": "norm_network.lin2.weight",
+      "shape": [
+        256,
+        256
+      ],
+      "offset": 7153840,
+      "bytes": 262144
+    },
+    {
+      "name": "norm_network.lin3.bias",
+      "shape": [
+        217
+      ],
+      "offset": 7415984,
+      "bytes": 868
+    },
+    {
+      "name": "norm_network.lin3.weight",
+      "shape": [
+        217,
+        256
+      ],
+      "offset": 7416864,
+      "bytes": 222208
+    },
+    {
+      "name": "norm_network.lin4.bias",
+      "shape": [
+        256
+      ],
+      "offset": 7639072,
+      "bytes": 1024
+    },
+    {
+      "name": "norm_network.lin4.weight",
+      "shape": [
+        256,
+        256
+      ],
+      "offset": 7640096,
+      "bytes": 262144
+    },
+    {
+      "name": "norm_network.lin5.bias",
+      "shape": [
+        256
+      ],
+      "offset": 7902240,
+      "bytes": 1024
+    },
+    {
+      "name": "norm_network.lin5.weight",
+      "shape": [
+        256,
+        256
+      ],
+      "offset": 7903264,
+      "bytes": 262144
+    },
+    {
+      "name": "norm_network.lin6.bias",
+      "shape": [
+        256
+      ],
+      "offset": 8165408,
+      "bytes": 1024
+    },
+    {
+      "name": "norm_network.lin6.weight",
+      "shape": [
+        256,
+        256
+      ],
+      "offset": 8166432,
+      "bytes": 262144
+    },
+    {
+      "name": "norm_network.lin7.bias",
+      "shape": [
+        256
+      ],
+      "offset": 8428576,
+      "bytes": 1024
+    },
+    {
+      "name": "norm_network.lin7.weight",
+      "shape": [
+        256,
+        256
+      ],
+      "offset": 8429600,
+      "bytes": 262144
+    },
+    {
+      "name": "norm_network.lin8.bias",
+      "shape": [
+        3
+      ],
+      "offset": 8691744,
+      "bytes": 12
+    },
+    {
+      "name": "norm_network.lin8.weight",
+      "shape": [
+        3,
+        256
+      ],
+      "offset": 8691760,
+      "bytes": 3072
+    },
+    {
+      "name": "latent.shape.mean",
+      "shape": [
+        64
+      ],
+      "offset": 8694832,
+      "bytes": 256
+    },
+    {
+      "name": "latent.shape.std",
+      "shape": [
+        64
+      ],
+      "offset": 8695088,
+      "bytes": 256
+    },
+    {
+      "name": "latent.detail.mean",
+      "shape": [
+        64
+      ],
+      "offset": 8695344,
+      "bytes": 256
+    },
+    {
+      "name": "latent.detail.std",
+      "shape": [
+        64
+      ],
+      "offset": 8695600,
+      "bytes": 256
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# Numerical QA fingerprints exact source/model bytes. Disable automatic newline
+# conversion for audited inputs and reports so a checkout preserves that evidence.
+src/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+tools/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+models/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+validation/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+dist/*.exe -text
+# Historical reports are not inputs to the current exact-byte checks.
+validation/88mb-release.json text
+validation/audio-release.json text
+validation/history/** text

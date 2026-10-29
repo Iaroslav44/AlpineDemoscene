@@ -17,3 +17,7 @@
 117 RCDATA "..\\build\\cloud_cs.cso"
 118 RCDATA "..\\build\\terrain_bounds_cs.cso"
 119 RCDATA "..\\build\\cloud_composite_ps.cso"
+120 RCDATA "..\\build\\neural_avatar_cs.cso"
+200 RCDATA "..\\models\\avatar\\gdna-thuman.nav"
+201 RCDATA "..\\models\\audio\\midi_ddsp_timbre.nad"
+202 RCDATA "..\\models\\head\\ganhead-faceverse.nah"

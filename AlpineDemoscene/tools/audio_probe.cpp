@@ -10,6 +10,7 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
+#include "../src/neural_audio.h"
 extern "C" {
 void GenerateSineTable();
 void GenerateAudio();
@@ -33,6 +34,15 @@ int wmain(int argc,wchar_t** argv){
     std::filesystem::create_directories(out);
     const uint32_t seed=argc>2?uint32_t(std::wcstoul(argv[2],nullptr,0)):0x4a197c3d;
     noiseState=seed?seed:1;
+    // The production host initializes both graphics and audio models together.
+    // This audio-only QA process loads the exact embedded resource without
+    // starting the renderer or silently using a procedural fallback.
+    HRSRC modelResource=FindResourceW(nullptr,MAKEINTRESOURCEW(201),MAKEINTRESOURCEW(10));
+    HGLOBAL modelData=modelResource?LoadResource(nullptr,modelResource):nullptr;
+    const DWORD modelBytes=modelResource?SizeofResource(nullptr,modelResource):0;
+    if(!modelData||!NeuralAudioInit(LockResource(modelData),modelBytes)){
+        std::fprintf(stderr,"Embedded neural audio model initialization failed\n");return 6;
+    }
     audioBuffer=VirtualAlloc(nullptr,frames*4,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);
     if(!audioBuffer)return 3;
     auto t=std::chrono::steady_clock::now(); GenerateSineTable();GenerateAudio();
