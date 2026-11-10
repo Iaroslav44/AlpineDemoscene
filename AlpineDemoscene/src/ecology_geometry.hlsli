@@ -37,25 +37,25 @@ float3 EcologyOctahedron(uint vertex)
 void EcologyShoot(uint v,uint shoot,EcologyBranch b,EcologyTraits traits,inout Geometry g)
 {
     uint key=traits.key+shoot*337u+(uint)(abs(b.seed)*8191.0);
-    float u=.17+.23*(shoot%4u);
+    float u=.22+.31*(shoot%3u);
     float3 axis=EcologyBranchTangent(b,u),right=EcologyUnit(cross(axis,float3(0,1,0)));
     float3 up=cross(axis,right);
     float twist=EcologyRandom(key+3u)*TAU;
-    float droop=traits.species==0u?-.75:(traits.species==1u?-.28:(traits.species==2u?.20:-.20));
-    float3 shootAxis=EcologyUnit(axis*.56+right*cos(twist)*.38+float3(0,droop+sin(twist)*.15,0));
+    float droop=traits.species==0u?-.58:(traits.species==1u?-.24:(traits.species==2u?.22:-.16));
+    float3 shootAxis=EcologyUnit(axis*.62+right*cos(twist)*.34+float3(0,droop+sin(twist)*.14,0));
     float3 shootRight=EcologyUnit(cross(shootAxis,up)),shootUp=cross(shootAxis,shootRight);
     float branchLength=length(b.end-b.start);
-    float halfLength=clamp(branchLength*.42+traits.crownRadius*.03,.12,.60);
-    float radius=halfLength*(traits.species==2u?.55:(traits.species==1u?.27:.38));
-    radius*=.85+.30*EcologyRandom(key+5u);
-    float3 center=EcologyBranchPoint(b,u)+shootAxis*halfLength*.35;
+    float halfLength=clamp(branchLength*.54+traits.crownRadius*.065,.22,.84);
+    float radius=halfLength*(traits.species==2u?.26:(traits.species==1u?.19:.22));
+    radius*=.88+.28*EcologyRandom(key+5u);
+    float3 center=EcologyBranchPoint(b,u)+shootAxis*halfLength*.28;
+    float packedSeed=(traits.species+EcologyRandom(key+29u))*.25;
     if(v<24u)
     {
-        // A closed 3D shoot envelope: unlike crossed cards it has a continuous
-        // silhouette from every view. Fine needles are statistically integrated
-        // in the pixel shader, with explicit silhouette needles below.
+        // A slim 3D inner twig-tuft core plus crossed procedural fir-needle frond
+        // sprays below: dense volume from afar with feathery needles up close.
         float3 q=EcologyOctahedron(v);
-        float lobe=1.0+.14*sin(q.x*3.0+q.z*2.0+EcologyRandom(key+7u)*TAU);
+        float lobe=1.0+.18*sin(q.x*3.0+q.z*2.0+EcologyRandom(key+7u)*TAU);
         float3 local=float3(q.x*radius*lobe,q.y*halfLength,q.z*radius*lobe);
         g.p=center+shootRight*local.x+shootAxis*local.y+shootUp*local.z;
         float3 n=EcologyUnit(float3(q.x/radius,q.y/halfLength,q.z/radius));
@@ -64,21 +64,20 @@ void EcologyShoot(uint v,uint shoot,EcologyBranch b,EcologyTraits traits,inout G
     }
     else
     {
-        uint needle=(v-24u)/3u,k=(v-24u)%3u;
-        float angle=needle*2.39996323+EcologyRandom(key+11u)*TAU;
-        float3 radial=shootRight*cos(angle)+shootUp*sin(angle);
-        float axial=(EcologyRandom(key+needle*7u+19u)-.5)*halfLength*1.7;
-        float3 start=center+shootAxis*axial+radial*radius*.60;
-        float needleLength=.018+.038*EcologyRandom(key+needle*7u+23u);
-        float3 direction=EcologyUnit(radial+shootAxis*.40);
-        float3 breadth=EcologyUnit(cross(direction,shootAxis));
-        float width=.00075;
-        g.p=k==2u?start+direction*needleLength:start+breadth*(k==0u?-width:width);
-        g.n=EcologyUnit(cross(direction,breadth));
-        g.local=float3(k==0u?-1.0:(k==1u?1.0:0.0),k==2u?1.0:0.0,0);
-        g.uv=g.local.xy;g.material=26;
+        uint card=(v-24u)/6u,cv=(v-24u)%6u;
+        float2 uv=Corner(cv);
+        float tilt=(card==0u?-.68:.68)+(.22*EcologyRandom(key+11u+card*7u)-.11);
+        float3 cardRight=shootRight*cos(tilt)+shootUp*sin(tilt);
+        float3 cardNormal=EcologyUnit(cross(shootAxis,cardRight));
+        float span=halfLength*1.76,halfW=radius*2.25;
+        float along=(uv.x-.46)*span,across=(uv.y-.5)*2.0*halfW;
+        float arch=-.11*along*along/max(span,.1);
+        g.p=center+shootAxis*along+cardRight*across+cardNormal*arch;
+        g.n=EcologyUnit(cardNormal+cardRight*(across/max(halfW,.05))*.28);
+        g.local=float3(across,along,0);
+        g.uv=uv;g.material=21;
     }
-    g.seed=(traits.species+EcologyRandom(key+29u))*.25;
+    g.seed=packedSeed;
     if(b.seed<0)g.p=b.start;
 }
 
@@ -109,9 +108,9 @@ Geometry EcologyNearTreeGeometry(uint vertex,uint tree)
     }
     else
     {
-        uint q=vertex-5256u,secondary=q/144u;
-        EcologyBranch branch=EcologyLoadBranch(tree,24u+secondary);
-        EcologyShoot(q%36u,secondary*4u+(q%144u)/36u,branch,traits,g);
+        uint q=vertex-5256u,branchIdx=min(q/108u,95u),sub=(q%108u)/36u;
+        EcologyBranch branch=EcologyLoadBranch(tree,branchIdx);
+        EcologyShoot(q%36u,branchIdx*3u+sub,branch,traits,g);
     }
     if(g.material==20)g.local=g.p;
     EcologyBend(height,b.yz,g);g.p+=a.xyz;
@@ -202,7 +201,21 @@ float EcologyCrownOccupancy(float3 local,float2 crownSize,float seed)
 
 // Band-limited needle density. Resolved needles modulate surface colour/normal;
 // below a pixel their coverage converges to its area average instead of a binary
-// repeating alpha-card comb. These aggregate surfaces do not require clip().
+// repeating alpha-card comb.
+float EcologyShootOccupancy(float3 local,float2 shootSize,float seed)
+{
+    float r=length(local.xz)/max(shootSize.x,.005);
+    float axial=local.y/max(shootSize.y,.01);
+    float angle=atan2(local.z,local.x+1e-6);
+    float phase=local.y/.022+angle*(5.0/TAU)+seed*23.0;
+    float tuft=pow(saturate(1.0-abs(frac(phase)-.5)*2.0),.55);
+    float fine=.72+.28*sin(angle*11.0+local.y*88.0+seed*41.0);
+    float detail=1.0-smoothstep(.28,.92,fwidth(phase));
+    float taper=sqrt(saturate(1.0-axial*axial*.86));
+    float outer=taper*lerp(.86,.52+.47*tuft*fine,detail);
+    return outer-r;
+}
+
 float EcologyNeedleDensity(float3 local,float2 shootSize,float seed)
 {
     float radius=max(shootSize.x,.005);
@@ -218,9 +231,16 @@ float EcologyNeedleDensity(float3 local,float2 shootSize,float seed)
 float3 EcologyNeedleAlbedo(float seed,float density)
 {
     uint species=min((uint)(seed*4.0),3u);float variation=frac(seed*4.0);
-    float3 base=species==0u?float3(.025,.067,.024):
-        (species==1u?float3(.048,.092,.022):(species==2u?float3(.039,.069,.030):float3(.023,.057,.035)));
-    return base*lerp(.72,1.19,variation)*lerp(.72,1.10,density);
+    // ~90% deep evergreen spruce, Swiss stone pine and silver fir; ~10% golden-
+    // russet autumn European larch (species==3 && variation>=.58) on high slopes.
+    bool isLarch=(species==3u)&&(variation>=.58);
+    float larchT=saturate((variation-.58)/.42);
+    float3 larch=lerp(float3(.082,.052,.014),float3(.148,.094,.020),larchT);
+    float3 base=species==0u?float3(.013,.037,.015):
+        (species==1u?float3(.018,.041,.017):(species==2u?float3(.012,.038,.023):
+        (isLarch?larch:float3(.020,.043,.017))));
+    float tone=isLarch?lerp(.88,1.12,larchT):lerp(.74,1.16,variation);
+    return base*tone*lerp(.68,1.12,density);
 }
 
 // Intersection of a radial direction with seeded convex fracture half-spaces.
@@ -261,6 +281,6 @@ Geometry EcologyRockGeometry(uint vertex,uint rock)
     float3 direction=float3(cos(azimuth)*sin(polar),cos(polar),sin(azimuth)*sin(polar));
     float radius;float3 normal;EcologyFracture(direction,EcologyKey(shape.w)+rock*71u,radius,normal);
     g.local=direction*radius*shape.xyz;g.p=placement.xyz+g.local;
-    g.n=EcologyUnit(normal/max(shape.xyz,.01));g.uv=uv;return g;
+    g.uv=uv;g.n=EcologyUnit(normal/max(shape.xyz,.01));return g;
 }
 #endif

@@ -49,6 +49,8 @@ float4 AtmosphereTransport(float3 rd)
     bool hitGround=ground>0; if(hitGround)distance=min(distance,ground);
     float mu=dot(rd,sun),rayleighPhase=3.0*(1+mu*mu)/(16.0*PI),g=.76;
     float miePhase=3.0*(1-g*g)*(1+mu*mu)/(8.0*PI*(2+g*g)*pow(max(.001,1+g*g-2*g*mu),1.5));
+    float3 solarExtra=float3(10.7,10.4,10.0);
+    float twilight=1.0-smoothstep(.025,.16,sun.y);
     float3 radiance=0,transmission=1;
     [loop]for(int i=0;i<24;++i)
     {
@@ -57,7 +59,11 @@ float4 AtmosphereTransport(float3 rd)
         float3 p=origin+rd*t,density=AtmosphereDensity(p);
         float3 extinction=AtmosphereExtinction(density),stepTransmittance=exp(-extinction*ds);
         float3 scattering=BETA_R*density.x*rayleighPhase+BETA_M*density.y*miePhase;
-        float3 source=AtmosphereSolar(p,sun)*float3(7.8,7.55,7.2)*scattering;
+        float3 multiScatter=AtmosphereSolar(p+normalize(p)*1.8,sun)*(BETA_R*density.x*.28+BETA_M*density.y*.09)/(4.0*PI);
+        float3 source=(AtmosphereSolar(p,sun)*scattering+multiScatter)*solarExtra;
+        // Upper-stratospheric blue-hour sky scatter keeps twilight valleys
+        // luminous and cool cobalt-blue when the low sun only grazes summits.
+        source+=density.x*float3(.00014,.00028,.00068)*twilight;
         // Integral of constant source over a homogeneous step, not source*alpha
         // without extinction normalization.
         radiance+=transmission*source*(1-stepTransmittance)/max(extinction,1e-7);
@@ -66,8 +72,8 @@ float4 AtmosphereTransport(float3 rd)
     if(hitGround)
     {
         float3 p=origin+rd*distance,normal=normalize(p);
-        float3 irradiance=AtmosphereSolar(p+normal*.005,sun)*7.8*saturate(dot(normal,sun));
-        radiance+=transmission*float3(.10,.13,.067)*(irradiance/PI+.035);
+        float3 irradiance=AtmosphereSolar(p+normal*.005,sun)*solarExtra*saturate(dot(normal,sun));
+        radiance+=transmission*float3(.15,.16,.16)*(irradiance/PI+float3(.036,.054,.095)*(1.0+.85*twilight));
     }
     return float4(max(radiance,0),dot(transmission,float3(.2126,.7152,.0722)));
 }

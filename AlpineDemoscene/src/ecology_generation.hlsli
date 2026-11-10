@@ -41,13 +41,13 @@ EcologyTraits EcologyDescribe(float height, float seed)
     t.age = .12 + .88 * EcologyRandom(t.key + 17u);
     // Norway spruce, European larch, mountain pine and silver fir. Parameters
     // express architecture families, not a claim of botanical reconstruction.
-    t.crownBase = t.species == 0 ? .14 : (t.species == 1 ? .29 : (t.species == 2 ? .11 : .22));
-    t.crownBase += .10 * t.age * EcologyRandom(t.key + 23u);
-    float slender = t.species == 0 ? .19 : (t.species == 1 ? .25 : (t.species == 2 ? .34 : .23));
-    t.crownRadius = height * slender * (.78 + .28 * EcologyRandom(t.key + 29u));
+    t.crownBase = t.species == 0 ? .12 : (t.species == 1 ? .24 : (t.species == 2 ? .10 : .18));
+    t.crownBase += .08 * t.age * EcologyRandom(t.key + 23u);
+    float slender = t.species == 0 ? .24 : (t.species == 1 ? .30 : (t.species == 2 ? .39 : .28));
+    t.crownRadius = height * slender * (.84 + .28 * EcologyRandom(t.key + 29u));
     t.droop = t.species == 0 ? .24 : (t.species == 1 ? .12 : (t.species == 2 ? -.04 : .07));
     t.upturn = t.species == 0 ? .16 : (t.species == 1 ? .24 : (t.species == 2 ? .37 : .10));
-    t.vitality = .78 + .20 * EcologyRandom(t.key + 31u);
+    t.vitality = .86 + .13 * EcologyRandom(t.key + 31u);
     return t;
 }
 
@@ -60,27 +60,27 @@ void EcologyAdjustPlacement(uint id, float3 center, float2 terrainGradient,
     uint key=EcologyHash(id + 19073u);
     float slope=length(terrainGradient), moisture=saturate(eco.x), soil=saturate(eco.y);
     float drainage=saturate(eco.z), visibility=saturate(eco.w);
-    float cold=smoothstep(1150.0,1850.0,center.y);
+    float cold=smoothstep(1050.0,1820.0,center.y);
     float dry=saturate((1.0-moisture)*.72 + slope*.16);
     float choice=EcologyRandom(key+1u);
     uint species=0u;
-    if(cold>.58 || (dry>.58 && slope>.48)) species=2u;
-    else if(choice < .16 + cold*.38 + visibility*.08) species=1u;
-    else if(moisture>.46 && visibility<.76 && choice>.74) species=3u;
+    if(cold>.62 || (dry>.60 && slope>.50)) species=2u;
+    else if(choice < .18 + cold*.34 + visibility*.06) species=1u;
+    else if(moisture>.44 && visibility<.78 && choice>.72) species=3u;
     else species=0u;
     seed=(species + .03 + .94*EcologyRandom(key+7u))*.25;
     float maturity=EcologyRandom(key+17u);
     // Mixed regeneration cohorts: saplings grow in canopy gaps; trees become
     // shorter on exposed slopes instead of remaining identical full-size cones.
-    float cohort=lerp(.32,1.08,sqrt(maturity));
-    float habitatScale=lerp(.66,1.0,moisture)*lerp(.80,1.03,soil);
-    float speciesScale=species==2u?.57:(species==1u?.91:1.0);
-    height=max(2.7,height*cohort*habitatScale*speciesScale);
-    float treeline=1.0-smoothstep(1450.0,1910.0,center.y+(1.0-moisture)*90.0);
-    float substrate=lerp(.38,1.0,saturate(soil*2.5+.2));
-    float steep=1.0-smoothstep(.65,1.25,slope);
+    float cohort=lerp(.48,1.16,sqrt(maturity));
+    float habitatScale=lerp(.72,1.04,moisture)*lerp(.84,1.06,soil);
+    float speciesScale=species==2u?.62:(species==1u?.95:1.0);
+    height=max(3.2,height*cohort*habitatScale*speciesScale);
+    float treeline=1.0-smoothstep(1460.0,1920.0,center.y+(1.0-moisture)*85.0);
+    float substrate=lerp(.56,1.0,saturate(soil*2.5+.25));
+    float steep=1.0-smoothstep(.68,1.28,slope);
     // Drainage channels stay open. Moist slopes beside them remain favourable.
-    float channel=1.0-smoothstep(.70,.96,drainage);
+    float channel=1.0-smoothstep(.74,.97,drainage);
     float probability=saturate(treeline*substrate*steep*channel);
     survival=EcologyRandom(key+47u)<probability?1.0:0.0;
 }
@@ -219,9 +219,9 @@ float EcologyBoundsRadius(float height,float seed,float2 trunkWind)
 {
     EcologyTraits t=EcologyDescribe(height,seed);
     // Secondary tips can extend beyond their parent's crown sector; needle
-    // shoots and both levels of branch flex are included in this sphere.
-    float horizontal=t.crownRadius*1.75+height*.04+length(trunkWind)+.8;
-    return sqrt(horizontal*horizontal+height*height*.29)+.3;
+    // shoots, crossed frond sprays and branch flex are included in this sphere.
+    float horizontal=t.crownRadius*1.90+height*.05+length(trunkWind)+1.15;
+    return sqrt(horizontal*horizontal+height*height*.31)+.4;
 }
 
 void EcologyAdjustRock(float4 eco,float2 terrainGradient,inout float size,out float burial)

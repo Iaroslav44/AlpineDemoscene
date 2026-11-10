@@ -154,6 +154,51 @@ float3 ACESCompact(float3 x)
                     (x * (2.43 * x + 0.59) + 0.14));
 }
 
+// AgX-inspired cinema filmic tonemapper with pre-curve gamut inset crosstalk.
+// Prevents per-channel neon primary skews on sunlit grass, timber and skin while
+// desaturating intense highlights smoothly into creamy photographic white.
+float3 CinemaTonemap(float3 c)
+{
+    c=max(c,0.0);
+    float3 inset=float3(dot(c,float3(.856,.092,.052)),
+                        dot(c,float3(.074,.878,.048)),
+                        dot(c,float3(.062,.088,.850)));
+    float3 mapped=ACESCompact(inset);
+    float luma=dot(mapped,float3(.2126,.7152,.0722));
+    float satBoost=lerp(1.13,.96,smoothstep(.35,.92,luma));
+    mapped=max(0.0,luma+(mapped-luma)*satBoost);
+    // Subtle split-tone cinema negative balance: crisp cool-neutral deep shadows
+    // and natural warm highlight rolloff without tinting neutral snow.
+    float shadowMask=(1.0-smoothstep(.0,.18,luma))*luma;
+    mapped+=shadowMask*float3(-.010,.002,.016);
+    return saturate(mapped);
+}
+
+float3 CinemaBloom(float2 uv)
+{
+    float2 aspectScale=float2(O.y/max(O.x,1.0),1.0);
+    float3 bloom=0,halation=0;
+    [unroll]for(int i=0;i<12;++i)
+    {
+        float fi=(float)i+.5;
+        float angle=fi*2.39996323;
+        float2 dir=float2(cos(angle),sin(angle))*aspectScale;
+        float rBloom=(4.5+36.0*(fi/12.0))/1080.0;
+        float3 tap=max(Input0.SampleLevel(LinearClamp,uv+dir*rBloom,0.0).rgb,0.0);
+        float luma=dot(tap,float3(.2126,.7152,.0722));
+        float knee=smoothstep(.82,2.6,luma);
+        bloom+=tap*(knee/(1.0+luma*.16));
+        if(i<6)
+        {
+            float rHal=(2.0+7.5*(fi/6.0))/1080.0;
+            float3 hTap=max(Input0.SampleLevel(LinearClamp,uv+dir*rHal,0.0).rgb,0.0);
+            float hLuma=dot(hTap,float3(.2126,.7152,.0722));
+            halation+=hTap*(smoothstep(1.15,3.4,hLuma)/(1.0+hLuma*.20));
+        }
+    }
+    return (bloom/12.0)*.042+(halation/6.0)*float3(.022,.009,.003);
+}
+
 float ResolvedAlpha(float2 uv)
 {
     int2 p=clamp(int2(uv*O.xy),int2(0,0),int2(O.xy)-1);
@@ -177,13 +222,13 @@ float3 DepthAwareDOF(float2 uv,CameraFrame camera,out float encodedDepth)
     float focusDepth = clamp(DecodeDepth(focusEncoded), 1.0, MAX_DIST);
 
     float portrait = 1.0 - smoothstep(35.0, 180.0, focusDepth);
-    // Thin-lens circle of confusion. A24mm-tall sensor and the projection
-    // lens determine focal length; landscapes usef/8, closeupsf/2.8.
-    float focalLength=.012*camera.lens,aperture=lerp(8.0,2.8,portrait);
+    // Thin-lens circle of confusion. A 24mm-tall sensor and the projection
+    // lens determine focal length; landscapes use f/8, closeups f/2.6.
+    float focalLength=.012*camera.lens,aperture=lerp(8.0,2.6,portrait);
     float viewDepth=max(.1,centreDepth*dot(CameraRay(camera,uv,O.x/O.y),camera.forward));
     float circle=focalLength*focalLength*abs(viewDepth-focusDepth)
         /(aperture*viewDepth*max(focusDepth-focalLength,.01));
-    float cocPixels=min(8.0,.5*circle/.024*O.y);
+    float cocPixels=min(9.5,.5*circle/.024*O.y);
 
     // Landscapes at f/8 normally have a subpixel CoC; the 16 texture taps
     // cannot change their resolved image meaningfully. Keep the physical
@@ -203,7 +248,12 @@ float3 DepthAwareDOF(float2 uv,CameraFrame camera,out float encodedDepth)
         tap.a=ResolvedAlpha(uv+offset);
         float tapDepth = DecodeDepth(abs(tap.a));
         float depthDelta = abs(tapDepth - centreDepth) / max(centreDepth, 1.0);
-        float w = exp2(-18.0 * depthDelta);
+        // Prevent sharp foreground edges from bleeding into distant backgrounds,
+        // while letting out-of-focus background highlights form smooth bokeh discs.
+        float bgBlur = step(focusDepth * 1.18, tapDepth) * step(focusDepth * 1.18, centreDepth);
+        float w = lerp(exp2(-18.0 * depthDelta), 1.0, bgBlur * 0.82);
+        float tapLuma = dot(max(tap.rgb, 0.0), float3(.2126, .7152, .0722));
+        w *= 1.0 + portrait * 0.28 * smoothstep(0.85, 3.2, tapLuma) / (1.0 + tapLuma * 0.12);
         sum += tap.rgb * w;
         weightSum += w;
     }
@@ -245,26 +295,32 @@ float ScreenContactOcclusion(CameraFrame camera,float2 uv,float depth)
     }
     // Applied only at display, not recursively baked into the HDR history.
     // This is local screen-space contact shading, not global illumination.
-    return 1.0-min(0.32,occlusion*0.23);
+    return 1.0-min(0.34,occlusion*0.24);
 }
 
 float4 Display(VSOut input) : SV_Target
 {
     float2 uv = input.uv;
+    CameraFrame cam = CurrentFrameCamera(input);
     float encodedDepth;
-    float3 colour = max(DepthAwareDOF(uv,CurrentFrameCamera(input),encodedDepth),0.0);
-    colour*=ScreenContactOcclusion(CurrentFrameCamera(input),uv,DecodeDepth(encodedDepth));
-    colour = ACESCompact(colour * 1.02);
+    float3 colour = max(DepthAwareDOF(uv,cam,encodedDepth),0.0);
+    colour*=ScreenContactOcclusion(cam,uv,DecodeDepth(encodedDepth));
+    colour+=CinemaBloom(uv);
+    float sunY=DiurnalSunDirection(fmod(G.z,128.0)*(TAU/128.0)).y;
+    float exposure=lerp(1.88,.86,smoothstep(.038,.44,sunY));
     float2 v = uv * 2.0 - 1.0;
-    colour *= saturate(1.0 - 0.055 * dot(v * v, float2(0.72, 0.46)));
+    colour *= exposure * saturate(1.0 - 0.085 * dot(v * v, float2(0.74, 0.48)));
+    colour = CinemaTonemap(colour);
     float noise = Hash12(input.pos.xy + float2(G.w * 17.0, G.w * 43.0)) - 0.5;
     float dither = (frac(dot(input.pos.xy, float2(0.754877666, 0.569840296)) + G.w * 0.618) - 0.5);
+    float luma = dot(colour, float3(.2126, .7152, .0722));
+    float filmGrain = noise * lerp(1.1, 2.2, 4.0 * luma * (1.0 - luma));
     // Exact sRGB output transfer, including its linear toe (the swapchain is
     // UNORM, not an automatic sRGB render target).
     colour = lerp(12.92*colour,1.055*pow(max(colour,0.0),1.0/2.4)-.055,step(.0031308,colour));
-    colour = saturate(colour + (noise * 0.70 + dither * 0.30) / 255.0);
+    colour = saturate(colour + (filmGrain * 0.72 + dither * 0.35) / 255.0);
     // A physical trajectory is not forced to close by injecting energy.
-    // Editorial fades cover the explicit reset of the128s demonstration.
+    // Editorial fades cover the explicit reset of the 128s demonstration.
     float phase=FlightTime(G.z);
     colour*=smoothstep(0.0,.8,phase)*(1.0-smoothstep(127.2,128.0,phase));
     return float4(colour, 1.0);

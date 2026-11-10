@@ -33,41 +33,64 @@ float2 MaterialCellOffset(int2 p)
     uint g=h*3266489917u+374761393u;g^=g>>16;
     return float2(h&0x00ffffffu,g&0x00ffffffu)/16777216.0;
 }
-void NeuralPatch(uint layer,float2 uv,float2 dx,float2 dy,out float4 color,out float4 normal,out float3 specular)
+void NeuralPatch(uint layer,float2 uv,float2 cellRand,float2 dx,float2 dy,out float4 color,out float4 normal,out float3 specular)
 {
-    // PhotoMat's original generator has non-periodic boundaries. Mirrored
-    // coordinates preserve colour/height continuity; tangent slopes follow
-    // each reflection. Random overlapping patches hide bilateral repetition.
-    float2 parity=fmod(floor(uv),2.0);parity+=step(parity,-.5)*2;
-    float2 flip=1-2*parity;
-    float2 position=lerp(frac(uv),1-frac(uv),parity);
-    position=(position*255+.5)/256;
-    dx*=flip*(255.0/256);dy*=flip*(255.0/256);
+    // PhotoMat's original generator has non-periodic boundaries. Desynchronize
+    // cell transforms from mirror boundaries and trim zero-padded borders so
+    // wood and rock never form repeating Rorschach mirror diamonds.
+    float2 uvr,dxr,dyr;
+    float rotC=1.0,rotS=0.0,signY=1.0;
     if(layer==2)
     {
-        color=NeuralWoodDiffuse.SampleGrad(MaterialSampler,position,dx,dy);
-        normal=NeuralWoodRelief.SampleGrad(MaterialSampler,position,dx,dy);
-        specular=NeuralWoodSpecular.SampleGrad(MaterialSampler,position,dx,dy).rgb;
+        rotC=cellRand.x>.5?1.0:-1.0;
+        signY=cellRand.y>.5?1.0:-1.0;
+        uvr=uv*float2(rotC,signY)+cellRand*float2(7.37,11.19);
+        dxr=dx*float2(rotC,signY);dyr=dy*float2(rotC,signY);
     }
     else
     {
-        color=NeuralMaterialDiffuse.SampleGrad(MaterialSampler,position,dx,dy);
-        normal=NeuralMaterialRelief.SampleGrad(MaterialSampler,position,dx,dy);
-        specular=NeuralMaterialSpecular.SampleGrad(MaterialSampler,position,dx,dy).rgb;
+        float theta=frac(cellRand.x*7.13+cellRand.y*3.71)*6.28318530718;
+        rotC=cos(theta);rotS=sin(theta);
+        uvr=float2(rotC*uv.x-rotS*uv.y,rotS*uv.x+rotC*uv.y)+cellRand*6.31;
+        dxr=float2(rotC*dx.x-rotS*dx.y,rotS*dx.x+rotC*dx.y);
+        dyr=float2(rotC*dy.x-rotS*dy.y,rotS*dy.x+rotC*dy.y);
     }
-    normal.xy*=flip;
+    float2 parity=fmod(floor(uvr),2.0);parity+=step(parity,-.5)*2.0;
+    float2 flip=1.0-2.0*parity;
+    float2 position=lerp(frac(uvr),1.0-frac(uvr),parity);
+    const float innerSpan=230.0/256.0,innerPad=13.0/256.0;
+    position=position*innerSpan+innerPad;
+    dxr*=flip*innerSpan;dyr*=flip*innerSpan;
+    if(layer==2)
+    {
+        color=NeuralWoodDiffuse.SampleGrad(MaterialSampler,position,dxr,dyr);
+        normal=NeuralWoodRelief.SampleGrad(MaterialSampler,position,dxr,dyr);
+        specular=NeuralWoodSpecular.SampleGrad(MaterialSampler,position,dxr,dyr).rgb;
+        normal.xy*=flip*float2(rotC,signY);
+    }
+    else
+    {
+        color=NeuralMaterialDiffuse.SampleGrad(MaterialSampler,position,dxr,dyr);
+        normal=NeuralMaterialRelief.SampleGrad(MaterialSampler,position,dxr,dyr);
+        specular=NeuralMaterialSpecular.SampleGrad(MaterialSampler,position,dxr,dyr).rgb;
+        normal.xy*=flip;
+        normal.xy=float2(rotC*normal.x+rotS*normal.y,-rotS*normal.x+rotC*normal.y);
+    }
+    float tone=.90+.20*frac(cellRand.x*3.17+cellRand.y*5.83);
+    color.rgb*=tone;
 }
 RuntimeMaterial SampleNeuralMaterial(uint layer,float2 uv)
 {
-    float2 grid=float2(uv.x-uv.y*.577350269,uv.y*1.154700538);
+    float2 scaled=layer==2?uv*float2(.37,1.19):uv*.43;
+    float2 grid=float2(scaled.x-scaled.y*.577350269,scaled.y*1.154700538);
     int2 base=int2(floor(grid));float2 f=frac(grid);int2 a,b,c;float3 w;
     if(f.x+f.y<1){a=base;b=base+int2(1,0);c=base+int2(0,1);w=float3(1-f.x-f.y,f.x,f.y);}
     else{a=base+1;b=base+int2(0,1);c=base+int2(1,0);w=float3(f.x+f.y-1,1-f.x,1-f.y);}
-    w=w*w*w;w/=max(dot(w,1),1e-6);
+    w=w*w*(3.0-2.0*w);w*=w;w/=max(dot(w,1),1e-6);
     float2 dx=ddx(uv),dy=ddy(uv);float4 albedo[3],relief[3];float3 spec[3];
-    NeuralPatch(layer,uv+MaterialCellOffset(a)*17,dx,dy,albedo[0],relief[0],spec[0]);
-    NeuralPatch(layer,uv+MaterialCellOffset(b)*17,dx,dy,albedo[1],relief[1],spec[1]);
-    NeuralPatch(layer,uv+MaterialCellOffset(c)*17,dx,dy,albedo[2],relief[2],spec[2]);
+    NeuralPatch(layer,uv,MaterialCellOffset(a),dx,dy,albedo[0],relief[0],spec[0]);
+    NeuralPatch(layer,uv,MaterialCellOffset(b),dx,dy,albedo[1],relief[1],spec[1]);
+    NeuralPatch(layer,uv,MaterialCellOffset(c),dx,dy,albedo[2],relief[2],spec[2]);
     float4 color=albedo[0]*w.x+albedo[1]*w.y+albedo[2]*w.z;
     float4 nh=relief[0]*w.x+relief[1]*w.y+relief[2]*w.z;
     float normalLength=length(nh.xyz);RuntimeMaterial m;

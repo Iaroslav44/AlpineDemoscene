@@ -9,29 +9,36 @@ StructuredBuffer<float4> NeuralBodyRig : register(t23);
 
 float3 NeuralResidentShirtColor(float seed)
 {
-    return lerp(float3(.045,.085,.105),float3(.09,.11,.085),seed);
+    if(seed>=.78)return lerp(float3(.185,.052,.025),float3(.235,.074,.033),saturate((seed-.78)/.22));
+    if(seed>=.62)return float3(.205,.120,.026);
+    if(seed>=.46)return float3(.026,.060,.035);
+    if(seed>=.30)return float3(.132,.026,.038);
+    if(seed>=.15)return float3(.042,.072,.112);
+    return float3(.024,.044,.088);
 }
 
 float NeuralHeadClothingCoverage(float3 source)
 {
     // GANHead's neck crop includes the captured shirt collar. Match that
-    // generated surface to the body's authored shirt without tinting the face.
-    // The lower neckline stays below the chin; it rises at the shoulders.
-    float neckline=1.455+.060*smoothstep(.025,.065,abs(source.x));
-    return 1.0-smoothstep(neckline-.012,neckline+.012,source.y);
+    // generated surface to the body's authored jacket without tinting the face.
+    // Keep collar height compact around the base of the neck to avoid side-jaw flare.
+    float neckline=1.452+.015*smoothstep(.032,.068,abs(source.x))+.010*smoothstep(.02,-.035,source.z);
+    return 1.0-smoothstep(neckline-.010,neckline+.010,source.y);
 }
 
 float NeuralHeadCropCoverage(float3 source)
 {
     // The independent head generator includes a broad scanner shoulder crop.
-    // The body already supplies shoulders: retain only a widening lower-neck
-    // envelope here. The first 1.535m cutoff removed part of this generator's
-    // low chin in visual QA: preserve everything above 1.49m and widen the
-    // envelope early, so the correction is confined to the shoulder base.
-    float blend=smoothstep(1.430,1.490,source.y);
-    float2 radius=lerp(float2(.052,.060),float2(.160,.160),blend);
-    float2 q=(source.xz-float2(0,-.015))/radius;
-    return max(source.y-1.490,1-dot(q,q));
+    // Combine an anatomical neck column (widening to the full cranium above 1.575m)
+    // with a forward jaw/chin ellipsoid so lateral shoulder spikes at 1.49..1.54m
+    // are cleanly removed without pinching the lower neck above the jacket collar.
+    float headBlend=smoothstep(1.515,1.575,source.y);
+    float2 neckRadius=lerp(float2(.071,.077),float2(.170,.170),headBlend);
+    float2 qNeck=(source.xz-float2(0,-.014))/neckRadius;
+    float neckCranium=1.0-dot(qNeck,qNeck);
+    float3 qJaw=(source-float3(0,1.520,.034))/float3(.074,.086,.098);
+    float jaw=1.0-dot(qJaw,qJaw);
+    return max(source.y-1.575,max(neckCranium,jaw));
 }
 
 static const uint NEURAL_RIG_BASE=118016;

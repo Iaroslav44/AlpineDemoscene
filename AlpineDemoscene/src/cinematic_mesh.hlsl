@@ -52,10 +52,10 @@ void CameraCS(uint3 id:SV_DispatchThreadID)
     FrameOutput[6]=float4(p.right,0);FrameOutput[7]=float4(p.up,0);
     float3 sun=CinematicSunDirection(fmod(G.z,128.0)*TAU/128.0);
     float3 sr=normalize(cross(float3(0,1,0),-sun)),su=cross(-sun,sr);
-    float village=(1.0-smoothstep(210.0,340.0,length(c.origin.xz-TOWN_C)))*
-                  (1.0-smoothstep(6.0,40.0,c.origin.y-Terrain(c.origin.xz)));
-    float extent=lerp(240.0,80.0,village),texel=2.0*extent/2048.0;
-    float3 center=c.origin+c.forward*lerp(85.0,25.0,village);
+    float village=(1.0-smoothstep(245.0,410.0,length(c.origin.xz-TOWN_C)))*
+                  (1.0-smoothstep(16.0,58.0,c.origin.y-Terrain(c.origin.xz)));
+    float extent=lerp(215.0,72.0,village),texel=2.0*extent/2048.0;
+    float3 center=c.origin+c.forward*lerp(82.0,26.0,village);
     center.y=Terrain(center.xz)+24.0;
     // Snap light-space origin, not just world X/Z: static surfaces remain stable.
     center+=sr*(floor(dot(center,sr)/texel)*texel-dot(center,sr));
@@ -131,7 +131,9 @@ void Gable(uint v,float width,float rise,float depth,float base,inout Geometry g
 #include "ecology_geometry.hlsli"
 void TreePlacementRaw(uint id,out float3 center,out float height,out float seed,out float survival)
 {
-    seed=Hash21(float2(id,111));float2 xz;
+    seed=Hash21(float2(id,111));
+    if(id<32)seed*=.74; // village street & chalet yard conifers are evergreen spruce/pine/fir
+    float2 xz;
     if(id<16)xz=float2((id%2==0?-1:1)*(8.2+seed*.8),1668.0+floor(id/2.0)*39.0+Hash21(float2(id,119))*7.0);
     else if(id<96)xz=float2((id%2==0?-1:1)*(64.0+seed*75.0),1570.0+Hash21(float2(id,112))*445.0);
     else
@@ -295,33 +297,38 @@ void ForestPlacementRaw(uint id,out float3 center,out float height,out float see
 {
     seed=Hash21(float2(id,317));
     float2 xz;
-    if(id<8192)
+    if(id<6000)
     {
         float a=id*2.39996323;
         float2 direction=float2(cos(a),sin(a));
         float edge=.99+.034*sin(a*3.0)+.022*sin(a*7.0);
-        float width=.21+.055*sin(a*5.0+1.7);
+        float width=.25+.065*sin(a*5.0+1.7);
         float edgeNoise=(Noise2(direction*4.3+17.0)-.5)*.085;
         width+=edgeNoise;
         float r=sqrt(lerp(edge*edge,(edge+width)*(edge+width),Hash21(float2(id,323))));
-        if(Hash21(float2(id,337))<.18)
+        if(Hash21(float2(id,337))<.20)
         {
             // A half-normal woodland fringe keeps a dense core while sparse
-            // young stands extend around100m past its irregular outer edge.
+            // young stands extend around 120m past its irregular outer edge.
             float gaussian=abs(sqrt(-2.0*log(max(.008,Hash21(float2(id,339)))))*cos(TAU*Hash21(float2(id,341))));
-            r=edge+width-.022+min(2.8,gaussian)*.075;
+            r=edge+width-.022+min(2.8,gaussian)*.085;
         }
         xz=LAKE_C+direction*float2(900.0,610.0)*r;
     }
-    else if(id<12288)
+    else if(id<12912)
     {
-        uint k=id-8192;float z=1750.0+Hash21(float2(k,322))*2400.0;
-        float edge=205.0+28.0*sin(z*.006)+(Noise2(float2(z*.004,11.0))-.5)*65.0;
-        float width=130.0+45.0*sin(z*.004+1.3),offset=edge+seed*width;
+        uint k=id-6000;float z=860.0+Hash21(float2(k,322))*3680.0;
+        // Keep chalet parcels open at z=1580..2030 while letting woodland groves
+        // sweep across the foothills north and south of the village.
+        float inTown=(smoothstep(1545.0,1625.0,z))*(1.0-smoothstep(2005.0,2080.0,z));
+        float groveGap=smoothstep(.35,.72,Noise2(float2(z*.0048,19.3)));
+        float edge=lerp(10.0+46.0*groveGap,194.0,inTown)+18.0*sin(z*.006)+(Noise2(float2(z*.004,11.0))-.5)*28.0;
+        edge=max(edge,lerp(6.0,185.0,inTown));
+        float width=lerp(580.0,235.0,inTown)+85.0*sin(z*.0038+1.3),offset=edge+seed*width;
         float fringe=Hash21(float2(k,343));
         float gaussian=abs(sqrt(-2.0*log(max(.008,Hash21(float2(k,347)))))*cos(TAU*Hash21(float2(k,349))));
-        if(fringe<.17)offset=edge+width-20.0+min(2.8,gaussian)*65.0;
-        else if(fringe>.97)offset=max(170.0,edge-gaussian*30.0);
+        if(fringe<.22)offset=edge+width-22.0+min(2.8,gaussian)*110.0;
+        else if(fringe>.95)offset=max(lerp(4.0,182.0,inTown),edge-gaussian*26.0);
         float x=ValleyCenter(z)+(k%2==0?-1.0:1.0)*offset;
         xz=float2(x,z);
     }
@@ -329,22 +336,22 @@ void ForestPlacementRaw(uint id,out float3 center,out float height,out float see
     {
         // Colonies on the lower mountain shoulders break the former uniform
         // ring of trees. Stratified trees form irregular overlapping groves,
-        // with open gullies and a continuous thinning at the alpine treeline.
-        uint k=id-12288,colony=k/48,member=k%48;
+        // spanning both the lake amphitheatre and village backdrop slopes.
+        uint k=id-12912,colony=k/48,member=k%48;
         float ca=TAU*Hash21(float2(colony,411));
         float2 colonyCentre;
-        if(colony<72)
+        if(colony<45)
         {
-            float radius=1.15+1.22*Hash21(float2(colony,413));
+            float radius=1.16+1.20*Hash21(float2(colony,413));
             colonyCentre=LAKE_C+float2(cos(ca)*930.0,sin(ca)*660.0)*radius;
         }
         else
         {
-            float z=3020.0+Hash21(float2(colony,417))*3650.0;
-            float offset=510.0+Hash21(float2(colony,419))*1350.0;
+            float z=960.0+Hash21(float2(colony,417))*5660.0;
+            float offset=395.0+Hash21(float2(colony,419))*1280.0;
             colonyCentre=float2(ValleyCenter(z)+(colony%2==0?-offset:offset),z);
         }
-        float radius=65.0+Hash21(float2(colony,421))*105.0;
+        float radius=72.0+Hash21(float2(colony,421))*115.0;
         float angle=member*2.39996323+ca;
         float r=sqrt((member+.2+.6*seed)/48.0)*radius;
         xz=colonyCentre+float2(cos(angle),sin(angle))*r;
@@ -387,7 +394,8 @@ void SceneInstancesCS(uint3 thread:SV_DispatchThreadID)
         if(id<256)
         {
             TreePlacementRaw(id-64,center,height,seed,valid);ground=center.y;
-            if(ground>930.0||(ground<LAKE_Y+.7&&length((center.xz-LAKE_C)/float2(970,690))<1.08))valid=0;
+            bool inFall=abs(center.x-350.0)<98.0&&center.z>4580.0&&center.z<4970.0;
+            if(ground>930.0||inFall||(ground<LAKE_Y+.9&&length((center.xz-LAKE_C)/float2(972,692))<1.085))valid=0;
         }
         else
         {
@@ -395,8 +403,10 @@ void SceneInstancesCS(uint3 thread:SV_DispatchThreadID)
             float2 xz=center.xz;
             float slope=length(float2(Terrain(xz+float2(3,0))-Terrain(xz-float2(3,0)),Terrain(xz+float2(0,3))-Terrain(xz-float2(0,3))))/6.0;
             float treeline=1.0-smoothstep(1400.0,1830.0,ground+(Noise2(xz*.004)-.5)*180.0);
-            if(ground<150.0||slope>1.25||Hash21(float2(id,431))>treeline||
-                (ground<LAKE_Y+1.0&&length((xz-LAKE_C)/float2(970,690))<1.08))valid=0;
+            bool inFall=abs(xz.x-350.0)<98.0&&xz.y>4580.0&&xz.y<4970.0;
+            bool inTownOpen=(abs(xz.x)<182.0&&xz.y>1565.0&&xz.y<2035.0);
+            if(ground<118.0||slope>1.25||inFall||inTownOpen||Hash21(float2(id,431))>treeline||
+                (ground<LAKE_Y+1.4&&length((xz-LAKE_C)/float2(975,695))<1.09))valid=0;
         }
         float2 wind=PlantDeflection(center,.20*height*height,2.6*20.0/height,.22,.7*height);
         a=float4(center,height);b=float4(seed,wind,valid);
@@ -564,28 +574,35 @@ MeshOut ShadowVS(uint vertex:SV_VertexID,uint instance:SV_InstanceID)
 }
 void FoliageCoverage(MeshOut i)
 {
-    if(i.tag.x==50)clip(1.44-i.local.y); // separate pretrained head replaces the body's coarse head
+    if(i.tag.x==50)
+    {
+        // Clean collar rim around the base of the neck while clearing shoulders/jaw.
+        float collarTop=1.452-.022*smoothstep(.058,.095,length(i.local.xz));
+        clip(collarTop-i.local.y);
+    }
     if(i.tag.x==51)clip(NeuralHeadCropCoverage(i.local));
     if(i.tag.x==27)clip(EcologyCrownOccupancy(i.local,i.uv,i.tag.y));
+    if(i.tag.x==25)clip(EcologyShootOccupancy(i.local,i.uv,i.tag.y));
     if(i.tag.x==21)
     {
         float2 uv=i.uv;float seed=i.tag.y;
-        float span=0.42+seed*0.28,halfWidth=0.09+seed*0.04;
+        float span=0.42+seed*0.24,halfWidth=0.085+seed*0.035;
         float u=uv.x*span,v=abs((uv.y-0.5)*2.0*halfWidth);
-        float envelope=halfWidth*(0.18+0.82*pow(saturate(sin(uv.x*PI)),0.66));
-        envelope*=.90+.065*sin(uv.x*37.0+seed*29.0)+.035*sin(uv.x*81.0+seed*17.0);
-        // Fir shoots stay narrow and separated at mid distance. Only the
-        // 2mm needles integrate; the gaps between secondary shoots survive.
-        float dx=(frac((u-v*.78)/.041+seed*.4+.5)-.5)*.041;
-        float needlePhase=v/0.008-abs(dx)*63.0;
-        float needleDistance=abs(frac(needlePhase)-.5)*.008;
-        float needleRadius=.0009+min(.0018,fwidth(needlePhase)*.0015);
-        float needles=min(.013-abs(dx),needleRadius-needleDistance);
-        float offshoot=max(.0013-abs(dx),needles);
+        float envelope=halfWidth*(0.22+0.78*pow(saturate(sin(uv.x*PI)),0.62));
+        envelope*=.88+.075*sin(uv.x*43.0+seed*29.0)+.045*sin(uv.x*97.0+seed*17.0);
+        // Fine 14mm spruce/fir needle pitch prevents coarse comb gaps up close
+        // while converging cleanly to its area-average bough silhouette afar.
+        float pitch=.0145;
+        float dx=(frac((u-v*.68)/pitch+seed*.4+.5)-.5)*pitch;
+        float needlePhase=v/0.0065-abs(dx)*82.0;
+        float needleDistance=abs(frac(needlePhase)-.5)*.0065;
+        float needleRadius=.0011+min(.0018,fwidth(needlePhase)*.0015);
+        float needles=min(.0060-abs(dx),needleRadius-needleDistance);
+        float offshoot=max(.0022-abs(dx),needles);
         float footprint=max(fwidth(u),fwidth(v));
-        float resolved=max(.0015-v,offshoot);
-        float integrated=max(.0015-v,.0105-abs(dx));
-        float coverage=lerp(resolved,integrated,smoothstep(.002,.008,footprint));
+        float resolved=max(.0032-v,offshoot);
+        float integrated=max(.0032-v,.0056-abs(dx));
+        float coverage=lerp(resolved,integrated,smoothstep(.0016,.0065,footprint));
         clip(min(envelope-v,coverage));
     }
     else if(i.tag.x==24)
@@ -659,21 +676,23 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
     }
     if(mat==21||mat==22||mat==24)n=dot(n,view)>=0.0?n:-n;
     float3 color=float3(0.65,0.61,0.51),dielectricF0=.04;float rough=0.78,metal=0,ao=1;
-    float neuralBareCoverage=0,neuralBareRough=.5;float3 neuralBareF0=.04;
+    float neuralBareCoverage=0,neuralBareRough=.5,skinWeight=0;float3 neuralBareF0=.04;
     float mottling=Noise2(i.world.xz*0.57+i.world.y*0.37);
     if(mat==1)
     {
         RuntimeMaterial plaster=TriplanarRuntimeMaterial(3,i.world,n,.24,.45);
-        color=plaster.albedo*lerp(float3(.89,.86,.76),float3(1.04,.98,.86),seed);
-        n=plaster.normal;rough=plaster.roughness;ao=lerp(.68,1.0,smoothstep(.2,1.8,i.local.y));
-        float groundStain=(1.0-smoothstep(.15,1.65,i.local.y))*(.14+.18*Noise2(i.world.xz*.71));
+        color=plaster.albedo*lerp(float3(.90,.85,.75),float3(1.06,.99,.87),seed);
+        n=plaster.normal;rough=plaster.roughness;
+        float eaveAO=1.0-.16*smoothstep(3.3,5.4,i.local.y)*(1.0-smoothstep(6.4,9.2,i.local.y));
+        ao=lerp(.64,1.0,smoothstep(.15,1.8,i.local.y))*eaveAO;
+        float groundStain=(1.0-smoothstep(.12,1.60,i.local.y))*(.15+.18*Noise2(i.world.xz*.71));
         color*=1.0-groundStain;
     }
     else if(mat==2||mat==23)
     {
         RuntimeMaterial stone=TriplanarRuntimeMaterial(0,i.world,n,.48,.58);
         float3 geometricNormal=n;
-        color=stone.albedo*lerp(.77,1.05,mottling);n=stone.normal;
+        color=stone.albedo*lerp(.74,1.06,mottling);n=stone.normal;
         float4 habitat=WorldEcology(i.world.xz);
         // Opaque weathering deposits over the glossy learned aggregate.
         // .04 is the authored dielectric F0 (IOR 1.5), not a rescaling of
@@ -684,39 +703,52 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         {
             float horizontal=abs(n.x)>abs(n.z)?i.local.z:i.local.x;
             float mortar=max(FilteredLines(i.local.y*3.0,0.045),FilteredLines(horizontal*1.8+floor(i.local.y*3.0)*0.5,0.045));
-            color=lerp(color,float3(0.16,0.17,0.16),mortar*0.60);
+            color=lerp(color,float3(0.15,0.155,0.145),mortar*0.62);
             neuralBareCoverage*=1-mortar;
             n=normalize(lerp(n,geometricNormal,mortar));
+            ao=lerp(.72,1.0,smoothstep(.05,.95,i.local.y));
         }
         rough=.82;
     }
     else if(mat==3||mat==6||mat==7||mat==35)
     {
-        RuntimeMaterial timber=TriplanarRuntimeMaterial(2,i.world*float3(1,.8,1),n,.64,.45);
+        RuntimeMaterial timber=TriplanarRuntimeMaterial(2,i.world*float3(1,.8,1),n,.62,.48);
         float horizontal=abs(n.x)>abs(n.z)?i.local.z:i.local.x;
         float boardCoordinate=(mat==7?i.local.z:i.local.y)*(mat==6?8.0:5.8);
         float boardID=floor(boardCoordinate),boardSeed=Hash21(float2(boardID,seed*97.0));
         float weather=Noise2(float2(horizontal*.21,i.local.y*.35)+seed*43.0);
-        float silver=saturate((weather-.32)*1.45+boardSeed*.22);
-        color=timber.albedo*lerp(float3(.67,.61,.54),float3(.83,.79,.70),seed);
+        float silver=saturate((weather-.42)*1.25+boardSeed*.16)*(1.0-smoothstep(2.8,5.2,i.local.y)*.55);
+        // Sun-baked Alpine larch and spruce timber tones, from roasted chestnut
+        // to warm honey-amber, with restrained silvering on exposed faces.
+        float3 woodTint=lerp(float3(.54,.31,.155),float3(.98,.70,.42),seed);
+        woodTint*=lerp(float3(.92,.86,.80),float3(1.08,1.03,.96),boardSeed);
+        color=timber.albedo*woodTint;
         float luminance=dot(color,float3(.30,.59,.11));
-        color=lerp(color,luminance*float3(1.10,1.07,.99)+float3(.022,.024,.023),silver*.76);
-        float board=FilteredLines(boardCoordinate,.021);
-        float endGrain=FilteredLines(horizontal*.34+boardSeed*17.0,.007);
-        color*=(.79+.30*boardSeed)*(1.0-.46*board)*(1.0-.18*endGrain);
-        n=timber.normal;rough=lerp(timber.roughness,.88,silver*.65);dielectricF0=timber.specular;
-        if(mat==6)color=lerp(color,lerp(float3(.055,.10,.08),float3(.15,.038,.022),step(.78,seed)),step(.40,seed));
-        if(mat==35)color*=.83+.17*smoothstep(0,2.0,i.local.y);
-        ao=.83;
+        color=lerp(color,luminance*float3(1.06,1.03,.96)+float3(.014,.014,.013),silver*.28);
+        float board=FilteredLines(boardCoordinate,.024);
+        float endGrain=FilteredLines(horizontal*.34+boardSeed*17.0,.008);
+        color*=(.82+.28*boardSeed)*(1.0-.48*board)*(1.0-.18*endGrain);
+        float bevel=sin((frac(boardCoordinate)-.5)*TAU)*.14*(1.0-saturate(fwidth(boardCoordinate)*1.6));
+        n=normalize(timber.normal+(mat==7?float3(0,0,bevel):float3(0,bevel,0)));
+        rough=lerp(timber.roughness,.86,silver*.55);dielectricF0=timber.specular;
+        if(mat==6)color=lerp(color,lerp(float3(.042,.088,.058),float3(.155,.038,.024),step(.74,seed)),step(.38,seed));
+        if(mat==35)
+        {
+            float eaveAO=1.0-.18*smoothstep(3.4,5.4,i.local.y);
+            color*=(.82+.18*smoothstep(0,2.2,i.local.y));
+            ao=.84*eaveAO;
+        }
+        else ao=.84;
     }
     else if(mat==4)
     {
         float row=floor(i.local.z*3.2),tile=Hash21(float2(floor(i.local.x*2.8+row*0.5),row)+seed*71);
         RuntimeMaterial slate=TriplanarRuntimeMaterial(4,i.world,n,.45,.42);
-        color=slate.albedo*lerp(.75,1.15,tile);n=slate.normal;
-        color*=lerp(float3(.88,.98,1.05),float3(1.25,.61,.36),step(.72,seed));
+        color=slate.albedo*lerp(.74,1.16,tile);n=slate.normal;
+        float3 roofTint=lerp(float3(.82,.86,.92),lerp(float3(.94,.78,.62),float3(1.12,.58,.36),step(.80,seed)),step(.54,seed));
+        color*=roofTint;
         float mortar=max(FilteredLines(i.local.z*3.2,0.055),FilteredLines(i.local.x*2.8+row*0.5,0.045));
-        color*=1.0-mortar*0.40;rough=0.70;
+        color*=1.0-mortar*0.44;rough=lerp(.58,.78,tile);ao=1.0-mortar*.22;
     }
     else if(mat==5||mat==31){color=float3(0.022,0.032,0.040);rough=0.075;ao=0.20;}
     else if(mat==20)
@@ -726,42 +758,59 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         float bark=Noise2(barkUV*float2(1.7,.8));
         float fissures=FilteredLines(barkUV.x+Noise2(barkUV*.51)*.32,.09);
         float plates=FilteredLines(barkUV.y*3.0+floor(barkUV.x)*.47,.018);
-        color=lerp(float3(.055,.046,.036),float3(.16,.13,.094),bark);
+        color=lerp(float3(.048,.038,.029),float3(.15,.115,.082),bark);
         color*=1.0-.64*fissures;color*=1.0-.24*plates;
         float lichen=smoothstep(.66,.82,Noise2(i.world.xz*7.1+i.world.y*.63));
-        color=lerp(color,float3(.16,.18,.13),lichen*.28);
+        color=lerp(color,float3(.15,.17,.12),lichen*.26);
         float3 tangent=float3(-sin(azimuth),0,cos(azimuth));
-        n=normalize(n+tangent*sin(barkUV.x*TAU+bark*2.0)*.13);
-        rough=.97;
+        n=normalize(n+tangent*sin(barkUV.x*TAU+bark*2.0)*.14);
+        rough=.96;
     }
     else if(mat==25||mat==26||mat==27)
     {
         float density=mat==26?1:EcologyNeedleDensity(i.local,i.uv,seed);
-        color=EcologyNeedleAlbedo(seed,density);rough=.80;ao=lerp(.58,.90,density);
+        color=EcologyNeedleAlbedo(seed,density);rough=.82;
+        if(mat==27)
+        {
+            float crownH=saturate(i.local.y/max(i.uv.y*2.0,.01)+.5);
+            float whorl=sin(crownH*34.0+seed*19.0)*.14;
+            n=normalize(n+float3(0,whorl,0));
+            ao=lerp(.44,.94,lerp(density,crownH,.35));
+        }
+        else if(mat==25)
+        {
+            float3 tuft=float3(sin(i.local.y*95.0+i.local.z*62.0+seed*31.0),
+                               cos(i.local.x*84.0+i.local.y*110.0),
+                               sin(i.local.x*78.0-i.local.y*92.0+seed*17.0));
+            n=normalize(n+tuft*.28);
+            ao=lerp(.48,.90,density);
+        }
+        else ao=lerp(.52,.92,density);
         if(mat==26)n=dot(n,view)>=0?n:-n;
     }
     else if(mat==21||mat==24)
     {
-        color=lerp(float3(.024,.049,.027),float3(.052,.090,.042),seed);
-        color*=0.85+0.20*i.uv.x;rough=.92;ao=.69;
+        float tip=mat==21?saturate(.5+i.local.y*.8):i.uv.x;
+        color=EcologyNeedleAlbedo(seed,.66+.30*tip);
+        rough=.80;ao=.54+.36*tip;
     }
-    else if(mat==22){color=lerp(float3(.035,.065,.017),float3(.12,.15,.035),seed);color*=.52+.48*i.uv.y;rough=.91;ao=.58+.42*i.uv.y;}
+    else if(mat==22){color=lerp(float3(.032,.060,.016),float3(.105,.135,.032),seed);color*=.52+.48*i.uv.y;rough=.88;ao=.58+.42*i.uv.y;}
     else if(mat==30)
     {
-        color=float3(.73,.76,.74);rough=.22;
+        color=float3(.76,.78,.77);rough=.18;
         float tips=smoothstep(7.8,8.2,abs(i.local.x));
         float tail=step(.45,i.local.y)*(1.0-smoothstep(-2.48,-2.32,i.local.z));
         float stripe=(1.0-smoothstep(.015,.032,abs(i.local.z+.41+.32*pow(saturate(abs(i.local.x)/9.0),1.4))))*step(.6,abs(i.local.x));
-        color=lerp(color,float3(.67,.16,.035),max(tips,max(tail,stripe)));
+        color=lerp(color,float3(.68,.15,.032),max(tips,max(tail,stripe)));
     }
-    else if(mat==32){color=float3(.35,.19,.12);rough=.55;}
-    else if(mat==36){color=float3(.16,.17,.15);rough=.38;metal=.75;}
-    else if(mat==37){color=lerp(float3(.022,.048,.012),float3(.075,.12,.025),mottling);rough=.92;ao=.65;}
-    else if(mat==38){color=lerp(float3(.40,.025,.025),float3(.52,.20,.045),step(.55,seed));rough=.82;ao=.8;}
+    else if(mat==32){color=float3(.35,.19,.12);rough=.52;skinWeight=1.0;}
+    else if(mat==36){color=float3(.16,.17,.16);rough=.36;metal=.78;}
+    else if(mat==37){color=lerp(float3(.022,.048,.012),float3(.072,.115,.024),mottling);rough=.90;ao=.65;}
+    else if(mat==38){color=lerp(float3(.42,.028,.026),float3(.54,.21,.045),step(.55,seed));rough=.80;ao=.8;}
     else if(mat==39)
     {
         RuntimeMaterial paving=TriplanarRuntimeMaterial(5,i.world,n,.6,.6);
-        color=paving.albedo;n=paving.normal;rough=paving.roughness;ao=.83;
+        color=paving.albedo;n=paving.normal;rough=paving.roughness;ao=.84;
     }
     else if(mat==40)
     {
@@ -774,47 +823,73 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         float ring=smoothstep(.77,.82,r),minuteMark=step(.91,cos(angle*12.0))*smoothstep(.58,.68,r);
         float hands=max((1.0-smoothstep(.018,.035,abs(q.x+.25*q.y)))*step(0,q.y),
             (1.0-smoothstep(.018,.035,abs(q.y-.45*q.x)))*step(0,q.x)*(1.0-smoothstep(.40,.5,r)));
-        color=lerp(float3(.58,.52,.38),float3(.018,.019,.015),saturate(ring+minuteMark+hands));rough=.65;
+        color=lerp(float3(.58,.52,.38),float3(.018,.019,.015),saturate(ring+minuteMark+hands));rough=.62;
     }
     else if(mat==50)
     {
-        // gDNA predicts geometry/normal/skinning, not albedo. These explicitly
-        // authored prototype materials must not be advertised as neural skin.
-        float skin=smoothstep(1.47,1.56,i.local.y);
-        float hands=smoothstep(.68,.78,abs(i.local.x));
-        skin=max(skin,hands);
-        float trousers=1.0-smoothstep(.82,.96,i.local.y);
+        // gDNA predicts geometry/normal/skinning, not albedo. Authored Alpine
+        // cold-weather jacket, trekking trousers, leather boots and skin tones.
+        float skin=smoothstep(.68,.78,abs(i.local.x));
+        float trousers=1.0-smoothstep(.82,.94,i.local.y);
+        float boots=1.0-smoothstep(.16,.22,i.local.y);
+        float jacket=(1.0-skin)*(1.0-trousers);
         float3 shirt=NeuralResidentShirtColor(seed);
-        color=lerp(shirt,float3(.032,.039,.043),trousers);
-        color=lerp(color,float3(.38,.205,.135),skin);
-        rough=lerp(.86,.55,skin);
+        float3 pants=lerp(float3(.028,.033,.040),float3(.048,.045,.038),step(.5,seed));
+        color=lerp(shirt,pants,trousers);
+        color=lerp(color,float3(.042,.026,.016),boots*(1.0-skin));
+        color=lerp(color,float3(.34,.195,.138),skin);
+        // Wide 10.5cm Alpine down-jacket baffles + matte woven outdoor textile.
+        float bafflePhase=i.local.y*9.5;
+        float baffleSeam=FilteredLines(bafflePhase,.030);
+        float weave=Noise2(i.local.xy*420.0+i.local.z*290.0)-.5;
+        n=normalize(n+float3(weave*.09*(1.0-skin),sin(bafflePhase*TAU)*.065*jacket,-weave*.09*(1.0-skin)));
         float micro=Noise2(i.local.xy*370.0+i.local.z*119.0);
-        color*=.97+.06*micro;
+        color*=(.95+.10*micro)*(1.0-.14*baffleSeam*jacket);
+        dielectricF0=lerp(.016,.036,max(skin,boots*(1.0-skin)));
+        rough=lerp(lerp(.82,.88,trousers),lerp(.48,.54,micro),skin);
+        rough=lerp(rough,.52,boots*(1.0-skin));
+        ao=1.0-.15*baffleSeam*jacket;
+        skinWeight=skin;
     }
     else if(mat==51)
     {
-        // GANHead predicts scanner appearance in sRGB. Its learned surface
-        // colour is converted to linear light; it is not a recovered PBR set.
+        // GANHead predicts scanner appearance in sRGB. Convert to linear light
+        // and balance cool studio scan white-point to natural Alpine daylight.
         float3 srgb=saturate(i.learnedColor);
         color=float3(srgb.x<=.04045?srgb.x/12.92:pow((srgb.x+.055)/1.055,2.4),
                      srgb.y<=.04045?srgb.y/12.92:pow((srgb.y+.055)/1.055,2.4),
                      srgb.z<=.04045?srgb.z/12.92:pow((srgb.z+.055)/1.055,2.4));
-        rough=lerp(.78,.53,smoothstep(.05,.3,dot(srgb,float3(.3,.59,.11))));
+        color*=float3(1.06,.99,.94);
+        float pore=Noise2(i.local.xy*420.0+i.local.z*310.0);
+        rough=lerp(.74,.44,smoothstep(.05,.32,dot(srgb,float3(.3,.59,.11))))+(pore-.5)*.06;
         float clothing=NeuralHeadClothingCoverage(i.local);
         color=lerp(color,NeuralResidentShirtColor(seed),clothing);
-        rough=lerp(rough,.86,clothing);
+        rough=lerp(rough,.76,clothing);
+        float luma=dot(color,float3(.2126,.7152,.0722));
+        skinWeight=(1.0-clothing)*smoothstep(.045,.13,luma)*smoothstep(-.04,.02,i.local.z)*(1.0-smoothstep(1.69,1.74,i.local.y));
     }
     float sunVisibility=CinematicShadow(i.world,(mat==50||mat==51)?neuralReceiverNormal:n);
 #if defined(ALPINE_QA_CHARACTER_UNSHADOWED)
     if(mat==50||mat==51)sunVisibility=1;
 #endif
-    float3 lit=CinematicLightingVisibleBentF0(n,n,view,color,rough,metal,ao,sunVisibility,dielectricF0);
+    float3 lit=CinematicLightingAt(i.world,n,n,view,color,rough,metal,ao,sunVisibility,dielectricF0);
+    if(skinWeight>.001)
+    {
+        float3 skinLit=CinematicSkinLighting(i.world,n,view,color,rough,ao,sunVisibility);
+        lit=lerp(lit,skinLit,skinWeight);
+    }
     if(mat==2||mat==23)
-        lit=lerp(lit,CinematicLightingVisibleBentF0(n,n,view,color,neuralBareRough,metal,ao,sunVisibility,neuralBareF0),neuralBareCoverage);
+        lit=lerp(lit,CinematicLightingAt(i.world,n,n,view,color,neuralBareRough,metal,ao,sunVisibility,neuralBareF0),neuralBareCoverage);
     if(mat==21||mat==22||mat==24||mat==25||mat==26||mat==27)
     {
         float transmission=pow(saturate(dot(-view,CinematicFrame[8].xyz)),3.0);
-        lit+=color*CinematicSunColor()*transmission*(mat==22?.35:.22)*sunVisibility;
+        lit+=color*CinematicSunColorAt(i.world.y)*transmission*(mat==22?.34:.26)*sunVisibility;
+    }
+    if(mat==40)
+    {
+        float warmHours=1.0-smoothstep(.10,.28,CinematicFrame[8].y);
+        float slats=1.0-FilteredLines(i.local.y*9.0,.14);
+        lit+=float3(1.55,.72,.22)*warmHours*slats*.65;
     }
     if(mat==5)
     {
@@ -828,7 +903,12 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         float curtainEdge=.16+.035*sin(i.uv.y*18.0+seed*19.0);
         float curtain=1.0-smoothstep(curtainEdge,curtainEdge+.035,min(i.uv.x,1.0-i.uv.x));
         room=lerp(room,float3(.12,.11,.083)*(.80+.20*sin(i.uv.x*71.0)),curtain*.85);
-        room+=float3(.015,.008,.002)*step(.72,seed)*smoothstep(.25,.45,roomUV.y)*(1.0-smoothstep(.7,.9,roomUV.y));
+        float winHash=Hash21(floor(i.world.xz*.42)+floor(i.local.y*.45)*13.7+seed*31.0);
+        float warmHours=1.0-smoothstep(.10,.30,CinematicFrame[8].y);
+        float lampOn=step(.30,winHash)*warmHours+.14*step(.84,winHash);
+        float3 lampColor=lerp(float3(2.25,.98,.30),float3(2.95,1.48,.56),frac(winHash*7.3));
+        float interiorGlow=smoothstep(.08,.55,roomUV.y)*(1.0-smoothstep(.72,.98,roomUV.y))*lerp(.45,1.0,wallEdge);
+        room+=lampColor*lampOn*interiorGlow*lerp(1.0,.42,curtain);
         lit=room*(1.0-fresnel)+AtmosphereEnvironment(reflect(-view,n))*fresnel+lit*.25;
     }
     else if(mat==31)
@@ -840,7 +920,7 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         float3 reflected=reflect(-view,n);
         float3 sky=AtmosphereEnvironment(reflected);
         float sunGlint=pow(saturate(dot(reflected,CinematicFrame[8].xyz)),900.0);
-        sky+=CinematicSunColor()*sunGlint*3.2*sunVisibility;
+        sky+=CinematicSunColorAt(i.world.y)*sunGlint*3.2*sunVisibility;
         float fresnel=.039+(.961)*pow(1.0-saturate(dot(n,view)),5.0);
         lit=lerp(inside,sky,fresnel);
         float frame=(1.0-smoothstep(.006,.014,abs(i.local.y-.24)))+

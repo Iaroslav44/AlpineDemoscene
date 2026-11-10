@@ -37,6 +37,20 @@ float ValleyCenter(float z)
     return 105.0 * sin(z * 0.00061 + 0.4) + 42.0 * sin(z * 0.00147 - 1.1);
 }
 
+// Continuous 128-second diurnal solar arc: low grazing alpenglow at loop ends,
+// golden raking morning light through the village/portrait, crisp Alpine sun
+// over the sailplanes/lake/waterfall, descending smoothly back to dusk.
+float3 DiurnalSunDirection(float a)
+{
+    float c01 = 0.5 + 0.5 * cos(a);
+    float twilightDip = c01 * c01;
+    twilightDip *= twilightDip;
+    float x = -0.82 + 0.12 * cos(a - 2.5);
+    float y = 0.500 - 0.110 * c01 - 0.352 * twilightDip + 0.022 * sin(a);
+    float z = -0.32 + 0.36 * sin(a) - 0.14 * cos(2.0 * a) + 0.12 * sin(2.0 * a);
+    return normalize(float3(x, y, z));
+}
+
 // Gradient noise on a triangular lattice avoids the square grid visible in
 // value-noise mountain faces. Evaluated only while generating the height field.
 float GeologicalNoise(float2 p)
@@ -182,29 +196,30 @@ float TerrainRaw(float2 xz)
     // narrow cascade lip. Previously the entire 1.8km ledge rose 240m within
     // ten metres, producing an artificial curtain of parallel columns.
     float fallDistance=abs(xz.x-350.0);
-    float fallCore=1-smoothstep(28,135,fallDistance);
+    float fallCore=1-smoothstep(8,22,fallDistance);
     float lip=4908.0+135.0*(GeologicalNoise(float2(xz.x*.0023,17.3))
         -GeologicalNoise(float2(350.0*.0023,17.3)))
         +44.0*(GeologicalNoise(float2(xz.x*.0051,8.1))
         -GeologicalNoise(float2(350.0*.0051,8.1)));
     float shelfWidth=1-smoothstep(180,920,fallDistance);
-    float upperRise=smoothstep(lip-lerp(54,3,fallCore),lip+lerp(58,3,fallCore),xz.y);
+    float upperRise=smoothstep(lip-lerp(54,4,fallCore),lip+lerp(58,4,fallCore),xz.y);
     float lowerRise=smoothstep(lip-240,lip-30,xz.y);
     float buttress=GeologicalNoise(float2(xz.x*.0051,xz.y*.0029)+float2(41.2,17.1));
     float cragFace=AlpineFracture(float2(xz.x*.007,xz.y*.012)+float2(7.1,53.7));
     float shelf=LAKE_Y+12+90*lowerRise+138*upperRise
         +100*smoothstep(4990,5910,xz.y);
-    float irregular=(buttress-.5)*112+cragFace*24;
+    float irregular=(buttress-.5)*112+cragFace*28;
     // Quiet upper catchment at the physical source; rougher interlocking
     // facets on the surrounding rock, without height-dependent colour bands.
-    shelf+=irregular*(1-fallCore*.90);
+    shelf+=irregular*(1-fallCore*.72);
     float escarpmentWeight=shelfWidth*smoothstep(4660,4860,xz.y)
         *(1-smoothstep(5680,6350,xz.y));
     h=lerp(h,RidgeJoin(h,shelf,25),escarpmentWeight);
     float ledgeFace=escarpmentWeight*sqrt(saturate(4*upperRise*(1-upperRise)));
-    float ledgeFracture=(GeologicalNoise(float2(xz.x*.019,xz.y*.033)+11.9)-.5)*34
-        +(GeologicalNoise(float2(xz.x*.043,xz.y*.028)+71.1)-.5)*11;
-    h+=ledgeFace*ledgeFracture*(1-fallCore*.96);
+    float ledgeFracture=(GeologicalNoise(float2(xz.x*.019,xz.y*.033)+11.9)-.5)*38
+        +(GeologicalNoise(float2(xz.x*.043,xz.y*.028)+71.1)-.5)*14
+        +cragFace*18.0;
+    h+=ledgeFace*ledgeFracture*(1-fallCore*.32);
     float gorge=1.0-smoothstep(27.0,91.0,fallDistance);
     gorge*=smoothstep(4590.0,4680.0,xz.y)*(1.0-smoothstep(4878.0,4904.0,xz.y));
     float channel=LAKE_Y-3.0+0.004*max(0.0,xz.y-4650.0);
@@ -217,7 +232,9 @@ float TerrainRaw(float2 xz)
     // No height-modulated noise rows. Metre relief is confined to massifs.
     float joints=1.0-abs(2.0*GeologicalNoise(xz*.011+float2(63.1,12.7))-1.0);
     float blocks=1.0-abs(2.0*GeologicalNoise(xz*.027+float2(7.3,39.2))-1.0);
-    h+=rugged*(1.0-gorge)*smoothstep(380.0,820.0,h)*((joints-.62)*11.0+(blocks-.62)*4.0+crag*1.5+talus*.4);
+    float foothillBench=(GeologicalNoise(xz*float2(.0014,.0020)+float2(41.7,19.3))-.5)*11.0;
+    h+=rugged*(1.0-gorge)*smoothstep(230.0,520.0,h)*foothillBench;
+    h+=rugged*(1.0-gorge)*smoothstep(340.0,780.0,h)*((joints-.62)*12.5+(blocks-.62)*4.8+crag*1.7+talus*.45);
     return h;
 }
 

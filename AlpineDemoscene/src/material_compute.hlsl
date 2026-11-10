@@ -67,15 +67,20 @@ float MaterialHeight(uint layer,float2 uv)
     else if(layer==4)
     {
         float row=floor(uv.y*12),x=frac(uv.x*8+.5*fmod(row,2.0));
-        float jointX=smoothstep(.01,.045,min(x,1-x)),jointY=smoothstep(.008,.05,frac(uv.y*12));
-        height=.24+.42*jointX*jointY+.13*frac(uv.y*12)+.07*f;
+        float tileWarp=(MNoise(uv*24+17,24)-.5)*.06;
+        float jointX=smoothstep(.008,.048,min(x,1-x)+tileWarp*.2),jointY=smoothstep(.008,.055,frac(uv.y*12));
+        float split=smoothstep(.01,.04,abs(x-.5+(MHash(float2(floor(uv.x*8),row))-.5)*.22));
+        height=.20+.46*jointX*jointY*(.90+.10*split)+.15*frac(uv.y*12)+.09*f+.02*fine;
     }
     else if(layer==5)
     {
-        float row=floor(uv.y*8),x=frac(uv.x*6+.5*fmod(row,2.0)),y=frac(uv.y*8);
-        float2 q=abs(float2(x,y)-.5)*2;
-        float edge=max(q.x,q.y);
-        height=.16+.62*(1-smoothstep(.72,.99,edge))+.09*f+.025*fine;
+        // Irregular Alpine granite/gneiss flagstones and cobbles instead of
+        // uniform machine-laid rectangular bricks.
+        float2 warp=float2(MNoise(uv*6,6),MNoise(uv*6+19,6))*.045;
+        float3 stones=MCells(uv+warp,10);
+        float bevel=smoothstep(.012,.095,stones.y);
+        float crown=1.0-smoothstep(0.0,.48,stones.x)*.22;
+        height=.14+.62*bevel*crown*(.82+.24*stones.z)+.11*f+.03*fine;
     }
     else if(layer==6)
     {
@@ -104,29 +109,37 @@ float3 MaterialAlbedo(uint layer,float2 uv,float height,out float rough)
     }
     else if(layer==1)
     {
-        float soil=smoothstep(.55,.76,MNoise(uv*16+33,16));
-        float dead=smoothstep(.50,.79,macro)*(.40+.60*n);
-        float3 turf=lerp(float3(.035,.061,.021),float3(.097,.137,.043),f);
-        turf=lerp(turf,float3(.16,.122,.060),dead*.55);
-        turf=lerp(turf,float3(.070,.055,.033)*(.8+.4*f),soil*.46);
-        rough=.91+.07*n;result=turf;
+        float soil=smoothstep(.56,.78,MNoise(uv*16+33,16));
+        float dead=smoothstep(.52,.80,macro)*(.35+.65*n);
+        float3 turf=lerp(float3(.028,.052,.018),float3(.078,.114,.034),f);
+        turf=lerp(turf,float3(.128,.098,.046),dead*.48);
+        turf=lerp(turf,float3(.058,.044,.026)*(.8+.4*f),soil*.42);
+        rough=.89+.08*n;result=turf;
     }
     else if(layer==2)
     {
-        rough=.71+.20*macro;float board=MHash(float2(floor(uv.x*8),0));
+        rough=.68+.20*macro;float board=MHash(float2(floor(uv.x*8),0));
         float grain=.5+.5*sin(uv.x*MT*112+MNoise(uv*8,8)*7+MNoise(uv*32,32)*2);
-        result=lerp(float3(.055,.031,.016),float3(.22,.14,.073),.30+.7*f)*(.8+.35*board)*(.91+.09*grain);
+        result=lerp(float3(.065,.035,.017),float3(.25,.15,.075),.30+.7*f)*(.82+.32*board)*(.90+.10*grain);
     }
-    else if(layer==3){rough=.89;result=lerp(float3(.48,.43,.34),float3(.73,.68,.56),.5+.5*f)*(.94+.06*n);}
+    else if(layer==3){rough=.88;result=lerp(float3(.52,.47,.39),float3(.76,.72,.63),.5+.5*f)*(.95+.05*n);}
     else if(layer==4)
     {
-        rough=.64+.18*n;float row=floor(uv.y*12);float tile=MHash(float2(floor(uv.x*8+.5*fmod(row,2)),row));
-        result=lerp(float3(.055,.064,.067),float3(.22,.24,.24),tile)*(.83+.17*f)*(.68+.32*smoothstep(.25,.5,height));
+        rough=.58+.22*n;float row=floor(uv.y*12);float tile=MHash(float2(floor(uv.x*8+.5*fmod(row,2)),row));
+        float moss=smoothstep(.64,.82,macro)*smoothstep(.45,.70,n);
+        result=lerp(float3(.048,.054,.058),float3(.17,.18,.185),tile)*(.84+.16*f)*(.68+.32*smoothstep(.22,.52,height));
+        result=lerp(result,float3(.09,.11,.055),moss*.24);
     }
     else if(layer==5)
     {
-        float row=floor(uv.y*8);float stone=MHash(float2(floor(uv.x*6+.5*fmod(row,2)),row));
-        result=lerp(float3(.18,.185,.17),float3(.31,.30,.27),stone)*(.94+.06*f)*(.76+.24*smoothstep(.25,.55,height));
+        float2 warp=float2(MNoise(uv*6,6),MNoise(uv*6+19,6))*.045;
+        float3 stones=MCells(uv+warp,10);
+        float mortar=1.0-smoothstep(.010,.065,stones.y);
+        float3 granite=lerp(float3(.13,.132,.128),float3(.26,.245,.22),stones.z);
+        granite=lerp(granite,granite*float3(1.08,.98,.86),smoothstep(.4,.8,macro)*.45);
+        float3 jointCol=float3(.078,.068,.052)*(.85+.3*f);
+        result=lerp(granite*(.82+.18*smoothstep(.25,.60,height)),jointCol,mortar);
+        rough=lerp(.64+.20*n,.93,mortar);
     }
     else if(layer==6){rough=.40+.18*f;result=float3(.52,.285,.19)*(.94+.10*f)+float3(.035,-.006,-.01)*(macro-.5);}
     else

@@ -106,10 +106,12 @@ float3 SunDirection(float loopA)
 float3 Sky(float3 rd, float3 sun)
 {
     float3 sky=AtmosphereEnvironment(rd);
-    float disc=smoothstep(cos(.0055),cos(.0045),dot(rd,sun));
+    float mu=saturate(dot(rd,sun));
+    float disc=smoothstep(cos(.0056),cos(.0044),dot(rd,sun));
+    float aureole=pow(mu,420.0)*1.35+pow(mu,32.0)*.11;
     // The direct water GGX lobe integrates the solar source separately.
-    // Keep the visible disc in the main sky, but out of its reflection cache.
-    return sky+CinematicSunColor()*disc*(PassMode.x>.5?0.0:16.0);
+    // Keep the visible disc and circumsolar corona out of its reflection cache.
+    return sky+CinematicSunColor()*(disc*16.0+aureole)*(PassMode.x>.5?0.0:1.0);
 }
 
 #include "terrain_material.hlsli"
@@ -243,7 +245,7 @@ float3 WaterSunReflection(float3 p,float3 n,float3 v,float3 sun,float slopeVaria
     float shadow=1.0;
     [branch]if(spec>.004)
         shadow=TerrainShadow(p+float3(0,.12,0),sun)*CinematicShadow(p,n);
-    return CinematicSunColor()*(CinematicFrame[8].w*spec*shadow);
+    return CinematicSunColorAt(p.y)*(CinematicFrame[8].w*spec*shadow);
 }
 
 float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
@@ -267,7 +269,7 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
         uint rw,rh;PlanarReflection.GetDimensions(rw,rh);
         reflectionUV-=TemporalJitter(((int)G.w)&7)/float2(rw,rh);
         float border=min(min(reflectionUV.x,reflectionUV.y),min(1.0-reflectionUV.x,1.0-reflectionUV.y));
-        reflectionWeight=smoothstep(0.0,0.025,border);
+        reflectionWeight=smoothstep(0.001,0.014,border);
         // Distorted lookups can cross into the part of the mirrored image
         // whose rays never reach the clipping plane. Blend to the real
         // surface-origin trace there instead of showing a white horizon seam.
@@ -277,7 +279,7 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
     if(reflectionWeight<.999)
         reflection=SkyWithCloudReflection(reflectedRay,p,sun,loopA);
     // Water must reflect actual geometry, including the surrounding mountains.
-    // Restrict this extra trace to the hemisphere that can reach the horizon.
+    // Match ShadeTerrain's radiometric balance so edge fallback is seamless.
     if(reflectedRay.y<0.65&&reflectionWeight<0.999)
     {
         float3 reflectionOrigin=p+n*0.35;
@@ -285,32 +287,37 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
         if(rt<=4200.0)
         {
             float3 rp=reflectionOrigin+reflectedRay*rt;
-            // Reflection LOD avoids another full shadow march per water pixel.
             float3 rn=TerrainNormal(rp.xz);
-            float rock=smoothstep(0.08,0.43,1.0-rn.y);
-            float snow=smoothstep(1500.0,1900.0,rp.y)*(1.0-smoothstep(0.18,0.62,1.0-rn.y));
-            float3 ra=lerp(float3(0.06,0.09,0.035),float3(0.25,0.23,0.20),rock);
-            ra=lerp(ra,float3(0.82,0.88,0.93),snow);
-            float3 reflectedTerrain=ra*(0.22+2.4*saturate(dot(rn,sun))*smoothstep(-0.06,0.16,sun.y));
-            float aerial=1.0-exp(-rt*0.00018);
-            reflection=lerp(reflectedTerrain,AtmosphereEnvironment(reflectedRay),aerial);
+            float rock=smoothstep(0.10,0.42,1.0-rn.y);
+            float forestBelt=smoothstep(152.0,210.0,rp.y)*(1.0-smoothstep(1380.0,1750.0,rp.y))*(1.0-rock);
+            float snow=smoothstep(1180.0,1540.0,rp.y)*(1.0-smoothstep(0.38,0.74,1.0-rn.y));
+            float3 ra=lerp(float3(0.045,0.062,0.026),float3(0.016,0.035,0.018),forestBelt*0.85);
+            ra=lerp(ra,float3(0.068,0.070,0.074),rock);
+            ra=lerp(ra,float3(0.87,0.90,0.935),snow);
+            float rShadow=TerrainShadow(rp+rn*2.2,sun);
+            float3 rDirect=CinematicSunColorAt(rp.y)*(CinematicFrame[8].w*rShadow*saturate(dot(rn,sun))/PI);
+            float3 reflectedTerrain=ra*(rDirect+AtmosphereDiffuse(rn));
+            reflection=CinematicFog(reflectedTerrain,rp);
         }
     }
     if(reflectionWeight>0.001)
     {
         uint rw,rh;PlanarReflection.GetDimensions(rw,rh);
+        float2 minUV=float2(0.5,0.5)/float2(rw,rh),maxUV=1.0-minUV;
         float2 texel=(.45+min(1.25,12.0*sqrt(unresolved)))/float2(rw,rh);
-        float3 planar=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV,0).rgb*.4;
-        planar+=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV+float2(texel.x,0),0).rgb*.15;
-        planar+=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV-float2(texel.x,0),0).rgb*.15;
-        planar+=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV+float2(0,texel.y),0).rgb*.15;
-        planar+=PlanarReflection.SampleLevel(CinematicSampler,reflectionUV-float2(0,texel.y),0).rgb*.15;
+        float2 cUV=clamp(reflectionUV,minUV,maxUV);
+        float3 planar=PlanarReflection.SampleLevel(CinematicSampler,cUV,0).rgb*.4;
+        planar+=PlanarReflection.SampleLevel(CinematicSampler,clamp(reflectionUV+float2(texel.x,0),minUV,maxUV),0).rgb*.15;
+        planar+=PlanarReflection.SampleLevel(CinematicSampler,clamp(reflectionUV-float2(texel.x,0),minUV,maxUV),0).rgb*.15;
+        planar+=PlanarReflection.SampleLevel(CinematicSampler,clamp(reflectionUV+float2(0,texel.y),minUV,maxUV),0).rgb*.15;
+        planar+=PlanarReflection.SampleLevel(CinematicSampler,clamp(reflectionUV-float2(0,texel.y),minUV,maxUV),0).rgb*.15;
         reflection=lerp(reflection,planar,reflectionWeight);
     }
-    float depth=max(0.0,p.y-Terrain(p.xz));float shallow=exp(-depth*0.055);
+    float depth=max(0.0,p.y-Terrain(p.xz));
     float3 refractedRay=refract(rd,n,1.0/1.333);
     float opticalDepth=depth/max(abs(refractedRay.y),0.12);
-    float3 bed=float3(.23,.25,.18);
+    float3 waterIrradiance=AtmosphereDiffuse(float3(0,1,0))+CinematicSunColorAt(p.y)*(CinematicFrame[8].w*max(0.0,sun.y)/PI);
+    float3 bed=float3(.16,.17,.14)*waterIrradiance;
     if(depth<32.0)
     {
         float bt=TraceTerrain(p+n*.04,refractedRay,220.0);
@@ -319,29 +326,35 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
             float3 bp=p+n*.04+refractedRay*bt;
             RuntimeMaterial gravel=SampleNaturalMaterial(7,bp.xz*.7);
             float3 bn=normalize(TerrainNormal(bp.xz)+float3(gravel.normal.x,0,gravel.normal.y)*.6);
-            float3 resolvedBed=gravel.albedo*(.30+1.2*saturate(dot(bn,sun)));
-            resolvedBed*=exp(-depth*float3(.12,.047,.024)/max(sun.y,.12));
+            float3 bedDirect=CinematicSunColorAt(bp.y)*(CinematicFrame[8].w*saturate(dot(bn,sun))/PI);
+            float3 resolvedBed=gravel.albedo*(AtmosphereDiffuse(bn)+bedDirect);
+            resolvedBed*=exp(-depth*float3(.13,.046,.026)/max(sun.y,.14));
             // Fade the expensive bed trace into the deep-water approximation
-            // continuously; a hard26m switch drew a ring across the lake.
+            // continuously; a hard 26m switch drew a ring across the lake.
             float bedWeight=1.0-smoothstep(20.0,32.0,depth);
             bed=lerp(bed,resolvedBed,bedWeight);
             opticalDepth=lerp(opticalDepth,bt,bedWeight);
         }
     }
-    float3 transmission=exp(-opticalDepth*float3(.12,.047,.024));
-    float3 refraction=bed*transmission+float3(.008,.067,.073)*(1.0-transmission);
+    // Glacial rock-flour hydro-optics: strong red absorption + turquoise-emerald
+    // Mie backscattering modulated physically by surface sky and solar irradiance.
+    float3 transmission=exp(-opticalDepth*float3(.145,.044,.030));
+    float3 scatterAlbedo=float3(.012,.092,.096);
+    float3 inscatter=scatterAlbedo*waterIrradiance*(.72+.28*saturate(dot(-rd,sun)));
+    float3 refraction=bed*transmission+inscatter*(1.0-transmission);
     float fresnel=WaterFresnel(dot(n,-rd));
     float3 col=lerp(refraction,reflection,fresnel);
     col+=WaterSunReflection(p,n,-rd,sun,unresolved);
     float shoreNoise=Noise2(p.xz*0.18+WindField(p.xz,loopA)*0.5);
-    float foam=(1.0-smoothstep(0.18,1.1,depth))*smoothstep(0.61,0.80,shoreNoise);
+    float foam=(1.0-smoothstep(0.16,0.95,depth))*smoothstep(0.62,0.82,shoreNoise);
     float streakPhase=dot(p.xz,float2(0.91,0.38))+loopA*29.0;
     foam*=0.72+0.28*sin(streakPhase)*DetailBand(fp,0.16);
     foam=max(foam,PhysicalWaterFoam(p.xz));
-    return lerp(col,float3(0.63,0.69,0.65),foam*0.32);
+    float3 foamLight=float3(.76,.80,.82)*(AtmosphereDiffuse(float3(0,1,0))+CinematicSunColorAt(p.y)*(CinematicFrame[8].w*max(0.0,sun.y)/PI));
+    return lerp(col,foamLight,foam*0.30);
 }
 
-// Ballistic jet: horizontal launch velocity15m/s and gravity9.81m/s?.
+// Ballistic jet: horizontal launch velocity 15m/s and gravity 9.81m/s^2.
 // The flow follows a trajectory through space, not the shape of the cliff.
 float3 WaterfallSource()
 {
@@ -357,43 +370,48 @@ float4 WaterfallVolume(float3 ro,float3 rd,float maxT,float seconds,out float fi
     float3 source=WaterfallSource();
     float fallAge=sqrt(max(0.0,2.0*(source.y-LAKE_Y)/9.81));
     float tn,tf;firstDepth=maxT+1.0;
-    if(!RayBox(ro,rd,float3(310.0,LAKE_Y,source.z-15.0*fallAge-35.0),
-        float3(390.0,source.y+2.0,source.z+4.0),tn,tf))return 0;
+    if(!RayBox(ro,rd,float3(306.0,LAKE_Y,source.z-15.0*fallAge-35.0),
+        float3(394.0,source.y+2.0,source.z+4.0),tn,tf))return 0;
     tn=max(0.0,tn);tf=min(tf,maxT);
     if(tf<=tn)return 0;
     float ds=(tf-tn)/48.0,trans=1.0;
     float3 result=0;
+    float3 sun=CinematicFrame[8].xyz;
+    float sunVis=.28+.72*TerrainShadow(float3(source.x,lerp(LAKE_Y,source.y,.58),source.z-38.0),sun);
+    float3 skyFill=AtmosphereDiffuse(normalize(float3(0,.45,-1.0)));
+    float3 sunFill=CinematicSunColorAt(lerp(LAKE_Y,source.y,.5))*CinematicFrame[8].w*sunVis;
     [loop]for(int i=0;i<48;++i)
     {
         float t=tn+(i+.5)*ds;float3 p=ro+rd*t;
         float age=sqrt(max(0.0,2.0*(source.y-p.y)/9.81));
         float centreZ=source.z-15.0*age;
-        float width=6.5+age*.55,thickness=1.2+age*.32;
+        float width=6.2+age*.58,thickness=1.2+age*.34;
         float parcelAge=age-seconds;
-        float turbulence=smoothstep(.3,4.0,age);
-        float centreX=source.x+turbulence*(1.1*sin(parcelAge*2.4)+.65*sin(parcelAge*5.1));
+        float turbulence=smoothstep(.25,3.8,age);
+        float centreX=source.x+turbulence*(1.05*sin(parcelAge*2.4)+.62*sin(parcelAge*5.1));
         float2 q=float2((p.x-centreX)/width,(p.z-centreZ)/thickness);
+        // Secondary side-ledge cascades flanking the main cataract core.
+        float2 qSideL=float2((p.x-(source.x-9.5-age*.45))/(2.3+age*.28),(p.z-(centreZ+1.6))/(0.85+age*.22));
+        float2 qSideR=float2((p.x-(source.x+8.8+age*.40))/(2.0+age*.25),(p.z-(centreZ+2.1))/(0.80+age*.20));
+        float plume=exp(-dot(q,q)*1.8)+.34*exp(-dot(qSideL,qSideL)*2.1)+.28*exp(-dot(qSideR,qSideR)*2.1);
         float parcel=Noise3(float3(p.x*.38,p.z*.28,(age-seconds)*2.3));
-        float fine=Noise3(float3(p.x*.91,p.z*.56,(age-seconds)*5.7));
-        float breakup=smoothstep(.12,.84,parcel*.65+fine*.35);
+        float fine=Noise3(float3(p.x*.95,p.z*.58,(age-seconds)*5.9));
+        float breakup=smoothstep(.10,.84,parcel*.62+fine*.38);
         // Constant mass flux: expansion and acceleration dilute the jet;
         // entrained bubbles/droplet area increase the scattering cross-section.
         float speed=sqrt(225.0+pow(9.81*age,2.0));
-        float dilution=(15.0/speed)*(6.5*1.2)/(width*thickness);
-        float bubbles=1.0+5.0*smoothstep(.4,6.0,age);
-        // Advected coherent filaments leave translucent gaps inside the jet;
-        // this is optical breakup, not a separately claimed particle solver.
-        float strands=.5+.5*sin((p.x-centreX)*1.15+sin(parcelAge*3.7)*.8);
-        float density=exp(-dot(q,q)*1.8)*(.16+.84*breakup)*lerp(1.0,.35+.95*strands,turbulence)*dilution*bubbles;
+        float dilution=(15.0/speed)*(6.2*1.2)/(width*thickness);
+        float bubbles=1.0+5.2*smoothstep(.35,5.8,age);
+        float strands=.5+.5*sin((p.x-centreX)*1.25+sin(parcelAge*3.7)*.85);
+        float density=plume*(.15+.85*breakup)*lerp(1.0,.32+.98*strands,turbulence)*dilution*bubbles;
         density*=step(p.y,source.y)*step(LAKE_Y,p.y);
-        float alpha=1.0-exp(-density*ds*1.15);
-        // Several individually thin samples can become visible together.
-        // Record the first visible cumulative extinction, so transparent
-        // fringes receive fog at the jet rather than the background depth.
+        float alpha=1.0-exp(-density*ds*1.18);
         if(1.0-trans*(1.0-alpha)>.001&&firstDepth>maxT)firstDepth=t;
-        float back=saturate(dot(rd,CinematicFrame[8].xyz));
-        float3 light=float3(.32,.39,.44)+CinematicSunColor()*(.54+.18*back);
-        light*=.83+.17*breakup;
+        float back=pow(saturate(dot(rd,sun)),3.0);
+        float3 jetNormal=normalize(float3((p.x-centreX)/max(width,1.0),.35,-1.0));
+        float nl=.38+.62*saturate(dot(jetNormal,sun));
+        float3 light=float3(.86,.90,.93)*(skyFill*.92+sunFill*(nl*.28+back*.22));
+        light*=.80+.20*breakup;
         result+=trans*alpha*light;trans*=1.0-alpha;
         if(trans<.015)break;
     }
@@ -407,21 +425,44 @@ float4 SprayLayer(float3 ro,float3 rd,float maxT,float loopA,float2 pixel)
     float3 impact=float3(source.x,LAKE_Y,source.z-15.0*impactAge);
     float seconds=FlightTime(G.z);
     float3 wind=PhysicalWind(impact,seconds);
-    float3 center=impact+float3(wind.x*2.0,12.0,wind.z*2.0);
-    float3 radius=float3(40.0,28.0,42.0);
+    float3 center=impact+float3(wind.x*2.8,19.0,wind.z*2.8-10.0);
+    float3 radius=float3(105.0,58.0,98.0);
     float3 o=(ro-center)/radius,d=rd/radius;
     float A=dot(d,d),B=dot(o,d),C=dot(o,o)-1.0,H=B*B-A*C;
     if(H<=0.0)return 0;H=sqrt(H);
     float tn=max(0.0,(-B-H)/A),tf=min(maxT,(-B+H)/A);
     if(tf<=tn)return 0;
-    float ds=(tf-tn)/12.0,trans=1.0;float3 accum=0;
-    [loop]for(int i=0;i<12;++i)
+    float3 sun=CinematicFrame[8].xyz;
+    float sunVis=.30+.70*TerrainShadow(center+float3(0,24.0,-24.0),sun);
+    float3 sunRad=CinematicSunColorAt(center.y)*CinematicFrame[8].w*sunVis;
+    float3 skyAmb=AtmosphereDiffuse(float3(0,1,0));
+    float forwardScatter=pow(saturate(dot(rd,sun)),4.0)*.38+.18;
+    // Primary optical rainbow dispersion + sunlit mist halo in waterfall spray.
+    float antiSun=dot(-rd,sun);
+    float bowAngle=antiSun>.0?(antiSun-.736)/.028:(dot(rd,normalize(float3(sun.x,0,sun.z)))-.56)/.14;
+    float bowMask=exp(-pow((bowAngle-.5)*2.2,2.0))*smoothstep(.12,.26,sun.y)*sunVis;
+    float3 rainbow=float3(exp(-pow((bowAngle-.20)*3.6,2.0)),
+                          exp(-pow((bowAngle-.52)*3.6,2.0)),
+                          exp(-pow((bowAngle-.82)*3.6,2.0)))*bowMask;
+    float jitter=.20+.60*frac(52.9829189*frac(dot(floor(pixel),float2(.06711056,.00583715))));
+    float ds=(tf-tn)/16.0,trans=1.0;float3 accum=0;
+    [loop]for(int i=0;i<16;++i)
     {
-        float t=tn+(i+.5)*ds;float3 p=ro+rd*t,q=(p-center)/radius;
-        float n=FBM3((p-wind*seconds)*.13+float3(0,-seconds*.7,0));
-        float density=exp(-dot(q,q)*2.5)*smoothstep(.24,.72,n)*smoothstep(LAKE_Y,LAKE_Y+3.0,p.y);
-        float alpha=1.0-exp(-density*ds*.032);
-        accum+=trans*alpha*float3(.52,.62,.68);trans*=1.0-alpha;
+        float t=tn+(i+jitter)*ds;float3 p=ro+rd*t,q=(p-center)/radius;
+        // Strictly C^2 compact-support radial envelope eliminates any visible
+        // bounding ellipsoid shell, leaving only turbulent billowing mist plumes.
+        float shell=pow(saturate(1.0-dot(q,q)),2.8);
+        float billow=FBM3((p-wind*seconds*.8)*.036+float3(0,-seconds*.28,0));
+        float fine=FBM3((p-wind*seconds*1.2)*.095+float3(13.7,-seconds*.55,7.1));
+        float wisp=smoothstep(.30,.76,billow*.65+fine*.35);
+        float3 qCore=(p-(impact+float3(0,3.5,-3.0)))/float3(25.0,13.0,23.0);
+        float core=pow(saturate(1.0-dot(qCore,qCore)),2.2)*(.45+.55*fine);
+        float waterFade=smoothstep(LAKE_Y-.5,LAKE_Y+7.0,p.y);
+        float density=(shell*wisp*.34+core*.85)*waterFade;
+        float alpha=1.0-exp(-density*ds*.016);
+        float heightShade=.74+.26*saturate((p.y-LAKE_Y)/52.0);
+        float3 sprayLight=(skyAmb*.95+sunRad*forwardScatter)*heightShade+sunRad*rainbow*.16;
+        accum+=trans*alpha*sprayLight;trans*=1.0-alpha;
     }
     return float4(accum,1.0-trans);
 }
