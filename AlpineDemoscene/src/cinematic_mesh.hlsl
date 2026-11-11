@@ -577,7 +577,7 @@ void FoliageCoverage(MeshOut i)
     if(i.tag.x==50)
     {
         // Clean collar rim around the base of the neck while clearing shoulders/jaw.
-        float collarTop=1.452-.022*smoothstep(.058,.095,length(i.local.xz));
+        float collarTop=1.454-.026*smoothstep(.056,.088,length(i.local.xz-float2(0,-.012)));
         clip(collarTop-i.local.y);
     }
     if(i.tag.x==51)clip(NeuralHeadCropCoverage(i.local));
@@ -828,47 +828,150 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
     else if(mat==50)
     {
         // gDNA predicts geometry/normal/skinning, not albedo. Authored Alpine
-        // cold-weather jacket, trekking trousers, leather boots and skin tones.
-        float skin=smoothstep(.68,.78,abs(i.local.x));
-        float trousers=1.0-smoothstep(.82,.94,i.local.y);
-        float boots=1.0-smoothstep(.16,.22,i.local.y);
+        // technical down jacket, reinforced shoulder yoke, zipper placket,
+        // trekking trousers, leather boots and anatomical hand skin tones.
+        float cuffEdge=.668+.003*sin(atan2(i.local.z+.025,i.local.y-1.32)*6.0);
+        float skin=smoothstep(cuffEdge,cuffEdge+.005,abs(i.local.x));
+        float cuffBand=(1.0-skin)*smoothstep(cuffEdge-.022,cuffEdge-.016,abs(i.local.x));
+        float hemY=.858-.010*saturate(i.local.z*8.0);
+        float trousers=1.0-smoothstep(hemY-.004,hemY+.004,i.local.y);
+        float bootTop=.195+.010*saturate(i.local.z*10.0);
+        float boots=(1.0-smoothstep(bootTop-.005,bootTop+.005,i.local.y))*(1.0-skin);
         float jacket=(1.0-skin)*(1.0-trousers);
         float3 shirt=NeuralResidentShirtColor(seed);
-        float3 pants=lerp(float3(.028,.033,.040),float3(.048,.045,.038),step(.5,seed));
-        color=lerp(shirt,pants,trousers);
-        color=lerp(color,float3(.042,.026,.016),boots*(1.0-skin));
-        color=lerp(color,float3(.34,.195,.138),skin);
-        // Wide 10.5cm Alpine down-jacket baffles + matte woven outdoor textile.
-        float bafflePhase=i.local.y*9.5;
-        float baffleSeam=FilteredLines(bafflePhase,.030);
-        float weave=Noise2(i.local.xy*420.0+i.local.z*290.0)-.5;
-        n=normalize(n+float3(weave*.09*(1.0-skin),sin(bafflePhase*TAU)*.065*jacket,-weave*.09*(1.0-skin)));
+        float yokeLine=1.262+.022*cos(clamp(i.local.x/.18,-1.0,1.0)*PI);
+        float sleeveMask=smoothstep(.195,.235,abs(i.local.x));
+        float yoke=jacket*max(smoothstep(yokeLine-.004,yokeLine+.004,i.local.y)*(1.0-sleeveMask),smoothstep(1.395,1.405,i.local.y));
+        shirt=lerp(shirt,shirt*.54+float3(.014,.018,.024),yoke*.88);
+        float frontZip=jacket*step(0.0,i.local.z)*(1.0-smoothstep(.0022,.0038,abs(i.local.x)));
+        float zipPull=jacket*step(0.0,i.local.z)*(1.0-smoothstep(.0026,.0040,abs(i.local.x)))*(1.0-smoothstep(.009,.013,abs(i.local.y-1.388)));
+        shirt=lerp(shirt,shirt*.25+float3(.018,.020,.024),max(frontZip,cuffBand*.75));
+        shirt=lerp(shirt,float3(.46,.48,.50),zipPull);
+        float3 pants=lerp(float3(.026,.031,.038),float3(.045,.042,.035),step(.5,seed));
+        float kneeSeam=trousers*(1.0-boots)*max(FilteredLines(i.local.y*2.2-.08,.006),FilteredLines(abs(i.local.x)-.095,.005));
+        pants*=1.0-.20*kneeSeam;
+        float3 bootColor=lerp(float3(.042,.026,.016),float3(.016,.016,.018),1.0-smoothstep(.045,.062,i.local.y));
         float micro=Noise2(i.local.xy*370.0+i.local.z*119.0);
-        color*=(.95+.10*micro)*(1.0-.14*baffleSeam*jacket);
-        dielectricF0=lerp(.016,.036,max(skin,boots*(1.0-skin)));
-        rough=lerp(lerp(.82,.88,trousers),lerp(.48,.54,micro),skin);
-        rough=lerp(rough,.52,boots*(1.0-skin));
-        ao=1.0-.15*baffleSeam*jacket;
+        color=lerp(shirt,pants,trousers);
+        color=lerp(color,bootColor,boots);
+        color=lerp(color,float3(.35,.202,.146)*(.94+.12*micro),skin);
+        // 3D convex down-jacket baffles (upper half of each baffle faces skyward,
+        // lower half curves into seam shadow) + fine ripstop nylon micro-grid.
+        float bafflePhase=lerp(i.local.y*9.5,abs(i.local.x)*10.2,sleeveMask);
+        float baffleSeam=max(FilteredLines(bafflePhase,.012),FilteredLines(i.local.y-yokeLine,.003)*(1.0-sleeveMask));
+        float baffleCurve=-sin(bafflePhase*TAU)*(1.0-yoke*.55)*(1.0-frontZip);
+        float weave=Noise2(i.local.xy*420.0+i.local.z*290.0)-.5;
+        float ripstop=(FilteredLines(i.local.x*165.0,.06)+FilteredLines(i.local.y*165.0,.06))*.5;
+        float3 baffleTilt=lerp(float3(0,baffleCurve*.32,0),float3(-sign(i.local.x)*baffleCurve*.32,0,0),sleeveMask);
+        n=normalize(n+baffleTilt*jacket+float3(weave*.07+ripstop*.025,weave*.05,-weave*.07)*(1.0-skin));
+        float baffleLoftShade=1.0+(.06*baffleCurve-.18*baffleSeam)*jacket;
+        color*=(.95+.10*micro)*baffleLoftShade;
+        dielectricF0=lerp(.020,.036,max(skin,boots));
+        rough=lerp(lerp(.68,.84,trousers),lerp(.46,.54,micro),skin);
+        rough=lerp(rough,.48,boots);
+        metal=zipPull*.75;
+        ao=(1.0-.24*baffleSeam*jacket-.14*frontZip-.15*kneeSeam)*lerp(.78,1.0,smoothstep(.85,.91,i.local.y)+trousers);
         skinWeight=skin;
     }
     else if(mat==51)
     {
-        // GANHead predicts scanner appearance in sRGB. Convert to linear light
-        // and balance cool studio scan white-point to natural Alpine daylight.
+        // GANHead predicts scanner appearance in sRGB. Convert to linear light,
+        // balance to Alpine daylight, and reconstruct anatomical eyes, lips & pores.
+        float3 hPos=i.local-float3(0,1.42,0);
         float3 srgb=saturate(i.learnedColor);
         color=float3(srgb.x<=.04045?srgb.x/12.92:pow((srgb.x+.055)/1.055,2.4),
                      srgb.y<=.04045?srgb.y/12.92:pow((srgb.y+.055)/1.055,2.4),
                      srgb.z<=.04045?srgb.z/12.92:pow((srgb.z+.055)/1.055,2.4));
-        color*=float3(1.06,.99,.94);
-        float pore=Noise2(i.local.xy*420.0+i.local.z*310.0);
-        rough=lerp(.74,.44,smoothstep(.05,.32,dot(srgb,float3(.3,.59,.11))))+(pore-.5)*.06;
+        color*=float3(1.04,.98,.93);
+        // Match surrounding linear cheek/chin skin (sRGB 0.87,0.69,0.59 -> linear 0.75,0.43,0.29)
+        // so removing scanner mouth bleed leaves zero dark halo around the lips.
+        float3 cheekRef=float3(.75,.43,.29);
+        float mouthRegion=smoothstep(.095,.105,hPos.y)*(1.0-smoothstep(.132,.142,hPos.y))*(1.0-smoothstep(.020,.030,abs(hPos.x)))*smoothstep(.082,.091,hPos.z);
+        float yFissure=.1218-3.5*hPos.x*hPos.x;
+        float upperVermilion=.1315-.0008*cos(clamp(hPos.x/.0058,-2.0,2.0)*PI)-16.0*hPos.x*hPos.x;
+        float lowerVermilion=.1105+16.0*hPos.x*hPos.x;
+        float lipMask=smoothstep(lowerVermilion-.0022,lowerVermilion+.0018,hPos.y)*(1.0-smoothstep(upperVermilion-.0018,upperVermilion+.0022,hPos.y))*(1.0-smoothstep(.0185,.0235,abs(hPos.x)))*smoothstep(.086,.093,hPos.z);
+        float fissureMask=exp(-pow((hPos.y-yFissure)/.00070,2.0))*(1.0-smoothstep(.0175,.0220,abs(hPos.x)))*smoothstep(.087,.093,hPos.z);
+        color=lerp(color,cheekRef,mouthRegion*.88);
+        float lipSulcus=.96+.04*sin(hPos.x*1350.0+sin(hPos.y*420.0));
+        float upperLipShade=smoothstep(yFissure-.0006,yFissure+.0018,hPos.y);
+        float3 vermilionColor=lerp(float3(.64,.29,.22),float3(.52,.23,.18),upperLipShade)*lipSulcus;
+        color=lerp(color,vermilionColor,lipMask*.85);
+        color=lerp(color,float3(.16,.055,.045),fissureMask*.72);
+        // Relax over-steep downward scanner normals on upper lip & mentolabial crease
+        // so real-time lighting does not double-darken the mouth perimeter.
+        n=normalize(lerp(n,normalize(float3(n.x*.75,max(n.y,-.12)*.40,max(n.z,.90))),mouthRegion*.72));
+        // Anatomical palpebral aperture, sclera, hazel-brown iris, pupil & wet cornea.
+        float2 e=float2(abs(hPos.x)-.0308,hPos.y-.2032);
+        float exNorm=clamp(e.x/.0132,-1.0,1.0);
+        float upperLid=.0045*(1.0-exNorm*exNorm)-.0004*exNorm;
+        float lowerLid=-.0033*(1.0-exNorm*exNorm)+.0003*exNorm;
+        float eyeOpen=smoothstep(lowerLid-.0004,lowerLid+.0009,e.y)*(1.0-smoothstep(upperLid-.0009,upperLid+.0004,e.y))*(1.0-smoothstep(.0112,.0134,abs(e.x)))*smoothstep(.072,.079,hPos.z);
+        float lashLine=exp(-pow((e.y-upperLid)/.0013,2.0))*(1.0-smoothstep(.0115,.0142,abs(e.x)))*smoothstep(.072,.079,hPos.z);
+        float lidCrease=exp(-pow((e.y-(upperLid+.0030))/.0011,2.0))*(1.0-smoothstep(.0105,.0135,abs(e.x)))*smoothstep(.072,.079,hPos.z);
+        float2 irisP=float2(e.x+.0004*sign(hPos.x),e.y-.0004);
+        float rIris=length(irisP);
+        float irisMask=1.0-smoothstep(.0050,.0057,rIris);
+        float pupilMask=1.0-smoothstep(.0018,.0023,rIris);
+        float limbus=smoothstep(.0038,.0052,rIris)*irisMask;
+        float irisFibers=.82+.36*Noise2(float2(atan2(irisP.y,irisP.x)*9.0,rIris*420.0));
+        float3 scleraCol=lerp(float3(.68,.62,.57),float3(.42,.18,.15),smoothstep(.0082,.0128,abs(e.x)))*smoothstep(upperLid+.0015,upperLid-.0032,e.y);
+        float3 irisCol=lerp(float3(.11,.065,.032)*irisFibers,float3(.022,.016,.012),limbus*.85);
+        irisCol=lerp(irisCol,float3(.005,.005,.007),pupilMask);
+        color=lerp(color,lerp(scleraCol,irisCol,irisMask),eyeOpen);
+        color*=(1.0-.76*lashLine)*(1.0-.32*lidCrease);
+        float3 eyeN=normalize(float3(hPos.x-sign(hPos.x)*.0308,(e.y+.0005)*1.15,.0115));
+        n=normalize(lerp(n,eyeN,eyeOpen*.90));
+        float nostril=(1.0-smoothstep(.0042,.0075,length(float2(abs(hPos.x)-.0092,hPos.y-.1555))))*smoothstep(.092,.102,hPos.z)*saturate(-n.y*1.8);
+        color*=1.0-.78*nostril;
         float clothing=NeuralHeadClothingCoverage(i.local);
         color=lerp(color,NeuralResidentShirtColor(seed),clothing);
+        // Spatial scalp-hair mask so facial skin has uniform skinWeight=1.0 with
+        // zero iso-luminance contour steps across the cheeks, brow or nose.
+        float srgbLuma=dot(srgb,float3(.30,.59,.11));
+        float scalpZone=max(smoothstep(.242,.268,hPos.y),smoothstep(.155,.195,hPos.y)*(1.0-smoothstep(-.005,.048,hPos.z)));
+        float hairMask=(1.0-clothing)*(1.0-eyeOpen)*scalpZone*(1.0-smoothstep(.12,.24,srgbLuma));
+        skinWeight=(1.0-clothing)*(1.0-eyeOpen)*(1.0-hairMask);
+        float2 poreGrad=float2(Noise2(hPos.xy*520.0+hPos.z*380.0)-.5,Noise2(hPos.yz*540.0-hPos.x*410.0)-.5);
+        n=normalize(n+float3(poreGrad.x,poreGrad.y,-poreGrad.x*.5)*(.085*skinWeight*(1.0-lipMask*.6)));
+        float hairAzimuth=atan2(hPos.x,hPos.z+.02);
+        float hairFine=(Noise2(float2(hairAzimuth*240.0,hPos.y*90.0))-.5)+.5*(Noise2(float2(hairAzimuth*520.0,hPos.y*170.0))-.5);
+        n=normalize(n+float3(cos(hairAzimuth),hairFine*.4,-sin(hairAzimuth))*(.065*hairMask*hairFine));
+        color*=1.0+.08*hairFine*hairMask;
+        rough=lerp(.52,.44,smoothstep(.12,.38,srgbLuma))+poreGrad.x*.05;
+        rough=lerp(rough,.34,lipMask*(1.0-fissureMask));
+        rough=lerp(rough,.78,fissureMask);
+        rough=lerp(rough,.48,hairMask);
+        rough=lerp(rough,.036,eyeOpen);
         rough=lerp(rough,.76,clothing);
-        float luma=dot(color,float3(.2126,.7152,.0722));
-        skinWeight=(1.0-clothing)*smoothstep(.045,.13,luma)*smoothstep(-.04,.02,i.local.z)*(1.0-smoothstep(1.69,1.74,i.local.y));
+        dielectricF0=lerp(.028,.038,eyeOpen);
+        ao=(1.0-.42*fissureMask)*(1.0-.75*nostril)*(1.0-.55*lashLine)*(1.0-.25*lidCrease);
     }
-    float sunVisibility=CinematicShadow(i.world,(mat==50||mat==51)?neuralReceiverNormal:n);
+    float sunVisibility;
+    if(mat==50||mat==51)
+    {
+        // Offset shadow-map lookup past the character's ~20cm thickness so the
+        // 7cm village cascade casts building/tree shadows without projecting
+        // coarse 7cm self-shadow texel steps onto the hero's face and chest.
+        float3 sunDir=CinematicFrame[8].xyz;
+        sunVisibility=CinematicShadow(i.world+sunDir*.28+neuralReceiverNormal*.06,neuralReceiverNormal);
+        float selfVis=smoothstep(-.06,.18,dot(neuralReceiverNormal,sunDir));
+        if(mat==51)
+        {
+            float3 hPos=i.local-float3(0,1.42,0);
+            float chinOverhang=smoothstep(.088,.062,hPos.y)*smoothstep(-.01,.05,hPos.z)*(1.0-smoothstep(.032,.054,abs(hPos.x)));
+            float orbitalSocket=smoothstep(.214,.202,hPos.y)*smoothstep(.190,.200,hPos.y)*(1.0-smoothstep(.018,.046,abs(abs(hPos.x)-.031)))*smoothstep(.070,.088,hPos.z);
+            selfVis*=(1.0-.58*chinOverhang)*(1.0-.32*orbitalSocket*saturate(sunDir.y*1.6));
+        }
+        else
+        {
+            float neckShadow=smoothstep(1.36,1.44,i.local.y)*smoothstep(.01,.06,i.local.z)*(1.0-smoothstep(.045,.085,abs(i.local.x)));
+            float armCrease=smoothstep(.92,1.26,i.local.y)*(1.0-smoothstep(1.26,1.34,i.local.y))*exp(-pow((abs(i.local.x)-.185)/.035,2.0));
+            selfVis*=(1.0-.42*neckShadow)*(1.0-.35*armCrease);
+        }
+        sunVisibility*=selfVis;
+    }
+    else sunVisibility=CinematicShadow(i.world,n);
 #if defined(ALPINE_QA_CHARACTER_UNSHADOWED)
     if(mat==50||mat==51)sunVisibility=1;
 #endif
@@ -877,6 +980,11 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
     {
         float3 skinLit=CinematicSkinLighting(i.world,n,view,color,rough,ao,sunVisibility);
         lit=lerp(lit,skinLit,skinWeight);
+    }
+    if(mat==50)
+    {
+        float grazing=pow(1.0-saturate(dot(n,view)),4.0)*(1.0-skinWeight);
+        lit+=(color+.025)*AtmosphereDiffuse(n)*grazing*.38*ao;
     }
     if(mat==2||mat==23)
         lit=lerp(lit,CinematicLightingAt(i.world,n,n,view,color,neuralBareRough,metal,ao,sunVisibility,neuralBareF0),neuralBareCoverage);

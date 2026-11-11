@@ -237,11 +237,12 @@ float3 DepthAwareDOF(float2 uv,CameraFrame camera,out float encodedDepth)
     float weightSum = 1.0;
     [branch]if(cocPixels>=.35)
     {
+    float dofIgn = frac(52.9829189 * frac(dot(floor(uv * O.xy) + 0.5, float2(0.06711056, 0.00583715))));
     [unroll]
     for (int i = 0; i < 16; ++i)
     {
         float fi = (float)i + 0.5;
-        float angle = fi * 2.39996323;
+        float angle = fi * 2.39996323 + dofIgn * TAU;
         float radius = sqrt(fi / 16.0) * cocPixels;
         float2 offset = float2(cos(angle), sin(angle)) * radius / O.xy;
         float4 tap = Input0.SampleLevel(LinearClamp, uv + offset, 0.0);
@@ -261,41 +262,31 @@ float3 DepthAwareDOF(float2 uv,CameraFrame camera,out float encodedDepth)
     return sum / weightSum;
 }
 
-float3 ResolvedWorld(CameraFrame camera,float2 uv)
-{
-    return camera.origin+CameraRay(camera,uv,O.x/O.y)*DecodeDepth(ResolvedAlpha(uv));
-}
-
 float ScreenContactOcclusion(CameraFrame camera,float2 uv,float depth)
 {
     if(depth>90.0||depth<0.15)return 1.0;
-    float3 p=ResolvedWorld(camera,uv);
     float2 pixel=1.0/O.xy;
-    float3 xp=ResolvedWorld(camera,uv+float2(pixel.x*2,0))-p;
-    float3 xm=p-ResolvedWorld(camera,uv-float2(pixel.x*2,0));
-    float3 yp=ResolvedWorld(camera,uv+float2(0,pixel.y*2))-p;
-    float3 ym=p-ResolvedWorld(camera,uv-float2(0,pixel.y*2));
-    float3 dx=dot(xp,xp)<dot(xm,xm)?xp:xm;
-    float3 dy=dot(yp,yp)<dot(ym,ym)?yp:ym;
-    float3 normal=cross(dx,dy);
-    normal*=rsqrt(max(dot(normal,normal),1e-12));
-    if(dot(normal,camera.origin-p)<0.0)normal=-normal;
-    float radius=clamp(0.32*camera.lens*O.y/max(depth,0.1),3.0,46.0);
+    float radius=clamp(0.28*camera.lens*O.y/max(depth,0.6),2.5,28.0);
+    float ign=frac(52.9829189*frac(dot(floor(uv*O.xy)+0.5,float2(0.06711056,0.00583715))));
+    // Symmetric second-difference depth-crease occlusion with a deadzone above
+    // FP16 radial depth quantization (~0.001*depth) so planar/sloped walls are
+    // 100% free of concentric quantization rings while concave corners darken.
+    float deadzone=depth*0.0045+0.008;
+    float range=max(depth*0.085,0.18);
     float occlusion=0.0;
-    [unroll]for(int i=0;i<8;++i)
+    [unroll]for(int i=0;i<4;++i)
     {
-        float angle=(i+0.5)*2.39996323;
-        float2 offset=float2(cos(angle),sin(angle))*radius*sqrt((i+0.5)/8.0)*pixel;
-        float2 sampleUV=uv+offset;
-        if(any(sampleUV<=0.0)||any(sampleUV>=1.0))continue;
-        float3 delta=ResolvedWorld(camera,sampleUV)-p;
-        float d2=dot(delta,delta);
-        float horizon=max(0.0,dot(normal,delta)-0.025);
-        occlusion+=horizon*rsqrt(max(d2,0.0004))*saturate(1.0-d2/1.44);
+        float angle=(i+ign)*0.78539816;
+        float2 offset=float2(cos(angle),sin(angle))*(radius*sqrt((i+0.5)/4.0))*pixel;
+        float dPos=DecodeDepth(ResolvedAlpha(uv+offset));
+        float dNeg=DecodeDepth(ResolvedAlpha(uv-offset));
+        float crease=max(0.0,depth-0.5*(dPos+dNeg)-deadzone);
+        float weight=exp2(-abs(dPos-dNeg)/range);
+        occlusion+=saturate(crease/(depth*0.035+0.04))*weight;
     }
     // Applied only at display, not recursively baked into the HDR history.
     // This is local screen-space contact shading, not global illumination.
-    return 1.0-min(0.34,occlusion*0.24);
+    return 1.0-min(0.26,occlusion*0.18);
 }
 
 float4 Display(VSOut input) : SV_Target

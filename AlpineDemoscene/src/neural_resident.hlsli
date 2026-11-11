@@ -19,26 +19,24 @@ float3 NeuralResidentShirtColor(float seed)
 
 float NeuralHeadClothingCoverage(float3 source)
 {
-    // GANHead's neck crop includes the captured shirt collar. Match that
-    // generated surface to the body's authored jacket without tinting the face.
-    // Keep collar height compact around the base of the neck to avoid side-jaw flare.
-    float neckline=1.452+.015*smoothstep(.032,.068,abs(source.x))+.010*smoothstep(.02,-.035,source.z);
-    return 1.0-smoothstep(neckline-.010,neckline+.010,source.y);
+    // Lower neck tucks cleanly inside the body's 3D stand-collar below 1.445m.
+    return 1.0-smoothstep(1.434,1.444,source.y);
 }
 
 float NeuralHeadCropCoverage(float3 source)
 {
-    // The independent head generator includes a broad scanner shoulder crop.
-    // Combine an anatomical neck column (widening to the full cranium above 1.575m)
-    // with a forward jaw/chin ellipsoid so lateral shoulder spikes at 1.49..1.54m
-    // are cleanly removed without pinching the lower neck above the jacket collar.
-    float headBlend=smoothstep(1.515,1.575,source.y);
-    float2 neckRadius=lerp(float2(.071,.077),float2(.170,.170),headBlend);
-    float2 qNeck=(source.xz-float2(0,-.014))/neckRadius;
+    // The independent head generator includes a broad scanner shoulder/collar crop.
+    // Trim the captured T-shirt collar flare around the cylindrical neck column
+    // (|x| <= 5.5cm below 1.505m, widening to the full cranium above 1.568m) while
+    // preserving the forward chin/jaw ellipsoid and clipping below the stand-collar.
+    float bottomClip=source.y-1.436;
+    float headBlend=smoothstep(1.505,1.568,source.y);
+    float2 neckRadius=lerp(float2(.055,.068),float2(.170,.170),headBlend);
+    float2 qNeck=(source.xz-float2(0,-.016))/neckRadius;
     float neckCranium=1.0-dot(qNeck,qNeck);
-    float3 qJaw=(source-float3(0,1.520,.034))/float3(.074,.086,.098);
+    float3 qJaw=(source-float3(0,1.522,.036))/float3(.068,.082,.096);
     float jaw=1.0-dot(qJaw,qJaw);
-    return max(source.y-1.575,max(neckCranium,jaw));
+    return min(bottomClip,max(source.y-1.568,max(neckCranium,jaw)));
 }
 
 static const uint NEURAL_RIG_BASE=118016;
@@ -159,21 +157,29 @@ void NeuralWriteResidentRig(uint id,float time)
         float3x3 rotation=float3x3(1,0,0,0,1,0,0,0,1);float3 translation=pelvis;
         bool leftArm=joint==16||joint==18||joint==20||joint==22;
         bool rightArm=joint==17||joint==19||joint==21||joint==23;
-        if(leftArm||rightArm)
+        if(joint==13||joint==14)
         {
-            float side=leftArm?1:-1;float3 shoulder=NeuralBodyRig[leftArm?16:17].xyz;
-            rotation=mul(NeuralRotationX(-side*sin(gait)*.18*walking),NeuralRotationZ(-side*1.30));
+            float side=joint==13?1:-1;float3 clav=float3(side*.085,1.335,-.022);
+            rotation=NeuralRotationZ(-side*.15);
+            translation=pelvis+clav-mul(rotation,clav);
+        }
+        else if(leftArm||rightArm)
+        {
+            // Symmetric anatomical glenohumeral pivot prevents the lateral bind
+            // landmark from levering the inner deltoid/armpit upward when lowered.
+            float side=leftArm?1:-1;
+            float3 shoulder=float3(side*.180,1.314,NeuralBodyRig[leftArm?16:17].z);
+            float3x3 shoulderRotation=mul(NeuralRotationX(-side*sin(gait)*.18*walking-.05),NeuralRotationZ(-side*1.31));
+            rotation=shoulderRotation;
             float3 localTranslation=0;
             bool lower=joint==18||joint==19||joint==20||joint==21||joint==22||joint==23;
             if(lower)
             {
-                float3 elbow=NeuralBodyRig[leftArm?18:19].xyz;float3x3 elbowRotation=NeuralRotationY(-side*(.14+.08*max(0,-side*sin(gait))*walking));
+                float3 elbow=NeuralBodyRig[leftArm?18:19].xyz;
+                float3x3 elbowRotation=mul(NeuralRotationY(-side*(.16+.09*max(0,-side*sin(gait))*walking)),NeuralRotationZ(-side*.06));
                 localTranslation=mul(rotation,elbow-mul(elbowRotation,elbow));rotation=mul(rotation,elbowRotation);
             }
-            // Lower-arm rotation is around its bind elbow, then the full chain
-            // rotates around the shoulder. Clavicles stay with the torso.
-            float3x3 shoulderRotation=mul(NeuralRotationX(-side*sin(gait)*.18*walking),NeuralRotationZ(-side*1.30));
-            translation=pelvis+shoulder-mul(shoulderRotation,shoulder)+localTranslation;
+            translation=pelvis+shoulder-mul(shoulderRotation,shoulder)+localTranslation+float3(-side*.016,-.012,0);
         }
         else if(joint==12||joint==15)
         {
@@ -198,12 +204,19 @@ void NeuralBone(uint joint,float3 source,float3 sourceNormal,uint id,out float3 
 Geometry NeuralPersonGeometry(uint vertex,uint id)
 {
     Geometry g=(Geometry)0;
-    float3 source=NeuralResidentVertices[vertex*4].xyz;
+    float3 rawSource=NeuralResidentVertices[vertex*4].xyz;
+    float3 source=rawSource;
     float3 sourceNormal=NeuralResidentVertices[vertex*4+1].xyz;
     uint4 joints=asuint(NeuralResidentVertices[vertex*4+2]);
     float4 weights=NeuralResidentVertices[vertex*4+3];
     float2 velocity=PeopleVelocity(id,G.z);
     float speed=length(velocity),walking=saturate(speed*1.8);
+    float handSpan=max(0.0,abs(source.x)-.680);
+    if(handSpan>0.0)
+    {
+        source.y-=handSpan*handSpan*1.6;
+        source.z-=max(0.0,source.z+.010)*smoothstep(.680,.735,abs(source.x))*.42;
+    }
     float3 p=0,n=0;
     [unroll]for(uint k=0;k<4;++k)
     {
@@ -226,10 +239,26 @@ Geometry NeuralPersonGeometry(uint vertex,uint id)
         float penetration=max(0,contact.w-dot(contact.xyz,p));
         p+=contact.xyz*min(penetration,.025);
     }
+    else
+    {
+        // 3D quilted down-jacket baffle loft, elastic cuffs, waist hem & stand-collar.
+        float3 posedDir=normalize(n+1e-6);
+        float skinMask=smoothstep(.668,.676,abs(rawSource.x));
+        float hemY=.858-.010*saturate(rawSource.z*8.0);
+        float jacketMask=(1.0-skinMask)*smoothstep(hemY-.006,hemY+.006,rawSource.y)*(1.0-smoothstep(1.444,1.454,rawSource.y));
+        float sleeveMask=smoothstep(.195,.235,abs(rawSource.x));
+        float bafflePhase=lerp(rawSource.y*9.5,abs(rawSource.x)*10.2,sleeveMask);
+        float baffleWave=abs(sin(bafflePhase*PI));
+        float baffleLoft=(1.0-pow(1.0-baffleWave,2.2))*.0042;
+        float cuffBand=exp(-pow((abs(rawSource.x)-.656)/.012,2.0))*.0026;
+        float hemBand=exp(-pow((rawSource.y-(hemY+.012))/.014,2.0))*.0032;
+        float collarBand=smoothstep(1.402,1.425,rawSource.y)*(1.0-smoothstep(1.442,1.455,rawSource.y))*.0038;
+        p+=posedDir*((baffleLoft+cuffBand+hemBand)*jacketMask+collarBand*(1.0-skinMask));
+    }
     float3 forward=normalize(float3(velocity.x,0,velocity.y)+float3(.0001,0,.0001));
     float3 right=float3(forward.z,0,-forward.x);
     float scale=PeopleScale(id);
-    g.local=source;g.uv=source.xy;
+    g.local=rawSource;g.uv=rawSource.xy;
     g.p=PeopleRoot(id,G.z)+(right*p.x+float3(0,p.y,0)+forward*p.z)*scale;
     g.n=normalize(right*n.x+float3(0,n.y,0)+forward*n.z);
     g.seed=Hash21(float2(id,953));g.material=50;g.moving=1;
@@ -245,9 +274,19 @@ Geometry NeuralHeadGeometry(uint vertex,uint id)
     float frame=frac(G.z/128.0+id*.137)*count;
     uint first=(uint)floor(frame),second=(first+1)%count;
     // Two float4 records per captured-control frame: expression coefficients
-    // and relative jaw pose. The latter is retained for future full jaw LBS.
-    float4 expression=lerp(NeuralHeadMotion[first*2],NeuralHeadMotion[second*2],frac(frame));
+    // and relative jaw pose. Keep morph weights within subtle anatomical range.
+    float4 expression=lerp(NeuralHeadMotion[first*2],NeuralHeadMotion[second*2],frac(frame))*float4(.18,.28,.28,.28);
     [unroll]for(uint k=0;k<4;++k)local+=NeuralHeadVertices[vertex*9+5+k].xyz*expression[k];
+    // Sculpt 3D oral fissure parting crease at y=0.1222 (true junction between
+    // upward-facing lower lip and downward-facing upper lip) and tuck lower lip.
+    float mouthX=saturate(1.0-abs(local.x)/.025);
+    float mouthFront=smoothstep(.082,.095,local.z);
+    float dyLip=local.y-(.1222-3.5*local.x*local.x);
+    float fissure=exp(-pow(dyLip/.0016,2.0))*mouthX*mouthFront;
+    float lowerTuck=exp(-pow((local.y-.108)/.009,2.0))*mouthX*mouthFront;
+    local.z-=.0016*fissure+.0022*lowerTuck;
+    float lipNormalY=(dyLip/.0024)*exp(-pow(dyLip/.0032,2.0))*mouthX*mouthFront;
+    normal=normalize(normal+float3(0,-lipNormalY*.26,-.14*fissure));
     float3 source=local+float3(0,1.42,0);
     float3 posed,posedNormal;
     NeuralBone(15,source,normal,id,posed,posedNormal);

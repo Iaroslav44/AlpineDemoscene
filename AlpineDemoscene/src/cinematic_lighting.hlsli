@@ -150,7 +150,12 @@ float3 CinematicLightingSun(float3 n,float3 bentNormal,float3 v,float3 albedo,fl
     float a004=min(r.x*r.x,exp2(-9.28*nv))*r.x+r.y;
     float2 dfg=float2(-1.04,1.04)*a004+r.zw;
     float3 reflected=reflect(-v,n);
-    float3 env=AtmosphereEnvironment(normalize(lerp(reflected,bentNormal,a*.65)));
+    float3 envDir=normalize(lerp(reflected,bentNormal,a*.65));
+    // Smoothly blend across the planetary horizon so rough surfaces do not
+    // project AtmosphereLUT's 1-texel hitGround cliff as a contour line.
+    float horizonBlend=smoothstep(-.18*rough-.02,.04+.28*rough,envDir.y);
+    float3 envSky=AtmosphereEnvironment(normalize(float3(envDir.x,max(envDir.y,.08),envDir.z)));
+    float3 env=lerp(sky*.32,envSky,horizonBlend);
     env=lerp(env,sky,smoothstep(.35,1.0,rough));
     float specularOcclusion=saturate(pow(max(nv+ao,1e-4),exp2(-16.0*rough-1.0))-1.0+ao);
     float3 indirectSpecular=env*(f0*dfg.x+dfg.y)*specularOcclusion;
@@ -184,9 +189,11 @@ float3 CinematicSkinLighting(float3 p,float3 n,float3 v,float3 albedo,float roug
     float3 direct=((1.0-F)*albedo*nlWrap*normWrap+D*vis*F*nl)*sunRad;
     direct+=albedo*float3(.26,.055,.020)*back*sunRad;
     float3 sky=AtmosphereDiffuse(n);
-    float3 env=lerp(AtmosphereEnvironment(reflect(-v,n)),sky,smoothstep(.25,.95,rough));
+    float3 refl=reflect(-v,n);
+    float3 envSky=AtmosphereEnvironment(normalize(float3(refl.x,max(refl.y,.12),refl.z)));
+    float3 env=lerp(sky*.34,lerp(envSky,sky,smoothstep(.20,.85,rough)),smoothstep(-.18,.32,refl.y));
     float specAO=saturate(pow(max(nv+ao,1e-4),exp2(-12.0*rough-1.0))-1.0+ao);
-    return max(0,direct+albedo*(1.0-f0)*sky*ao+env*(f0+.016*pow(1.0-nv,4.0))*specAO);
+    return max(0,direct+albedo*(1.0-f0)*sky*ao+env*(f0+.012*pow(1.0-nv,4.0))*specAO);
 }
 float3 CinematicLightingVisibleBentF0(float3 n,float3 bentNormal,float3 v,float3 albedo,float rough,float metal,float ao,float sunVisibility,float3 dielectricF0)
 {
