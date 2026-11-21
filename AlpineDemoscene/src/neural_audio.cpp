@@ -88,6 +88,37 @@ void denseRow(const float* in, float* out, const float* weights,
     }
 }
 
+// Four adjacent control frames share each checkpoint weight load. Each output
+// still accumulates in input-channel order, including the final partial batch.
+void denseFrames(const float* in, float* out, unsigned rows, unsigned inputChannels,
+                 unsigned outputChannels, unsigned outputStride,
+                 const float* weights, const float* bias) {
+    if (rows != 4 || (outputChannels & 3u)) {
+        for (unsigned r = 0; r < rows; ++r)
+            denseRow(in + r * inputChannels, out + r * outputStride,
+                     weights, bias, inputChannels, outputChannels);
+        return;
+    }
+    for (unsigned r = 0; r < 4; ++r) copy(out + r * outputStride, bias, outputChannels);
+    for (unsigned i = 0; i < inputChannels; ++i) {
+        const __m128 a = _mm_set1_ps(in[i]);
+        const __m128 b = _mm_set1_ps(in[inputChannels + i]);
+        const __m128 c = _mm_set1_ps(in[2 * inputChannels + i]);
+        const __m128 d = _mm_set1_ps(in[3 * inputChannels + i]);
+        for (unsigned j = 0; j < outputChannels; j += 4) {
+            const __m128 w = _mm_loadu_ps(weights + i * outputChannels + j);
+            float* y = out + j;
+            _mm_storeu_ps(y, _mm_add_ps(_mm_loadu_ps(y), _mm_mul_ps(a, w)));
+            y += outputStride;
+            _mm_storeu_ps(y, _mm_add_ps(_mm_loadu_ps(y), _mm_mul_ps(b, w)));
+            y += outputStride;
+            _mm_storeu_ps(y, _mm_add_ps(_mm_loadu_ps(y), _mm_mul_ps(c, w)));
+            y += outputStride;
+            _mm_storeu_ps(y, _mm_add_ps(_mm_loadu_ps(y), _mm_mul_ps(d, w)));
+        }
+    }
+}
+
 void normalize(float* values, unsigned count, unsigned channels,
                const float* scale, const float* shift, float epsilon,
                bool leaky, const float* residual) {
@@ -119,7 +150,9 @@ bool conv(const float* in, float* out, const float* weights, const float* bias,
             const float* x = in + q * ni;
             const float* w = weights + k * ni * 128;
             for (unsigned i = 0; i < ni; ++i) {
-                const __m128 a = _mm_set1_ps(relu ? maxf(0, x[i]) : x[i]);
+                // A closed ReLU gate contributes zero to all 128 outputs.
+                if (relu && x[i] <= 0) continue;
+                const __m128 a = _mm_set1_ps(x[i]);
                 for (unsigned j = 0; j < 128; j += 4) {
                     _mm_storeu_ps(y + j, _mm_add_ps(_mm_loadu_ps(y + j),
                         _mm_mul_ps(a, _mm_loadu_ps(w + i * 128 + j))));
@@ -197,10 +230,12 @@ extern "C" int NeuralAudioPredict(const float* controls10, float* raw126,
         const float* bias = w; w += 512;
         const float* scale = w; w += 512;
         const float* shift = w; w += 512;
-        for (unsigned t = 0; t < frames; ++t) {
-            denseRow(x + t * ni, a + t * 512, weights, bias, ni, 512);
-            normalize(a + t * 512, 512, 512, scale, shift, 0.001f, true, nullptr);
-            if ((t & 31) == 31 && !continued(pump)) { success = false; break; }
+        for (unsigned t = 0; t < frames; t += 4) {
+            const unsigned rows = frames - t < 4 ? frames - t : 4;
+            denseFrames(x + t * ni, a + t * 512, rows, ni, 512, 512, weights, bias);
+            for (unsigned r = 0; r < rows; ++r)
+                normalize(a + (t + r) * 512, 512, 512, scale, shift, 0.001f, true, nullptr);
+            if (((t + rows) & 31) == 0 && !continued(pump)) { success = false; break; }
         }
         if (!success) break;
         x = a; float* swap = a; a = b; b = swap;
@@ -212,12 +247,15 @@ extern "C" int NeuralAudioPredict(const float* controls10, float* raw126,
         const float* embedding = w; w += 20 * 64;
         const float* pitchWeights = w; w += 64;
         const float* pitchBias = w; w += 64;
-        for (unsigned t = 0; t < frames; ++t) {
-            float* c = condition + t * 384;
-            denseRow(x + t * 512, c, weights, bias, 512, 256);
-            copy(c + 256, embedding + instrumentId * 64, 64);
-            for (unsigned j = 0; j < 64; ++j)
-                c[320 + j] = controls10[t * 10 + 6] * pitchWeights[j] + pitchBias[j];
+        for (unsigned t = 0; t < frames; t += 4) {
+            const unsigned rows = frames - t < 4 ? frames - t : 4;
+            denseFrames(x + t * 512, condition + t * 384, rows, 512, 256, 384, weights, bias);
+            for (unsigned r = 0; r < rows; ++r) {
+                float* c = condition + (t + r) * 384;
+                copy(c + 256, embedding + instrumentId * 64, 64);
+                for (unsigned j = 0; j < 64; ++j)
+                    c[320 + j] = controls10[(t + r) * 10 + 6] * pitchWeights[j] + pitchBias[j];
+            }
         }
         const float* cw = w; w += 3 * 384 * 128;
         const float* cb = w; w += 128;

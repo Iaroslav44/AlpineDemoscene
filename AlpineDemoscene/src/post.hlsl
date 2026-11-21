@@ -57,6 +57,30 @@ float3 HistoryCubic(float2 uv)
     return max(result,0.0);
 }
 
+// At a silhouette the cubic footprint can reach past the validated depth.
+// Reconstruct just the four bilinear texels that belong to this surface.
+float3 SurfaceHistory(float2 uv,float distance,float tolerance,bool sky,
+                      float3 fallback,out float coverage)
+{
+    float2 p=uv*O.xy-.5;
+    int2 base=int2(floor(p));
+    float2 f=frac(p);
+    float3 sum=0;
+    coverage=0;
+    [unroll]for(int y=0;y<2;++y)[unroll]for(int x=0;x<2;++x)
+    {
+        int2 pixel=clamp(base+int2(x,y),int2(0,0),int2(O.xy)-1);
+        float4 sample=Input1.Load(int3(pixel,0));
+        float w=(x?f.x:1.0-f.x)*(y?f.y:1.0-f.y);
+        float confidence=sky?step(.9995,sample.a):
+            1.0-smoothstep(tolerance,tolerance*3.0,abs(DecodeDepth(sample.a)-distance));
+        w*=confidence*step(1e-5,sample.a);
+        sum+=sample.rgb*w;
+        coverage+=w;
+    }
+    return coverage>1e-5?sum/max(coverage,1e-5):fallback;
+}
+
 float4 Temporal(VSOut input) : SV_Target
 {
     float2 uv=input.uv;
@@ -67,7 +91,7 @@ float4 Temporal(VSOut input) : SV_Target
     float4 centre=LoadLow(base);
     float centreDepth=abs(centre.a);
     float3 sum=0,mean=0,secondMoment=0;
-    float weightSum=0;
+    float weightSum=0,depthSpread=0;
     float3 localMin=1e6,localMax=-1e6;
     float reactive=centre.a<0?1.0:0.0;
     [unroll] for(int y=-1;y<=1;++y)
@@ -76,7 +100,9 @@ float4 Temporal(VSOut input) : SV_Target
         {
             float4 tap=LoadLow(base+int2(x,y));
             float2 delta=float2(x,y)-sub;
-            float w=exp2(-2.0*dot(delta,delta)-96.0*abs(abs(tap.a)-centreDepth));
+            float depthDelta=abs(abs(tap.a)-centreDepth);
+            depthSpread=max(depthSpread,depthDelta);
+            float w=exp2(-2.0*dot(delta,delta)-96.0*depthDelta);
             // Resolve/covariance in reversible luminance-compressed HDR space.
             // One solar glint must not pull an entire 3x3 neighborhood white.
             float3 compressed=CompressRadiance(tap.rgb);
@@ -88,6 +114,10 @@ float4 Temporal(VSOut input) : SV_Target
         }
     }
     float3 current=max(0.0,sum/max(weightSum,1e-6));
+    float4 resolvedCurrent=float4(ExpandRadiance(current),
+        reactive>.5?-max(centreDepth,1e-4):max(centreDepth,1e-4));
+    float dt=G.z-O.w;
+    [branch]if(reactive>.5||G.w<1||dt<0||dt>.25)return resolvedCurrent;
     mean/=9.0;secondMoment/=9.0;
     float3 sigma=sqrt(max(0.0,secondMoment-mean*mean));
     float3 lo=max(localMin,mean-1.25*sigma);
@@ -104,7 +134,7 @@ float4 Temporal(VSOut input) : SV_Target
     float viewZ;
     float2 historyUV=ProjectCamera(prev,world,G.x/G.y,viewZ)+(uv-sampleUV);
     bool inside=all(historyUV>0)&&all(historyUV<1)&&viewZ>0;
-    float3 history=HistoryCubic(historyUV);
+    [branch]if(!inside)return resolvedCurrent;
     int2 hp=clamp(int2(historyUV*O.xy),int2(0,0),int2(O.xy)-1);
     // Never interpolate the sign of a reactive flag or depth at an edge.
     float historyAlpha=Input1.Load(int3(hp,0)).a;
@@ -113,8 +143,16 @@ float4 Temporal(VSOut input) : SV_Target
     float tolerance=max(.025,expectedDepth*.008);
     float depthConfidence=1.0-smoothstep(tolerance,tolerance*3.0,abs(oldDepth-expectedDepth));
     if(sky)depthConfidence=abs(historyAlpha)>.9995?1.0:0.0;
-    float dt=G.z-O.w;
-    bool reset=G.w<1||dt<0||dt>.25||abs(historyAlpha)<1e-5;
+    float3 history;
+    [branch]if(depthSpread>.008)
+    {
+        history=SurfaceHistory(historyUV,expectedDepth,tolerance,sky,resolvedCurrent.rgb,depthConfidence);
+    }
+    else
+    {
+        [branch]if(historyAlpha<1e-5||depthConfidence<=0)return resolvedCurrent;
+        history=HistoryCubic(historyUV);
+    }
     float3 historyYC=RGBToYCoCg(CompressRadiance(history));
     float3 currentYC=RGBToYCoCg(current);
     // Clip along the current->history segment, not independently per channel.
@@ -134,9 +172,6 @@ float4 Temporal(VSOut input) : SV_Target
     float lumaDelta=abs(historyYC.x-currentYC.x);
     float historyWeight=pow(.86,max(dt*60.0,1.0));
     historyWeight*=exp2(-.018*motion-3.0*lumaDelta)*depthConfidence;
-    // Animated objects have no deformation motion vectors: use current frame.
-    historyWeight*=reactive>.5||historyAlpha<0?0.0:1.0;
-    if(reset||!inside)historyWeight=0;
     float3 resolved=ExpandRadiance(lerp(current,clipped,saturate(historyWeight)));
     return float4(resolved,reactive>.5?-max(centreDepth,1e-4):max(centreDepth,1e-4));
 }
@@ -207,8 +242,9 @@ float ResolvedAlpha(float2 uv)
 
 float3 DepthAwareDOF(float2 uv,CameraFrame camera,out float encodedDepth)
 {
-    float4 centre = Input0.SampleLevel(LinearClamp, uv, 0.0);
-    centre.a=ResolvedAlpha(uv);
+    // The resolved texture and the display target share the same pixel grid.
+    int2 pixel=clamp(int2(uv*O.xy),int2(0,0),int2(O.xy)-1);
+    float4 centre = Input0.Load(int3(pixel,0));
     encodedDepth = abs(centre.a);
     float centreDepth = DecodeDepth(encodedDepth);
 

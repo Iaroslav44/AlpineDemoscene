@@ -27,6 +27,29 @@ uint32_t Hash(uint32_t x){x^=x>>16;x*=0x7feb352d;x^=x>>15;x*=0x846ca68b;return x
 float Gaussian(uint32_t& x){float s=0;for(uint32_t i=0;i<12;++i){x=Hash(x+0x9e3779b9);s+=(float)(x>>8)*(1.0f/16777216)-0.5f;}return s;}
 struct Tensor{char name[80];uint32_t rank,shape[5],offset,bytes,layout,reserved[3];};
 static_assert(sizeof(Tensor)==128,"NAM1 tensor record");
+
+// NAM1 stores adjacent output channels contiguously. Stream each weight
+// row once and keep the per-output sums in the small style buffer.
+void MaterialDemodulation(const float* weights, const float* style, float* factors,
+                          uint32_t inputChannels, uint32_t outputChannels, uint32_t kernel) {
+    Zero(factors, outputChannels * sizeof(float));
+    for (uint32_t tap = 0; tap < kernel * kernel; ++tap) {
+        for (uint32_t i = 0; i < inputChannels; ++i, weights += outputChannels) {
+            const __m128 s = _mm_set1_ps(style[i]);
+            uint32_t o = 0;
+            for (; o + 4 <= outputChannels; o += 4) {
+                const __m128 v = _mm_mul_ps(s, _mm_loadu_ps(weights + o));
+                _mm_storeu_ps(factors + o, _mm_add_ps(_mm_loadu_ps(factors + o), _mm_mul_ps(v, v)));
+            }
+            for (; o < outputChannels; ++o) {
+                const float v = style[i] * weights[o];
+                factors[o] += v * v;
+            }
+        }
+    }
+    for (uint32_t o = 0; o < outputChannels; ++o)
+        factors[o] = 1 / Root(factors[o] + 1e-8f);
+}
 struct U4{uint32_t x,y,z,w;};
 struct Constants{U4 control,source,target,layer,noise;float params[4];};
 static_assert(sizeof(Constants)==96,"Shader constant ABI");
@@ -124,8 +147,8 @@ struct Runner {
         if(!wt||!bt||wt->bytes!=in*512*4||bt->bytes!=in*4||in>512||out>512)return false;
         const float* w=Data(wt);const float* b=Data(bt);float gain=1/Root(512.0f);
         for(uint32_t o=0;o<in;++o){float value=b[o];for(uint32_t i=0;i<512;++i)value+=latent[i]*(w[o*512+i]*gain);style[o]=value*(demodulate?1:1/Root((float)in));}
-        const float* weights=Data(conv);
-        for(uint32_t o=0;o<out;++o){float square=0;if(demodulate){for(uint32_t k=0;k<kernel*kernel*in;++k){float v=weights[k*out+o]*style[k%in];square+=v*v;}}style[512+o]=demodulate?1/Root(square+1e-8f):1;}
+        if (demodulate) MaterialDemodulation(Data(conv), style, style + 512, in, out, kernel);
+        else for (uint32_t o = 0; o < out; ++o) style[512 + o] = 1;
         Unbind();context->UpdateSubresource(styles.buffer,0,0,style,0,0);return Alive();
     }
     bool Upsample(Buffer& input,Buffer& output,bool fir,uint32_t padding=2){

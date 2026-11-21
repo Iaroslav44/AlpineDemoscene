@@ -44,34 +44,42 @@ float CloudHG(float mu,float g)
 float CloudLightOpticalDepth(float3 p,float3 sun,float loopA,uint samples)
 {
     float distance=0.0,optical=0.0;
+    float stepLength=samples==6?32.0:100.0;
+    float growth=samples==6?1.6:2.0;
     [loop]for(uint k=0;k<samples;++k)
     {
         // Expanding steps reach the edge of a dense billow without spending
         // the whole budget in its centre. Each contribution has metre units.
-        float stepLength=samples==6?32.0*pow(1.6,(float)k):100.0*pow(2.0,(float)k);
         float3 q=p+sun*(distance+stepLength*.5);
+        if(q.y>=CLOUD_TOP&&sun.y>=0.0)break;
+        if(q.y<=CLOUD_BASE&&sun.y<=0.0)break;
         optical+=CloudDensity(q,loopA)*stepLength*(CLOUD_EXTINCTION*1.45);
         distance+=stepLength;
+        stepLength*=growth;
     }
     return optical;
 }
 float4 TraceCloudVolume(float3 ro,float3 rd,float maxT,float3 sun,float loopA,float2 pixel,uint viewSteps,uint lightSteps)
 {
     float nearT,farT;
-    maxT=min(maxT,11500.0);
+    const float maxRange=11500.0;
     if(abs(rd.y)<.0001)
     {
         if(ro.y<CLOUD_BASE||ro.y>CLOUD_TOP)return 0;
-        nearT=0;farT=maxT;
+        nearT=0;farT=maxRange;
     }
     else
     {
         float a=(CLOUD_BASE-ro.y)/rd.y,b=(CLOUD_TOP-ro.y)/rd.y;
-        nearT=max(0.0,min(a,b));farT=min(maxT,max(a,b));
+        nearT=max(0.0,min(a,b));farT=min(maxRange,max(a,b));
     }
-    if(farT<=nearT)return 0;
+    if(min(maxT,farT)<=nearT)return 0;
     farT=min(farT,nearT+6800.0);
     float baseStep=(farT-nearT)/viewSteps;
+    // Keep the integration lattice fixed across silhouette edges. An opaque
+    // object clips the final segment only; it cannot move the cloud samples
+    // already traversed between itself and the camera.
+    farT=min(maxT,farT);
     float jitter=.15+.70*frac(52.9829189*frac(dot(floor(pixel),float2(.06711056,.00583715))));
     float distance=nearT,transmittance=1.0;float3 radiance=0;
     float mu=dot(rd,sun);
@@ -98,7 +106,7 @@ float4 TraceCloudVolume(float3 ro,float3 rd,float maxT,float3 sun,float loopA,fl
         if(coarse)
         {
             coarse=false;
-            distance=max(nearT,distance-dt);
+            distance=max(nearT,distance-baseStep);
             dt=min(baseStep,farT-distance);
             p=ro+rd*(distance+dt*jitter);
             density=CloudDensity(p,loopA)*diurnalCloud*smoothstep(110.0,520.0,distance);

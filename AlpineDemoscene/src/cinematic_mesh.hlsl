@@ -511,7 +511,7 @@ bool CullMeshGroup(uint vertex,uint instance,bool shadowPass)
     {
         bool head=instance>=70000;
         uint person=head?instance-70000:instance-60000;
-        center=PeopleRoot((int)(person%6u),G.z);
+        center=SceneInstanceData[ResidentWorldRecord(person)].xyz;
         center.y+=head?1.57:.9;
         return OutsideMeshBounds(center,head?.45:1.6,shadowPass);
     }
@@ -900,12 +900,26 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         color=lerp(color,float3(.16,.055,.045),fissureMask*.72);
         // Relax over-steep downward scanner normals on upper lip & mentolabial crease
         // so real-time lighting does not double-darken the mouth perimeter.
-        n=normalize(lerp(n,normalize(float3(n.x*.75,max(n.y,-.12)*.40,max(n.z,.90))),mouthRegion*.72));
+        uint actor=(uint)round(i.uv.x);
+        float4 heading=SceneInstanceData[ResidentWorldRecord(actor)+12];
+        float3 headRight=float3(heading.z,0,-heading.x);
+        uint headBone=NEURAL_RIG_BASE+actor*96+15*4;
+        float3x3 headRotation=float3x3(SceneInstanceData[headBone].xyz,
+                                      SceneInstanceData[headBone+1].xyz,SceneInstanceData[headBone+2].xyz);
+        float3 faceZ=mul(headRotation,float3(0,0,1));
+        float3 faceForward=headRight*faceZ.x+float3(0,faceZ.y,0)+heading.xyz*faceZ.z;
+        n=normalize(lerp(n,faceForward,mouthRegion*.45));
         // Anatomical palpebral aperture, sclera, hazel-brown iris, pupil & wet cornea.
         float2 e=float2(abs(hPos.x)-.0308,hPos.y-.2032);
         float exNorm=clamp(e.x/.0132,-1.0,1.0);
         float upperLid=.0045*(1.0-exNorm*exNorm)-.0004*exNorm;
         float lowerLid=-.0033*(1.0-exNorm*exNorm)+.0003*exNorm;
+        float restingUpper=upperLid;
+        upperLid=lerp(upperLid,lowerLid,heading.w);
+        float lidPatch=(1.0-smoothstep(.0112,.0134,abs(e.x)))*smoothstep(.072,.079,hPos.z)
+                      *(1.0-smoothstep(restingUpper-.0006,restingUpper+.0006,e.y))
+                      *smoothstep(upperLid-.0006,upperLid+.0006,e.y)*heading.w;
+        color=lerp(color,cheekRef*float3(.85,.77,.75),lidPatch);
         float eyeOpen=smoothstep(lowerLid-.0004,lowerLid+.0009,e.y)*(1.0-smoothstep(upperLid-.0009,upperLid+.0004,e.y))*(1.0-smoothstep(.0112,.0134,abs(e.x)))*smoothstep(.072,.079,hPos.z);
         float lashLine=exp(-pow((e.y-upperLid)/.0013,2.0))*(1.0-smoothstep(.0115,.0142,abs(e.x)))*smoothstep(.072,.079,hPos.z);
         float lidCrease=exp(-pow((e.y-(upperLid+.0030))/.0011,2.0))*(1.0-smoothstep(.0105,.0135,abs(e.x)))*smoothstep(.072,.079,hPos.z);
@@ -921,7 +935,9 @@ float4 MeshPS(MeshOut i,bool front:SV_IsFrontFace):SV_Target
         color=lerp(color,lerp(scleraCol,irisCol,irisMask),eyeOpen);
         color*=(1.0-.76*lashLine)*(1.0-.32*lidCrease);
         float3 eyeN=normalize(float3(hPos.x-sign(hPos.x)*.0308,(e.y+.0005)*1.15,.0115));
-        n=normalize(lerp(n,eyeN,eyeOpen*.90));
+        float3 posedEye=mul(headRotation,eyeN);
+        float3 eyeWorld=headRight*posedEye.x+float3(0,posedEye.y,0)+heading.xyz*posedEye.z;
+        n=normalize(lerp(n,eyeWorld,eyeOpen*.90));
         float nostril=(1.0-smoothstep(.0042,.0075,length(float2(abs(hPos.x)-.0092,hPos.y-.1555))))*smoothstep(.092,.102,hPos.z)*saturate(-n.y*1.8);
         color*=1.0-.78*nostril;
         float clothing=NeuralHeadClothingCoverage(i.local);

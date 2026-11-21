@@ -180,39 +180,54 @@ float WaterHit(float3 ro,float3 rd,float maxT,float loopA)
 
 #include "cloud_render.hlsli"
 
-float3 WaterShadingNormal(float3 p,float3 rd,float loopA,float footprint,out float unresolved)
+// Direction, angular wavenumber (rad/m), amplitude (m). Keeping the
+// stationary spectrum here avoids rebuilding the eight wave axes per pixel.
+static const float4 RippleSpectrum[8]={
+    float4( .89393305, .44820051,  .45000000,.014000000),
+    float4(-.32138021, .94695024,  .83972969,.006531231),
+    float4(-.99300031,-.11811173, 1.56699101,.003046927),
+    float4( .45122641,-.89240950, 2.92410863,.001421442),
+    float4( .94183283,-.33608171, 5.45657964,.000663126),
+    float4(-.60206323, .79844841,10.18233765,.000309359),
+    float4(-.72727555, .68634560,19.00091392,.000144321),
+    float4( .78734524,-.61651235,35.45695910,.000067328)
+};
+float RipplePhase(float2 xz,float localDepth,float4 wave,float band,float seconds)
 {
-    float3 w=WaterField(p.xz,loopA);
+    float k=wave.z;
+    // This positive-domain form of tanh stays finite for deep water in SM5.
+    float decay=exp(-2.0*k*localDepth);
+    float finiteDepth=(1.0-decay)/(1.0+decay);
+    float omega=sqrt((9.81*k+.000074*k*k*k)*finiteDepth);
+    return dot(xz,wave.xy)*k-seconds*omega+band*2.31;
+}
+
+float3 LakeSurfaceNormal(float3 p,float3 rd,float depth,float footprint,out float unresolved)
+{
+    float3 w=PhysicalWaterField(p.xz);
     float2 rippleGradient=0;
-    unresolved=0;
+    // Total slope variance is sum((amplitude*k)^2/2). Subtract the bands
+    // resolved by this pixel; the remaining energy widens the specular lobe.
+    const float ratio=exp2(-.4);
+    unresolved=.5*.014*.014*.45*.45*(1.0-pow(ratio,8.0))/(1.0-ratio);
     float fp=footprint/max(abs(rd.y),0.08);
-    // Sub-grid waves use the gravity/capillary dispersion relation in SI units:
-    // omega?=(g*k+surfaceTension/density*k?)*tanh(k*depth).
-    float localDepth=max(.1,p.y-Terrain(p.xz));
+    float seconds=FlightTime(G.z);
     [loop]for(int band=0;band<8;++band)
     {
-        float b=(float)band,k=0.45*exp2(b*.9),amplitude=.014*exp2(-1.1*b);
-        float2 direction=normalize(float2(cos(b*1.67+0.23),sin(b*1.37+0.51)));
-        // FXC lowers tanh to exponentials: large positive k*depth can become
-        // inf/inf on SM5 hardware. This equivalent positive-domain expression
-        // stays bounded, including the deep-water limit of exactly1.
-        float decay=exp(-2.0*k*localDepth);
-        float finiteDepth=(1.0-decay)/(1.0+decay);
-        float omega=sqrt((9.81*k+.000074*k*k*k)*finiteDepth);
-        float phase=dot(p.xz,direction)*k-FlightTime(G.z)*omega+b*2.31;
-        float2 phaseGradient=direction*k;
-        // Reflection changes much faster than the water height. Filter the
-        // short-wave slope conservatively, including the grazing footprint,
-        // instead of reflecting sharp ridges through an undersampled grating.
-        float visible=DetailBand(fp,k*3.5/TAU);
-        rippleGradient+=phaseGradient*(amplitude*cos(phase)*visible);
-        // Unresolved slopes contribute VARIANCE, not linearly accumulated
-        // amplitude. Filtering must broaden the microfacet lobe while retaining
-        // its integrated energy instead of making distant water perfectly flat.
-        unresolved+=.5*amplitude*amplitude*k*k*(1.0-visible*visible);
+        float4 wave=RippleSpectrum[band];
+        float visible=DetailBand(fp,wave.z*3.5/TAU);
+        if(visible<=0.0)break;
+        float phase=RipplePhase(p.xz,max(.1,depth),wave,band,seconds);
+        float slope=wave.z*wave.w*visible;
+        rippleGradient+=wave.xy*(slope*cos(phase));
+        unresolved-=.5*slope*slope;
     }
-    float3 n=normalize(float3(-w.y-rippleGradient.x,1.0,-w.z-rippleGradient.y));
-    return n;
+    unresolved=max(0.0,unresolved);
+    return normalize(float3(-w.y-rippleGradient.x,1.0,-w.z-rippleGradient.y));
+}
+float3 WaterShadingNormal(float3 p,float3 rd,float loopA,float footprint,out float unresolved)
+{
+    return LakeSurfaceNormal(p,rd,p.y-Terrain(p.xz),footprint,unresolved);
 }
 
 float WaterFresnel(float cosine)
@@ -224,6 +239,33 @@ float WaterFresnel(float cosine)
     float rs=(c-eta*ct)/max(c+eta*ct,1e-6);
     float rp=(eta*c-ct)/max(eta*c+ct,1e-6);
     return .5*(rs*rs+rp*rp);
+}
+
+float LakebedFocus(float2 bedXZ,float bedDepth,float3 underwaterSun,float sunCos,float footprint,float seconds)
+{
+    // First-order ray-bundle compression on a horizontal receiver. Back-project
+    // the bed along the refracted sun direction and differentiate wave slopes.
+    float path=bedDepth/underwaterSun.y;
+    float2 entry=bedXZ+path*underwaterSun.xz;
+    float2x2 jacobian=float2x2(1,0,0,1);
+    float bending=1.0-sunCos/(1.333*underwaterSun.y);
+    [unroll]for(int band=2;band<=6;band+=2)
+    {
+        float4 wave=RippleSpectrum[band];
+        // The solar disc adds a projected blur radius proportional to depth.
+        float filterWidth=max(footprint,path*.0047);
+        float contrast=DetailBand(filterWidth,wave.z/TAU);
+        float phase=RipplePhase(entry,max(.1,bedDepth),wave,band,seconds);
+        float curvature=-wave.w*wave.z*wave.z*sin(phase)*contrast;
+        float2 axis=wave.xy;
+        float2 spread=bending*(axis+underwaterSun.xz*dot(underwaterSun.xz,axis)/max(.01,underwaterSun.y*underwaterSun.y));
+        jacobian+=bedDepth*curvature*float2x2(spread.x*axis.x,spread.x*axis.y,
+                                             spread.y*axis.x,spread.y*axis.y);
+    }
+    // Limit the small-slope approximation near a fold; with increasing depth
+    // the finite disc and scattering progressively wash out the modulation.
+    float focus=rcp(max(.55,determinant(jacobian)));
+    return lerp(1.0,focus,1.0-smoothstep(7.0,19.0,bedDepth));
 }
 
 float3 WaterSunReflection(float3 p,float3 n,float3 v,float3 sun,float slopeVariance)
@@ -250,8 +292,8 @@ float3 WaterSunReflection(float3 p,float3 n,float3 v,float3 sun,float slopeVaria
 
 float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
 {
-    float unresolved;
-    float3 n=WaterShadingNormal(p,rd,loopA,footprint,unresolved);
+    float depth=max(0.0,p.y-Terrain(p.xz)),unresolved;
+    float3 n=LakeSurfaceNormal(p,rd,depth,footprint,unresolved);
     float fp=footprint/max(abs(rd.y),0.08);
     float3 reflectedRay=reflect(rd,n);
     float3 reflection=0;
@@ -276,8 +318,7 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
         float planeT=(LAKE_Y+0.03-mirrored.origin.y)/max(planarDirection.y,0.00001);
         reflectionWeight*=step(0.00001,planarDirection.y)*(1.0-smoothstep(MAX_DIST*.85,MAX_DIST,planeT));
     }
-    if(reflectionWeight<.999)
-        reflection=SkyWithCloudReflection(reflectedRay,p,sun,loopA);
+    bool needsSky=reflectionWeight<.999;
     // Water must reflect actual geometry, including the surrounding mountains.
     // Match ShadeTerrain's radiometric balance so edge fallback is seamless.
     if(reflectedRay.y<0.65&&reflectionWeight<0.999)
@@ -286,6 +327,7 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
         float rt=TraceTerrain(reflectionOrigin,reflectedRay,4200.0);
         if(rt<=4200.0)
         {
+            needsSky=false;
             float3 rp=reflectionOrigin+reflectedRay*rt;
             float3 rn=TerrainNormal(rp.xz);
             float rock=smoothstep(0.10,0.42,1.0-rn.y);
@@ -300,6 +342,7 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
             reflection=CinematicFog(reflectedTerrain,rp);
         }
     }
+    [branch]if(needsSky)reflection=SkyWithCloudReflection(reflectedRay,p,sun,loopA);
     if(reflectionWeight>0.001)
     {
         uint rw,rh;PlanarReflection.GetDimensions(rw,rh);
@@ -313,10 +356,10 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
         planar+=PlanarReflection.SampleLevel(CinematicSampler,clamp(reflectionUV-float2(0,texel.y),minUV,maxUV),0).rgb*.15;
         reflection=lerp(reflection,planar,reflectionWeight);
     }
-    float depth=max(0.0,p.y-Terrain(p.xz));
     float3 refractedRay=refract(rd,n,1.0/1.333);
     float opticalDepth=depth/max(abs(refractedRay.y),0.12);
-    float3 waterIrradiance=AtmosphereDiffuse(float3(0,1,0))+CinematicSunColorAt(p.y)*(CinematicFrame[8].w*max(0.0,sun.y)/PI);
+    float3 sunLight=CinematicSunColorAt(p.y)*CinematicFrame[8].w;
+    float3 waterIrradiance=AtmosphereDiffuse(float3(0,1,0))+sunLight*(max(0.0,sun.y)/PI);
     float3 bed=float3(.16,.17,.14)*waterIrradiance;
     if(depth<32.0)
     {
@@ -326,9 +369,19 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
             float3 bp=p+n*.04+refractedRay*bt;
             RuntimeMaterial gravel=SampleNaturalMaterial(7,bp.xz*.7);
             float3 bn=normalize(TerrainNormal(bp.xz)+float3(gravel.normal.x,0,gravel.normal.y)*.6);
-            float3 bedDirect=CinematicSunColorAt(bp.y)*(CinematicFrame[8].w*saturate(dot(bn,sun))/PI);
-            float3 resolvedBed=gravel.albedo*(AtmosphereDiffuse(bn)+bedDirect);
-            resolvedBed*=exp(-depth*float3(.13,.046,.026)/max(sun.y,.14));
+            // Snell's law bends incoming sunlight toward the surface normal.
+            // Irradiance crossing a unit of lake surface sets the power budget.
+            // Keep the sky path independent so dusk does not black out the bed.
+            const float3 extinction=float3(.145,.044,.030);
+            float3 underwaterSun=-refract(-sun,float3(0,1,0),1.0/1.333);
+            float bedDepth=max(0.0,p.y-bp.y);
+            float sunPath=bedDepth/underwaterSun.y;
+            float entry=saturate(sun.y)*(1.0-WaterFresnel(sun.y))/underwaterSun.y;
+            float3 bedDirect=sunLight*(entry*saturate(dot(bn,underwaterSun))/PI)*exp(-extinction*sunPath);
+            [branch]if(bedDepth<19.0&&sun.y>.01&&fp<2.6)
+                bedDirect*=LakebedFocus(bp.xz,bedDepth,underwaterSun,sun.y,fp,FlightTime(G.z));
+            float3 bedSky=AtmosphereDiffuse(bn)*exp(-extinction*(bedDepth*1.18));
+            float3 resolvedBed=gravel.albedo*(bedSky+bedDirect);
             // Fade the expensive bed trace into the deep-water approximation
             // continuously; a hard 26m switch drew a ring across the lake.
             float bedWeight=1.0-smoothstep(20.0,32.0,depth);
@@ -350,7 +403,7 @@ float3 ShadeWater(float3 p,float3 rd,float3 sun,float loopA,float footprint)
     float streakPhase=dot(p.xz,float2(0.91,0.38))+loopA*29.0;
     foam*=0.72+0.28*sin(streakPhase)*DetailBand(fp,0.16);
     foam=max(foam,PhysicalWaterFoam(p.xz));
-    float3 foamLight=float3(.76,.80,.82)*(AtmosphereDiffuse(float3(0,1,0))+CinematicSunColorAt(p.y)*(CinematicFrame[8].w*max(0.0,sun.y)/PI));
+    float3 foamLight=float3(.76,.80,.82)*waterIrradiance;
     return lerp(col,foamLight,foam*0.30);
 }
 
@@ -437,13 +490,11 @@ float4 SprayLayer(float3 ro,float3 rd,float maxT,float loopA,float2 pixel)
     float3 sunRad=CinematicSunColorAt(center.y)*CinematicFrame[8].w*sunVis;
     float3 skyAmb=AtmosphereDiffuse(float3(0,1,0));
     float forwardScatter=pow(saturate(dot(rd,sun)),4.0)*.38+.18;
-    // Primary optical rainbow dispersion + sunlit mist halo in waterfall spray.
+    // Droplet dispersion separates red (42.4 degrees) from blue (40.6)
+    // around the antisolar axis. A forward-looking ray cannot see this bow.
     float antiSun=dot(-rd,sun);
-    float bowAngle=antiSun>.0?(antiSun-.736)/.028:(dot(rd,normalize(float3(sun.x,0,sun.z)))-.56)/.14;
-    float bowMask=exp(-pow((bowAngle-.5)*2.2,2.0))*smoothstep(.12,.26,sun.y)*sunVis;
-    float3 rainbow=float3(exp(-pow((bowAngle-.20)*3.6,2.0)),
-                          exp(-pow((bowAngle-.52)*3.6,2.0)),
-                          exp(-pow((bowAngle-.82)*3.6,2.0)))*bowMask;
+    float3 bowOffset=(antiSun-float3(.73846,.749,.75927))/.0064;
+    float3 rainbow=exp(-.5*bowOffset*bowOffset)*saturate(sun.y*18.0);
     float jitter=.20+.60*frac(52.9829189*frac(dot(floor(pixel),float2(.06711056,.00583715))));
     float ds=(tf-tn)/16.0,trans=1.0;float3 accum=0;
     [loop]for(int i=0;i<16;++i)
@@ -497,11 +548,13 @@ WorldOutput P(VSOut input)
         rayStart=validTerrainRay?max(0.0,(LAKE_Y+0.03-ro.y)/rd.y):MAX_DIST;
         validTerrainRay=validTerrainRay&&rayStart<MAX_DIST;
     }
-    float terrainT=validTerrainRay?rayStart+TraceTerrain(ro+rd*rayStart,rd,MAX_DIST-rayStart):MAX_DIST+1.0;
-    float solidT=terrainT;
-    int surface=terrainT<=MAX_DIST?1:0;
-    float waterT=PassMode.x>0.5?MAX_DIST+1.0:WaterHit(ro,rd,solidT,loopA);
-    if(waterT<solidT){solidT=waterT;surface=3;}
+    // A valid lake crossing bounds the primary terrain ray. The separate
+    // refracted ray below intersects the lakebed along its actual optical path.
+    float waterT=PassMode.x>0.5?MAX_DIST+1.0:WaterHit(ro,rd,MAX_DIST,loopA);
+    float rayEnd=min(MAX_DIST,waterT);
+    float terrainT=validTerrainRay?rayStart+TraceTerrain(ro+rd*rayStart,rd,rayEnd-rayStart):MAX_DIST+1.0;
+    int surface=terrainT<=rayEnd?1:(waterT<=MAX_DIST?3:0);
+    float solidT=surface==1?terrainT:(surface==3?waterT:MAX_DIST+1.0);
     // Shade the visible surface only. Detailed terrain behind windows/water
     // need not consume a second material and shadow evaluation.
     float3 hitP=ro+rd*min(solidT,MAX_DIST),col;

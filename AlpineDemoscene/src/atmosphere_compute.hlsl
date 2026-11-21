@@ -2,6 +2,7 @@
 // with ozone absorption and planet shadow, not an embedded skydome image.
 #include "scene_common.hlsli"
 #include "atmosphere_sh.hlsli"
+#include "solar_profile.hlsli"
 StructuredBuffer<float4> AtmosphereFrame : register(t3);
 RWTexture2D<float4> AtmosphereOutput : register(u0);
 RWTexture2D<float4> AtmosphereIrradianceOutput : register(u1);
@@ -39,6 +40,34 @@ float3 AtmosphereSolar(float3 position,float3 sun)
         optical+=AtmosphereExtinction(AtmosphereDensity(position+sun*t))*ds;
     }
     return exp(-optical);
+}
+
+// Direct illumination is spatially uniform at a given altitude in the
+// spherical atmosphere. Tabulate it once for the current solar elevation.
+float3 DirectSunProfile(uint index)
+{
+    float altitude = lerp(SOLAR_PROFILE_BASE_M, SOLAR_PROFILE_CEILING_M,
+                          float(index) / SOLAR_PROFILE_INTERVALS) * .001;
+    float radius = PLANET_R + altitude;
+    float projected = radius * AtmosphereFrame[8].y;
+    float groundDelta = altitude * (2.0 * PLANET_R + altitude);
+    if (projected < 0 && projected * projected > groundDelta)
+        return 0;
+    float topDelta = (ATMOSPHERE_R - radius) * (ATMOSPHERE_R + radius);
+    float distance = sqrt(projected * projected + topDelta) - projected;
+    float3 opticalDepth = 0;
+    [loop] for (uint i = 0; i < 32; ++i)
+    {
+        float a = float(i) / 32.0, b = float(i + 1) / 32.0;
+        float t = .5 * distance * (a * a + b * b);
+        float dr2 = t * (2.0 * projected + t);
+        // Rationalize the radial difference to retain altitude precision
+        // where the ray grazes the planet near sunrise.
+        float h = max(0.0, altitude + dr2 / (sqrt(radius * radius + dr2) + radius));
+        float3 density = float3(exp(-h / 8.0), exp(-h / 1.2), saturate(1.0 - abs(h - 25.0) / 15.0));
+        opticalDepth += AtmosphereExtinction(density) * (distance * (b * b - a * a));
+    }
+    return exp(-opticalDepth);
 }
 float4 AtmosphereTransport(float3 rd)
 {
@@ -84,6 +113,8 @@ void AtmosphereCS(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:
     float phi=(uv.x-.5)*TAU,theta=uv.y*PI;
     float3 rd=float3(cos(phi)*sin(theta),cos(theta),sin(phi)*sin(theta));
     if(id.x<256&&id.y<128)AtmosphereOutput[id.xy]=AtmosphereTransport(rd);
+    if (id.y == 0 && id.x <= SOLAR_PROFILE_INTERVALS)
+        AtmosphereIrradianceOutput[uint2(SKY_SH_COUNT + id.x, 0)] = float4(DirectSunProfile(id.x), 1);
     // Nine groups project the same analytic transport, not a partially written
     // LUT. Every lane participates in group-uniform reductions. 128 fixed
     // equal-area directions avoid a changing tangent frame at each pixel.

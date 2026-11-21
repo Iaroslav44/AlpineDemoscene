@@ -227,7 +227,7 @@ materialUAVDesc:
 atmosphereSurfaceDesc:
     dd 256, 128, 1, 1, 10, 1, 0, 0, 88h, 0, 0 ; RGBA16F SRV|UAV
 irradianceSurfaceDesc:
-    dd 9, 1, 1, 1, 2, 1, 0, 0, 88h, 0, 0 ; nine signed RGBA32F SH coefficients
+    dd 74, 1, 1, 1, 2, 1, 0, 0, 88h, 0, 0 ; nine SH coefficients and 65 solar transmittance samples
 cloudVolumeDesc:
     dd 128, 128, 128, 1, 28, 0, 88h, 0, 0 ; D3D11_TEXTURE3D_DESC RGBA8
 terrainBoundsDesc:

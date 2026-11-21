@@ -682,11 +682,12 @@ int main(int argc,char** argv) try {
     check(device->CreateUnorderedAccessView(atmosphereTexture.Get(),nullptr,&atmosphereUAV),"Create atmosphere UAV");
     atmosphereDesc.BindFlags=0;atmosphereDesc.Usage=D3D11_USAGE_STAGING;atmosphereDesc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
     check(device->CreateTexture2D(&atmosphereDesc,nullptr,&atmosphereStaging),"Create atmosphere staging");
-    D3D11_TEXTURE2D_DESC shDesc{};shDesc.Width=9;shDesc.Height=shDesc.MipLevels=shDesc.ArraySize=1;
+    constexpr UINT shCount=9, solarCount=65;
+    D3D11_TEXTURE2D_DESC shDesc{};shDesc.Width=shCount+solarCount;shDesc.Height=shDesc.MipLevels=shDesc.ArraySize=1;
     shDesc.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;shDesc.SampleDesc.Count=1;
     shDesc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
     ComPtr<ID3D11Texture2D> irradianceSHTexture;ComPtr<ID3D11ShaderResourceView> irradianceSHSRV;ComPtr<ID3D11UnorderedAccessView> irradianceSHUAV;
-    std::array<float,36> shPoison;shPoison.fill(NAN);D3D11_SUBRESOURCE_DATA shInitial{shPoison.data(),9*16,0};
+    std::array<float,(shCount+solarCount)*4> shPoison;shPoison.fill(NAN);D3D11_SUBRESOURCE_DATA shInitial{shPoison.data(),shDesc.Width*16,0};
     check(device->CreateTexture2D(&shDesc,&shInitial,&irradianceSHTexture),"Create irradiance SH coefficients");
     check(device->CreateShaderResourceView(irradianceSHTexture.Get(),nullptr,&irradianceSHSRV),"Create irradiance SH SRV");
     check(device->CreateUnorderedAccessView(irradianceSHTexture.Get(),nullptr,&irradianceSHUAV),"Create irradiance SH UAV");
@@ -1244,14 +1245,25 @@ int main(int argc,char** argv) try {
         }
         context->Unmap(atmosphereStaging.Get(),0);if(f==0)bmp(outDir/"atmosphere_preview.bmp",atmospherePreview,256,128);
         const auto shValues=readFloatRGBA(device.Get(),context.Get(),irradianceSHTexture.Get());
+        size_t invalidSolarSamples=0;
+        for(size_t i=shCount*4;i<shValues.size();++i){
+            float value=shValues[i];
+            if(!std::isfinite(value)||value<0.f||value>1.f||(i%4==3 && value!=1.f))++invalidSolarSamples;
+        }
+        if(invalidSolarSamples)failed=true;
         size_t shInvalid=0;float shMinimum=INFINITY,shMaximum=-INFINITY;
-        for(float value:shValues){shInvalid+=!std::isfinite(value);shMinimum=std::min(shMinimum,value);shMaximum=std::max(shMaximum,value);}
+        for(size_t i=0;i<shCount*4;++i){float value=shValues[i];shInvalid+=!std::isfinite(value);shMinimum=std::min(shMinimum,value);shMaximum=std::max(shMaximum,value);}
         // SH coefficients can be negative; they are basis amplitudes, not radiance samples.
-        if(f==0){std::ofstream shFile(outDir/"sh_coefficients.f32",std::ios::binary);shFile.write(reinterpret_cast<const char*>(shValues.data()),shValues.size()*sizeof(float));}
+        if(f==0){std::ofstream shFile(outDir/"sh_coefficients.f32",std::ios::binary);shFile.write(reinterpret_cast<const char*>(shValues.data()),shCount*4*sizeof(float));}
         context->CopyResource(cameraStaging.Get(),cameraBuffer.Get());D3D11_MAPPED_SUBRESOURCE cameraMap{};
         check(context->Map(cameraStaging.Get(),0,D3D11_MAP_READ,0,&cameraMap),"Map camera cache");
         std::vector<uint8_t> cameraValues(CameraFloats*4);memcpy(cameraValues.data(),cameraMap.pData,CameraFloats*4);context->Unmap(cameraStaging.Get(),0);
-        if(dumpWorld&&f==0){std::ofstream raw(outDir/"camera_float4.bin",std::ios::binary);raw.write(reinterpret_cast<const char*>(cameraValues.data()),cameraValues.size());}
+        if(dumpWorld&&f==0){
+            std::ofstream raw(outDir/"camera_float4.bin",std::ios::binary);
+            raw.write(reinterpret_cast<const char*>(cameraValues.data()),cameraValues.size());
+            std::ofstream solar(outDir/"solar_profile.f32",std::ios::binary);
+            solar.write(reinterpret_cast<const char*>(shValues.data()+shCount*4),solarCount*4*sizeof(float));
+        }
         const auto ca=scalarMetrics(cameraValues,false);
         context->CopyResource(instanceStaging.Get(),instanceBuffer.Get());D3D11_MAPPED_SUBRESOURCE instanceMap{};
         check(context->Map(instanceStaging.Get(),0,D3D11_MAP_READ,0,&instanceMap),"Map instance cache");
@@ -1285,6 +1297,7 @@ int main(int argc,char** argv) try {
             <<",\"instance_counts\":{\"records\":"<<InstanceElements<<",\"houses\":64,\"active_near_trees\":"<<activeNearTrees<<",\"active_far_trees\":"<<activeFarTrees<<",\"active_grass\":"<<activeGrass<<",\"rocks\":384,\"branch_count\":18432,\"branch_geometry_records\":55296,\"resident_rig_records\":576,\"invalid_flags\":"<<invalidInstanceFlags<<"}"
             <<",\"far_shadow\":"<<json(farSh)<<",\"atmosphere\":{\"nonfinite_values\":"<<atmosphereInvalid<<",\"max_rgb\":"<<atmosphereMax<<",\"mean_rgb\":"<<atmosphereSum/(256*128*3)<<"}"
             <<",\"irradiance_sh\":{\"coefficients\":9,\"nonfinite_values\":"<<shInvalid<<",\"minimum\":"<<shMinimum<<",\"maximum\":"<<shMaximum<<"}"
+            <<",\"solar_profile\":{\"samples\":"<<solarCount<<",\"invalid_components\":"<<invalidSolarSamples<<"}"
             <<",\"human_composite\":"<<json(hu)<<",\"cloud_composite\":"<<json(cl)<<",\"resolved\":"<<json(hi)<<",\"physics_steps\":"<<physicsSteps<<",\"water_state\":"<<json(waterState)
             <<",\"cloud_changed_depth_pixels\":"<<cloudDepthChanged<<",\"reflection_cloud_changed_depth_pixels\":"<<reflectionDepthChanged
             <<",\"reflection_enabled\":"<<(reflectionEnabled?"true":"false")<<",\"reflection\":"<<(reflectionEnabled?json(re):"null")

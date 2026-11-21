@@ -2,6 +2,7 @@
 #define ALPINE_CINEMATIC_LIGHTING
 #include "scene_common.hlsli"
 #include "atmosphere_common.hlsli"
+#include "solar_profile.hlsli"
 
 // GPU frame contract, generated once by CameraCS. Bind the same SRVs to VS/PS.
 // 0..3 current camera origin/lens, forward, right/aspect, up/near;
@@ -18,39 +19,14 @@ float3 CinematicSunDirection(float a)
 {
     return DiurnalSunDirection(a);
 }
-// Spherical Rayleigh + Mie + Chappuis-ozone optical transmittance matching
-// AtmosphereCS. Evaluating at receiver altitude yields physical rose-gold
-// alpenglow on 2km peaks while low valleys sit in cool twilight sky fill.
-float3 CinematicSolarTransmittance(float altitudeMetres,float3 sun)
-{
-    const float planetR=6360.0,atmoR=6460.0;
-    float3 pos=float3(0,planetR+clamp(altitudeMetres*.001,.01,12.0),0);
-    float b=dot(pos,sun),c=dot(pos,pos)-planetR*planetR;
-    float discG=b*b-c;
-    if(discG>0.0&&(-b-sqrt(discG))>.002)return 0;
-    float cAtmo=dot(pos,pos)-atmoR*atmoR;
-    float dist=max(0.0,-b+sqrt(max(0.0,b*b-cAtmo)));
-    float3 optical=0;
-    [unroll]for(int i=0;i<6;++i)
-    {
-        float a0=(float)i/6.0,a1=(i+1.0)/6.0;
-        float t=dist*(a0*a0+a1*a1)*.5,ds=dist*(a1*a1-a0*a0);
-        float h=max(0.0,length(pos+sun*t)-planetR);
-        float3 dens=float3(exp(-h/8.0),exp(-h/1.2),max(0.0,1.0-abs(h-25.0)/15.0));
-        optical+=(float3(.005802,.013558,.033100)*dens.x
-                 +(.003996/.9)*dens.y
-                 +float3(.000650,.001881,.000085)*dens.z)*ds;
-    }
-    return exp(-optical);
-}
 float3 CinematicSunColorAt(float altitudeMetres)
 {
-    float3 sun=CinematicFrame[8].xyz;
-    float3 base=CinematicSolarTransmittance(altitudeMetres,sun)*float3(3.35,3.25,3.12);
-    // High-altitude rose-coral Chappuis alpenglow on snow-clad Alpine peaks
-    // during dawn and dusk blue hour when the low sun skims the horizon.
-    float alpenglow=(1.0-smoothstep(.028,.135,sun.y))*smoothstep(980.0,1720.0,altitudeMetres);
-    return base+alpenglow*float3(1.55,.72,.54);
+    float fraction = saturate((altitudeMetres - SOLAR_PROFILE_BASE_M) /
+                              (SOLAR_PROFILE_CEILING_M - SOLAR_PROFILE_BASE_M));
+    float texel = SKY_SH_COUNT + fraction * SOLAR_PROFILE_INTERVALS;
+    float u = (texel + .5) / (SKY_SH_COUNT + SOLAR_PROFILE_INTERVALS + 1);
+    return AtmosphereIrradiance.SampleLevel(CinematicSampler, float2(u, .5), 0).rgb *
+           float3(3.35, 3.25, 3.12);
 }
 float3 CinematicSunColor()
 {

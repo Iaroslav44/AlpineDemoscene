@@ -163,9 +163,14 @@ float3 ShadeTerrain(float3 p,float3 rd,float3 sun,float loopA,float footprint)
     float bareFraction=rockExposure*(1-weatherCoverage);
     float weatherRough=lerp(rough,lerp(.80,.22,damp),rockExposure);
     float visibility=CinematicShadow(p,baseNormal)*shadow*cloudShadow;
-    float3 weathered=CinematicLightingAt(p,n,bentNormal,-rd,albedo,weatherRough,0,cavity,visibility,.04);
-    float3 substrate=CinematicLightingAt(p,n,bentNormal,-rd,albedo,rock.roughness,0,cavity,visibility,rock.specular);
-    float3 lit=lerp(weathered,substrate,bareFraction);
+    float3 sunColor=CinematicSunColorAt(p.y);
+    float3 lit=CinematicLightingSun(n,bentNormal,-rd,albedo,weatherRough,0,cavity,visibility,.04,sunColor);
+    // Completely covered rock contributes no second specular lobe.
+    [branch] if(bareFraction>0)
+    {
+        float3 substrate=CinematicLightingSun(n,bentNormal,-rd,albedo,rock.roughness,0,cavity,visibility,rock.specular,sunColor);
+        lit=lerp(lit,substrate,bareFraction);
+    }
     // Subtle multi-scattered blue-white sky fill inside shaded snowfields.
     if(snow>.01)lit+=snow*AtmosphereDiffuse(float3(0,1,0))*float3(.08,.12,.19)*cavity*(1.0-visibility*.65);
     return lit;

@@ -40,6 +40,9 @@ float NeuralHeadCropCoverage(float3 source)
 }
 
 static const uint NEURAL_RIG_BASE=118016;
+// Skinning reads three rows per bone. Use the spare row of the root and
+// spine bones for the actor transform shared by all three drawing passes.
+uint ResidentWorldRecord(uint id) { return NEURAL_RIG_BASE + id*96 + 3; }
 float3x3 NeuralRotationX(float a){float s=sin(a),c=cos(a);return float3x3(1,0,0,0,c,-s,0,s,c);}
 float3x3 NeuralRotationY(float a){float s=sin(a),c=cos(a);return float3x3(c,0,s,0,1,0,-s,0,c);}
 float3x3 NeuralRotationZ(float a){float s=sin(a),c=cos(a);return float3x3(c,-s,0,s,c,0,0,0,1);}
@@ -192,6 +195,24 @@ void NeuralWriteResidentRig(uint id,float time)
     }
     NeuralWriteLeg(id,time,1,pelvis,root,right,forward,walking);
     NeuralWriteLeg(id,time,-1,pelvis,root,right,forward,walking);
+    uint world=ResidentWorldRecord(id);
+    FrameOutput[world]=float4(root,PeopleScale(id));
+    // Stagger blink timing between residents and vary it between cycles.
+    // Each four-second interval starts and ends with the eyes open.
+    float blinkTime=fmod(time+id*.67,128.0);
+    float start=.45+2.9*Hash21(float2(id,floor(blinkTime*.25)));
+    float elapsed=fmod(blinkTime,4.0)-start;
+    float blink=smoothstep(0,.073,elapsed)*(1.0-smoothstep(.088,.235,elapsed));
+    FrameOutput[world+12]=float4(forward,blink);
+}
+void PlaceResident(uint id,float3 p,float3 n,out float3 worldPosition,out float3 worldNormal)
+{
+    uint base=ResidentWorldRecord(id);
+    float4 origin=SceneInstanceData[base];
+    float3 forward=SceneInstanceData[base+12].xyz;
+    float3 right=float3(forward.z,0,-forward.x);
+    worldPosition=origin.xyz+(right*p.x+float3(0,p.y,0)+forward*p.z)*origin.w;
+    worldNormal=normalize(right*n.x+float3(0,n.y,0)+forward*n.z);
 }
 void NeuralBone(uint joint,float3 source,float3 sourceNormal,uint id,out float3 p,out float3 n)
 {
@@ -209,8 +230,6 @@ Geometry NeuralPersonGeometry(uint vertex,uint id)
     float3 sourceNormal=NeuralResidentVertices[vertex*4+1].xyz;
     uint4 joints=asuint(NeuralResidentVertices[vertex*4+2]);
     float4 weights=NeuralResidentVertices[vertex*4+3];
-    float2 velocity=PeopleVelocity(id,G.z);
-    float speed=length(velocity),walking=saturate(speed*1.8);
     float handSpan=max(0.0,abs(source.x)-.680);
     if(handSpan>0.0)
     {
@@ -255,12 +274,8 @@ Geometry NeuralPersonGeometry(uint vertex,uint id)
         float collarBand=smoothstep(1.402,1.425,rawSource.y)*(1.0-smoothstep(1.442,1.455,rawSource.y))*.0038;
         p+=posedDir*((baffleLoft+cuffBand+hemBand)*jacketMask+collarBand*(1.0-skinMask));
     }
-    float3 forward=normalize(float3(velocity.x,0,velocity.y)+float3(.0001,0,.0001));
-    float3 right=float3(forward.z,0,-forward.x);
-    float scale=PeopleScale(id);
     g.local=rawSource;g.uv=rawSource.xy;
-    g.p=PeopleRoot(id,G.z)+(right*p.x+float3(0,p.y,0)+forward*p.z)*scale;
-    g.n=normalize(right*n.x+float3(0,n.y,0)+forward*n.z);
+    PlaceResident(id,p,n,g.p,g.n);
     g.seed=Hash21(float2(id,953));g.material=50;g.moving=1;
     return g;
 }
@@ -299,12 +314,10 @@ Geometry NeuralHeadGeometry(uint vertex,uint id)
     float3 torso,torsoNormal;NeuralBone(9,source,normal,id,torso,torsoNormal);
     posed=lerp(posed,torso,saturate(rootInfluence));
     posedNormal=normalize(lerp(posedNormal,torsoNormal,saturate(rootInfluence)));
-    float2 velocity=PeopleVelocity(id,G.z);
-    float3 forward=normalize(float3(velocity.x,0,velocity.y)+float3(.0001,0,.0001));
-    float3 right=float3(forward.z,0,-forward.x);
-    g.p=PeopleRoot(id,G.z)+(right*posed.x+float3(0,posed.y,0)+forward*posed.z)*PeopleScale(id);
-    g.n=normalize(right*posedNormal.x+float3(0,posedNormal.y,0)+forward*posedNormal.z);
-    g.local=source;g.uv=local.xy;g.material=51;g.seed=Hash21(float2(id,953));g.moving=1;
+    PlaceResident(id,posed,posedNormal,g.p,g.n);
+    g.local=source;
+    // Analytic facial details need the head rotation and lid state of this actor.
+    g.uv=float2(id,0);g.material=51;g.seed=Hash21(float2(id,953));g.moving=1;
     g.learnedColor=NeuralHeadVertices[vertex*9+4].rgb;
     return g;
 }
